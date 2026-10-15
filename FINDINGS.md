@@ -10,6 +10,13 @@ measurement code, not in the market — see Section 6, which documents
 that in detail because it is arguably the most useful thing this project
 produced.
 
+> **Data-vintage note (2026-10-16).** Midcap 150 and Smallcap 250 results end on the 2025-12-30 bar
+> (yfinance's `end` is exclusive, so the window's last day was never downloaded); the Nifty 50 cache was
+> later extended and now includes 2025-12-31. Re-running Nifty 50 today therefore gives figures about
+> 0.01 Sharpe higher than those printed below (e.g. MA crossover out-of-sample 0.983 vs 0.974;
+> momentum 1.413 vs 1.405). No status or conclusion changes. Details and the proposed fix:
+> `data/known_issues.md`, "The last day of the research window is never downloaded".
+
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a
 number changed from an earlier version of this file, the reason is in

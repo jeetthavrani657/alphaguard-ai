@@ -241,3 +241,34 @@ Full reasoning per date is in `data/discontinuity_registry.py`.
   `tests/test_loader_artifact_rows.py` covers it, and confirms the
   original 2025-03-18 zero-volume artifact is still dropped and an
   ordinary zero-volume day with a price move is kept.
+
+### The last day of the research window is never downloaded (yfinance `end` is exclusive)
+
+- **Status: OPEN** (found by the web app smoke test; deliberately NOT fixed, see below)
+- **Reviewed:** 2026-10-16
+- **What happens:** `config.END_DATE` is `2025-12-31` and `data/loader.py` passes it
+  straight to `yfinance` as `end=`. Yahoo treats `end` as **exclusive**, so a fresh
+  download stops at 2025-12-30. On every later load the cache check
+  (`cache.max >= end`) fails, the loader asks for the "missing" tail
+  `2025-12-31 -> 2025-12-31`, Yahoo returns nothing for a zero-width range, and
+  that failure is swallowed (one `possibly delisted; no price data found` line per
+  stock in the console).
+- **Evidence (cache last-bar dates):** Nifty 50: all 50 stocks end 2026-10-15
+  (their cache was extended to the present for the forward test, which contains
+  the 2025-12-31 bar). Midcap 150: all 145 end **2025-12-30**. Smallcap 250: all
+  246 end **2025-12-30**.
+- **Effect on results:** the three universes are not on exactly the same window.
+  Nifty 50 includes 2025-12-31, Midcap/Smallcap do not. One extra trading day
+  moves a Sharpe by about 0.01: Nifty 50 MA crossover out-of-sample is 0.9745
+  when ended 2025-12-30 (the figure FINDINGS.md Section 4 prints, 0.974) and
+  0.9831 with the 2025-12-31 bar (what the cache produces today). Momentum
+  1.4051 vs 1.4135 likewise. No conclusion changes: every strategy's status and
+  every strategy-vs-benchmark ordering is the same either way.
+- **Proposed fix (needs the owner's decision, because it changes published
+  numbers):** request `end + 1 day` from Yahoo in `_download_with_retry` /
+  Case 3 of `load_price_data`, then clip to `end` as already done. Then re-run the
+  Midcap/Smallcap work and update the affected figures in FINDINGS.md,
+  MIDCAP_SMALLCAP_FINDINGS.md and MOMENTUM_FINDINGS.md.
+- **Until then:** the web app's status strip shows the conservative
+  "data through" date (the earliest across strategies: 2025-12-30), and every
+  figure in the app is reproducible from the cache as it stands.
