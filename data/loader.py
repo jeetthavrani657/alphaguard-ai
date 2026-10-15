@@ -107,6 +107,10 @@ def _download_with_retry(symbol: str, start: str, end: str) -> pd.DataFrame:
     Call yfinance with retry + exponential backoff on rate limiting or
     other transient errors. Raises loudly if all retries are exhausted --
     it never fails silently.
+
+    `end` is passed straight to yfinance, which treats it as EXCLUSIVE. Callers
+    that mean "up to and including day D" must pass D + 1 day
+    (load_price_data does).
     """
     backoff = INITIAL_BACKOFF_SECONDS
     last_error = None
@@ -146,8 +150,15 @@ def load_price_data(symbol: str, start: str, end: str, force_refresh: bool = Fal
     Load daily OHLCV data for one NSE stock, using a local CSV cache.
 
     symbol : NSE ticker, with or without the ".NS" suffix, e.g. "RELIANCE"
-    start, end : date strings "YYYY-MM-DD"
+    start, end : date strings "YYYY-MM-DD"; `end` is INCLUSIVE (the bar dated
+        `end` is returned if it exists)
     force_refresh : if True, ignore the cache and re-download from scratch
+
+    Cost note: whenever the cache does not already reach `start`..`end`, the
+    whole range is downloaded again (see Case 2 below for why). Two situations
+    make that happen on every call: a window ending on a day with no bar
+    (weekend or exchange holiday), and a stock that listed after `start`.
+    Both cost one request per symbol per call, the same count as before.
 
     Returns a DataFrame indexed by date (DatetimeIndex) with columns:
     open, high, low, close, volume
@@ -163,41 +174,69 @@ def load_price_data(symbol: str, start: str, end: str, force_refresh: bool = Fal
     if start_ts > end_ts:
         raise ValueError(f"start ({start}) is after end ({end}).")
 
-    cached = None if force_refresh else _load_cache(symbol)
+    existing = _load_cache(symbol)            # what is on disk, even when force_refresh ignores it for coverage
+    cached = None if force_refresh else existing
+    have_cache = cached is not None and not cached.empty
 
     # Case 1: cache already fully covers the requested window -- no network call.
-    if cached is not None and not cached.empty:
-        if cached.index.min() <= start_ts and cached.index.max() >= end_ts:
-            return cached.loc[start_ts:end_ts].copy()
+    if have_cache and cached.index.min() <= start_ts and cached.index.max() >= end_ts:
+        return cached.loc[start_ts:end_ts].copy()
 
-    # Case 2: nothing usable cached (or force_refresh) -- download the full range.
-    if cached is None or cached.empty or force_refresh:
-        fresh = _download_with_retry(symbol, start, end)
-        if fresh.empty:
-            raise ValueError(
-                f"No data returned for '{symbol}' between {start} and {end}. "
-                f"This usually means the symbol is invalid, delisted, or has "
-                f"no trading history in this range."
-            )
-        combined = _clean_columns(fresh)
-
-    # Case 3: cache exists but doesn't fully cover the request -- fetch only
-    # the missing head/tail portions instead of re-downloading everything.
+    # Case 2: the cache is missing or does not reach the whole window. Download ONE
+    # contiguous range and REPLACE the cache with it -- never splice a new piece onto
+    # old history.
+    #
+    # Why not just fetch the missing head/tail (what this function used to do):
+    # Yahoo's adjusted prices are re-scaled retroactively every time a dividend or
+    # split goes ex. A tail downloaded today is on today's adjustment basis, the
+    # history cached last month is on last month's, so the join shows a fake one-day
+    # move for every stock that paid a dividend in between (found on the Nifty 50
+    # cache: COALINDIA -1.25%, TCS -0.53% on 2025-12-31). One download = one basis.
+    #
+    # The range requested is the union of what the caller wants and what we already
+    # hold, so extending never shrinks the cache.
+    if have_cache:
+        fetch_start = min(start_ts, cached.index.min())
+        fetch_end = max(end_ts, cached.index.max())
     else:
-        pieces = [cached]
-        if start_ts < cached.index.min():
-            head = _download_with_retry(symbol, start, str(cached.index.min().date()))
-            if not head.empty:
-                pieces.append(_clean_columns(head))
-        if end_ts > cached.index.max():
-            tail_start = str((cached.index.max() + pd.Timedelta(days=1)).date())
-            tail = _download_with_retry(symbol, tail_start, end)
-            if not tail.empty:
-                pieces.append(_clean_columns(tail))
-        combined = pd.concat(pieces)
-        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+        fetch_start, fetch_end = start_ts, end_ts
 
-    combined = _drop_phantom_rows(combined)
+    # yfinance's `end` is EXCLUSIVE: end="2025-12-31" returns bars only up to 2025-12-30.
+    # Ask for the day after, so the last day the caller named is actually downloaded.
+    fresh = _download_with_retry(
+        symbol, str(fetch_start.date()), str((fetch_end + pd.Timedelta(days=1)).date())
+    )
+
+    if fresh.empty:
+        # Nothing came back (e.g. the extension range holds no new trading day). Keep
+        # what is cached rather than wiping it, and serve the window from it.
+        if have_cache:
+            held = cached.loc[start_ts:end_ts]
+            if not held.empty:
+                return held.copy()
+        raise ValueError(
+            f"No data returned for '{symbol}' between {start} and {end}. "
+            f"This usually means the symbol is invalid, delisted, or has "
+            f"no trading history in this range."
+        )
+
+    combined = _drop_phantom_rows(_clean_columns(fresh))
+
+    # Vendor-truncation guard. Replacing the cache is only safe if the new download is
+    # at least as deep as what we hold. Yahoo sometimes re-lists a ticker and then serves
+    # only the history since the re-listing (found: HEG.NS began 2026-07-17 on a refresh,
+    # which would have discarded 2,714 rows of 2015-2025). If we held data right at the
+    # start of the range we asked for and the download no longer has it, keep the cache.
+    if existing is not None and not existing.empty and not combined.empty:
+        near_start = fetch_start + pd.Timedelta(days=30)
+        if existing.index.min() <= near_start and combined.index.min() > near_start:
+            print(f"[loader] WARNING {symbol}: Yahoo returned history starting "
+                  f"{combined.index.min().date()}, but the cache starts {existing.index.min().date()}. "
+                  f"Treating this as a vendor truncation and KEEPING the cache.")
+            held = existing.loc[start_ts:end_ts]
+            if held.empty:
+                raise ValueError(f"No data available for '{symbol}' between {start} and {end}.")
+            return held.copy()
 
     result = combined.loc[start_ts:end_ts].copy()
     if result.empty:
