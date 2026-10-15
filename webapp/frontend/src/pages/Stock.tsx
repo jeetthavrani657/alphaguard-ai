@@ -1,0 +1,162 @@
+import { Link, useParams } from "react-router-dom";
+import { api } from "../api/client";
+import { useApi } from "../api/useApi";
+import { Async } from "../components/Async";
+import { Panel } from "../components/Panel";
+import { Ratio } from "../components/Ratio";
+import { StatusChip } from "../components/StatusChip";
+import { PriceChart } from "../components/charts/PriceChart";
+import { int, num, pct, signClass } from "../fmt";
+import type { SliceMetrics, SymbolStrategyResult } from "../api/types";
+
+function SliceRow({ label, m, excluded }: { label: string; m: SliceMetrics | null | undefined; excluded?: string | null }) {
+  if (!m) {
+    return (
+      <tr>
+        <td>{label}</td>
+        <td colSpan={5} className="wrap muted">not run: {excluded ?? "no result"}</td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td>{label}</td>
+      <td><Ratio ratio={m.sharpe} /></td>
+      <td className={`num ${signClass(m.total_return_pct)}`}>{pct(m.total_return_pct)}</td>
+      <td className={`num ${signClass(m.buy_hold_return_pct)}`}>{pct(m.buy_hold_return_pct)}</td>
+      <td className="num">{pct(m.max_drawdown_pct)}</td>
+      <td className="num">{pct(m.win_rate_pct)} of {int(m.total_trades)}</td>
+      <td className="num">{pct(m.market_exposure_pct)}</td>
+    </tr>
+  );
+}
+
+function ResultBlock({ r }: { r: SymbolStrategyResult }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h3>
+        <Link to={`/strategies/${r.strategy_id}`}>{r.strategy_name}</Link>{" "}
+        <span className="muted">pooled status</span> <StatusChip status={r.parent_status} />{" "}
+        <span className="muted">as of {r.as_of_hypotheses}</span>
+      </h3>
+      {r.note ? (
+        <p className="note info">{r.note}</p>
+      ) : (
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Window</th><th>Sharpe (this stock)</th><th className="num">Strategy return</th>
+                <th className="num">Buy&amp;hold return</th><th className="num">Max drawdown</th>
+                <th className="num">Win rate (closed)</th><th className="num">Exposure</th>
+              </tr>
+            </thead>
+            <tbody>
+              <SliceRow label="in-sample" m={r.in_sample} excluded={r.excluded_in_sample} />
+              <SliceRow label="out-of-sample" m={r.out_of_sample} excluded={r.excluded_out_of_sample} />
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Stock() {
+  const { symbol = "" } = useParams();
+  const detail = useApi(() => api.symbol(symbol), [symbol]);
+  const prices = useApi(() => api.prices(symbol), [symbol]);
+
+  return (
+    <div>
+      <Link to="/" className="back">← Screener</Link>
+      <Async state={detail}>
+        {(d) => (
+          <div className="pagehead">
+            <h1>{symbol}</h1>
+            <span className="price" title="Split/dividend-adjusted close on the last day of the research window">
+              ₹{num(d.last_close)}
+            </span>
+            <span className="muted">adj. close · {d.last_date}</span>
+            <span className="chip">{d.universe}</span>
+            {d.sector && <span className="chip">{d.sector}</span>}
+            {!d.usable && <span className="chip flag">UNUSABLE</span>}
+            {d.quality?.discontinuities.some((x) => x.status !== "GENUINE") && (
+              <span className="chip flag">UNRESOLVED DATA DISCONTINUITY</span>
+            )}
+            <span className="muted">{d.first_date} → {d.last_date}</span>
+          </div>
+        )}
+      </Async>
+
+      <Panel title="Price · SMA 50/200 · volume · RSI 14 · strategy trades">
+        <Async state={prices}>
+          {(p) => (
+            <Async state={detail}>{(d) => <PriceChart prices={p} markers={d.markers} />}</Async>
+          )}
+        </Async>
+      </Panel>
+
+      <Async state={detail}>
+        {(d) => (
+          <div className="grid2">
+            <Panel title="Strategy results on this stock">
+              <p className="note slice">{d.caveat}</p>
+              {d.results.length === 0 && <p className="muted">No registered strategy was run on this stock's universe.</p>}
+              {d.results.map((r) => <ResultBlock key={r.strategy_id} r={r} />)}
+            </Panel>
+
+            <div>
+              <Panel title="Data quality">
+                {d.quality ? (
+                  <>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {d.quality.checks.map((c) => (
+                        <li key={c.name} className={c.passed ? "" : d.usable ? "muted" : "neg"}>
+                          {c.passed ? "pass" : d.usable ? "note (soft check, stock still usable)" : "FAIL"} — {c.name}
+                          {c.affected_rows > 0 ? ` (${c.affected_rows} rows)` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                    {d.quality.discontinuities.length > 0 && (
+                      <>
+                        <h3 style={{ marginTop: 12 }}>Large single-day moves, reviewed</h3>
+                        {d.quality.discontinuities.map((x) => (
+                          <div key={x.date + x.status} className={x.status === "GENUINE" ? "note info" : "note"}>
+                            <b>{x.date}</b> {pct(x.magnitude_pct)} <span className={`chip ${x.status === "GENUINE" ? "" : "flag"}`}>{x.status}</span>
+                            {x.reason && <div className="muted" style={{ marginTop: 4 }}>{x.reason}</div>}
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted">No quality report in the snapshot.</p>
+                )}
+              </Panel>
+
+              <Panel title={`Trades on this stock · ${d.markers.length} closed, ${d.executions.length} portfolio executions`} flush>
+                <div className="tablewrap scroll" style={{ maxHeight: 260 }}>
+                  <table>
+                    <thead><tr><th>Strategy</th><th>Entry</th><th>Exit</th><th className="num">Net return</th></tr></thead>
+                    <tbody>
+                      {d.markers.map((m, i) => (
+                        <tr key={i}>
+                          <td>{m.strategy_id}</td>
+                          <td className="num">{m.entry_date} @ {num(m.entry_price)}</td>
+                          <td className="num">{m.exit_date} @ {num(m.exit_price)}</td>
+                          <td className={`num ${signClass(m.return_pct)}`}>{pct(m.return_pct)}</td>
+                        </tr>
+                      ))}
+                      {d.markers.length === 0 && <tr><td colSpan={4} className="muted">none</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            </div>
+          </div>
+        )}
+      </Async>
+    </div>
+  );
+}
