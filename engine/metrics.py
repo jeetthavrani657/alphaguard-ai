@@ -16,6 +16,63 @@ def _annualized_risk_free_daily(annual_rate: float) -> float:
     return (1 + annual_rate) ** (1 / TRADING_DAYS_PER_YEAR) - 1
 
 
+def drawdown_series_pct(equity_curve: pd.Series) -> pd.Series:
+    """
+    Underwater curve: for every date, how far (in percent, <= 0) equity sits
+    below its highest value so far. Its minimum IS max_drawdown_pct --
+    compute_metrics() below takes its figure from this function, so a chart
+    of this series and the headline number cannot disagree.
+    """
+    running_max = equity_curve.cummax()
+    return (equity_curve / running_max - 1) * 100
+
+
+def growth_of_100(equity_curve: pd.Series, initial_capital: float) -> pd.Series:
+    """
+    Equity expressed as 'what 100 invested at the start became'. Its last value
+    minus 100 IS total_return_pct, so the chart and the table agree by construction.
+
+    Why this exists: a universe run sums one book per stock (initial_capital x N),
+    while a portfolio strategy trades ONE book -- so their rupee curves are on
+    different scales and cannot be drawn together. Dividing each by ITS OWN
+    initial capital puts them on the same footing.
+    """
+    return equity_curve / initial_capital * 100
+
+
+def exposure_series_pct(positions: dict) -> pd.Series:
+    """
+    Share of books invested on each date, in percent (0-100).
+
+    positions: {symbol: lagged position Series (1.0 = long, 0.0 = cash)}, as
+    returned in run_backtest()'s "position" for each symbol of a universe run.
+    On a given date the denominator is the number of symbols that HAVE a row
+    that date (a stock not yet listed is not a cash book, it is absent) and
+    the numerator is how many of those are long.
+
+    Note this weights every DATE equally, while compute_metrics()'s headline
+    market_exposure_pct pools every (symbol, day) pair. The two are equal when
+    every symbol covers the same dates and differ slightly otherwise.
+    """
+    is_long = pd.concat({s: (p == 1.0) for s, p in positions.items()}, axis=1).sort_index()
+    present = is_long.notna()                      # NaN only where a symbol has no row that date
+    return is_long.fillna(False).astype(float).sum(axis=1) / present.sum(axis=1) * 100
+
+
+def non_cash_exposure_series_pct(dates: pd.DatetimeIndex, first_execution_date) -> pd.Series:
+    """
+    Exposure for a rebalanced portfolio, under the same definition
+    research/run_momentum_strategy.py uses for its headline figure: 0% on
+    every date before the first rebalance executes (nothing can be ranked
+    until enough history exists), 100% from then on. It is NOT a measure of
+    how much cash is held after that. If first_execution_date is None the
+    headline treats the whole window as invested, and so does this.
+    """
+    if first_execution_date is None:
+        return pd.Series(100.0, index=dates)
+    return pd.Series(((dates >= first_execution_date) * 100.0), index=dates)
+
+
 def compute_metrics(equity_curve: pd.Series, trade_log: pd.DataFrame, initial_capital: float,
                      position: pd.Series, risk_free_rate: float = 0.06) -> dict:
     """
@@ -55,9 +112,7 @@ def compute_metrics(equity_curve: pd.Series, trade_log: pd.DataFrame, initial_ca
     sortino = (excess_returns.mean() / downside_deviation) * np.sqrt(TRADING_DAYS_PER_YEAR) \
         if downside_deviation > 0 else float("nan")
 
-    running_max = equity_curve.cummax()
-    drawdown = equity_curve / running_max - 1
-    max_drawdown = drawdown.min()
+    max_drawdown_pct = drawdown_series_pct(equity_curve).min()
     max_drawdown_duration_days = _max_drawdown_duration_days(equity_curve)
 
     n_trades = len(trade_log)
@@ -80,7 +135,7 @@ def compute_metrics(equity_curve: pd.Series, trade_log: pd.DataFrame, initial_ca
     return {
         "total_return_pct": total_return * 100,
         "cagr_pct": cagr * 100,
-        "max_drawdown_pct": max_drawdown * 100,
+        "max_drawdown_pct": max_drawdown_pct,
         "max_drawdown_duration_days": max_drawdown_duration_days,
         "sharpe_ratio": sharpe,
         "sortino_ratio": sortino,

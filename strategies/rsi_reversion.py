@@ -76,6 +76,16 @@ def _wilders_rsi(close: pd.Series, period: int) -> pd.Series:
     return rsi
 
 
+def rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """
+    Public name for the strategy's RSI series (Wilder's smoothing; see
+    _wilders_rsi). Added so the web app's chart can plot the exact series
+    the strategy trades on without reaching for a private function or
+    recomputing it. Identical to _wilders_rsi -- no behaviour of its own.
+    """
+    return _wilders_rsi(close, period)
+
+
 def generate_signals(df: pd.DataFrame, period: int = 14, oversold: float = 30, exit_level: float = 50) -> pd.Series:
     """
     df must have a 'close' column.

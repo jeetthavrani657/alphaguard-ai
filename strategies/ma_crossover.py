@@ -11,6 +11,17 @@ import pandas as pd
 from base import validate_signals
 
 
+def moving_average(close: pd.Series, window: int) -> pd.Series:
+    """
+    Simple moving average of `close` over `window` trading days; NaN until
+    `window` days of history exist. This is the one place the strategy's
+    average is computed -- generate_signals() below calls it, and the web
+    app's chart reads the same function, so the line drawn on a chart is
+    by construction the line the strategy traded on.
+    """
+    return close.rolling(window=window).mean()
+
+
 def generate_signals(df: pd.DataFrame, fast: int = 50, slow: int = 200) -> pd.Series:
     """
     df must have a 'close' column.
@@ -21,8 +32,8 @@ def generate_signals(df: pd.DataFrame, fast: int = 50, slow: int = 200) -> pd.Se
     - 1.0 when fast MA > slow MA (long)
     - 0.0 otherwise (cash)
     """
-    fast_ma = df["close"].rolling(window=fast).mean()
-    slow_ma = df["close"].rolling(window=slow).mean()
+    fast_ma = moving_average(df["close"], fast)
+    slow_ma = moving_average(df["close"], slow)
 
     signal = (fast_ma > slow_ma).astype(float)
     # rolling() leaves the first (window-1) rows of each MA as NaN. The
