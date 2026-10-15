@@ -200,21 +200,29 @@ def evaluate_strategy(name: str, rationale: str, in_sample_sharpe: float, in_sam
     return result
 
 
-def run_harness(results: list, context: str, alpha: float = DEFAULT_ALPHA) -> dict:
+def classify_results(results: list, cumulative_total: int, alpha: float = DEFAULT_ALPHA) -> dict:
     """
-    The mandatory pipeline every batch of strategy results goes through.
-    Not optional, not a flag -- point 2 and point 4 are enforced HERE,
-    not left to whoever calls the reporting function to remember.
+    PURE: decides every result's validation status. Reads and writes no
+    files -- in particular it does NOT touch the hypothesis ledger.
 
-    results: list of StrategyResult from evaluate_strategy().
-    context: a short human description of this run, stored in the ledger.
+    results: list of StrategyResult from evaluate_strategy(); their
+        correction fields and `status` are filled in, in place.
+    cumulative_total: the TRUE cumulative hypothesis count the Bonferroni
+        bar is divided by (see the note below on why that is not just
+        len(results)).
 
-    Returns a dict with the corrected results, the survivor counts
-    (point 5's required lead numbers), and the ledger entry that was
-    just appended to disk.
+    Split out of run_harness() so that a READ-ONLY consumer (the web
+    app's snapshot command) can reuse the exact status rules -- not a
+    copy of them -- without registering a hypothesis. Extracted verbatim;
+    run_harness() calls this and then does the ledger bookkeeping.
+
+    A status is only true AS OF a total: the same p-values can flip from
+    one status to another purely because cumulative_total grew (the
+    Bonferroni bar alpha/total only ever tightens). Callers that display
+    a status must display the total it was computed against.
     """
     if not results:
-        raise ValueError("run_harness() called with no strategy results.")
+        raise ValueError("classify_results() called with no strategy results.")
 
     n_tested = len(results)
     in_sample_pvals = np.array([r.in_sample_p_value for r in results])
@@ -231,9 +239,7 @@ def run_harness(results: list, context: str, alpha: float = DEFAULT_ALPHA) -> di
     # against, which the ledger always has -- see the note on
     # Benjamini-Hochberg below for why that correction is NOT extended
     # the same way.
-    cumulative_before = _load_ledger()["cumulative_hypotheses"]
-    cumulative_after = cumulative_before + n_tested
-    bonferroni_alpha = alpha / cumulative_after
+    bonferroni_alpha = alpha / cumulative_total
 
     # BH-FDR, by contrast, genuinely needs the FULL set of p-values
     # together to compute its step-up q-values correctly -- it is not a
@@ -309,6 +315,48 @@ def run_harness(results: list, context: str, alpha: float = DEFAULT_ALPHA) -> di
     n_unvalidated = sum(1 for r in results if r.status == "UNVALIDATED")
     n_no_rationale = sum(1 for r in results if not r.has_rationale)
 
+    return {
+        "n_tested": n_tested,
+        "bonferroni_alpha": bonferroni_alpha,
+        "expected_by_chance": expected_by_chance,
+        "n_raw_significant": n_raw_significant,
+        "n_survive_bonferroni": n_survive_bonferroni,
+        "n_survive_bh_fdr": n_survive_bh,
+        "n_validated_confirmed": n_confirmed,
+        "n_oos_only_significant": n_oos_only,
+        "n_unvalidated": n_unvalidated,
+        "n_no_rationale": n_no_rationale,
+        "results": results,
+    }
+
+
+def run_harness(results: list, context: str, alpha: float = DEFAULT_ALPHA) -> dict:
+    """
+    The mandatory pipeline every batch of strategy results goes through.
+    Not optional, not a flag -- point 2 and point 4 are enforced HERE,
+    not left to whoever calls the reporting function to remember.
+
+    results: list of StrategyResult from evaluate_strategy().
+    context: a short human description of this run, stored in the ledger.
+
+    Returns a dict with the corrected results, the survivor counts
+    (point 5's required lead numbers), and the ledger entry that was
+    just appended to disk.
+    """
+    if not results:
+        raise ValueError("run_harness() called with no strategy results.")
+
+    n_tested = len(results)
+
+    # Bonferroni is corrected against the TRUE CUMULATIVE hypothesis count
+    # (this run's own n_tested PLUS everything the ledger already recorded
+    # before it) -- not just this run's own batch size. See
+    # classify_results() and FINDINGS.md Section 6, Bug 3.
+    cumulative_before = _load_ledger()["cumulative_hypotheses"]
+    cumulative_after = cumulative_before + n_tested
+
+    summary = classify_results(results, cumulative_after, alpha)
+
     ledger_entry = _append_to_ledger(context, n_tested)
     assert ledger_entry["cumulative_hypotheses_after_run"] == cumulative_after, (
         "Ledger cumulative count changed between the peek and the append -- "
@@ -321,15 +369,15 @@ def run_harness(results: list, context: str, alpha: float = DEFAULT_ALPHA) -> di
         "n_tested": n_tested,
         "cumulative_hypotheses_before_run": cumulative_before,
         "cumulative_hypotheses_all_time": cumulative_after,
-        "bonferroni_alpha": bonferroni_alpha,
-        "expected_by_chance": expected_by_chance,
-        "n_raw_significant": n_raw_significant,
-        "n_survive_bonferroni": n_survive_bonferroni,
-        "n_survive_bh_fdr": n_survive_bh,
-        "n_validated_confirmed": n_confirmed,
-        "n_oos_only_significant": n_oos_only,
-        "n_unvalidated": n_unvalidated,
-        "n_no_rationale": n_no_rationale,
+        "bonferroni_alpha": summary["bonferroni_alpha"],
+        "expected_by_chance": summary["expected_by_chance"],
+        "n_raw_significant": summary["n_raw_significant"],
+        "n_survive_bonferroni": summary["n_survive_bonferroni"],
+        "n_survive_bh_fdr": summary["n_survive_bh_fdr"],
+        "n_validated_confirmed": summary["n_validated_confirmed"],
+        "n_oos_only_significant": summary["n_oos_only_significant"],
+        "n_unvalidated": summary["n_unvalidated"],
+        "n_no_rationale": summary["n_no_rationale"],
         "results": results,
     }
 

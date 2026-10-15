@@ -167,3 +167,57 @@ def test_bonferroni_alpha_uses_the_cumulative_ledger_total_not_just_this_batch()
     assert out["cumulative_hypotheses_all_time"] == 164
     assert out["bonferroni_alpha"] == pytest.approx(0.05 / 164)
     assert out["results"][0].bonferroni_alpha == pytest.approx(0.05 / 164)
+
+
+# --- classify_results(): the pure status function extracted from run_harness() ---
+# Extracted so the web app's snapshot command can reuse the exact status rules
+# without registering a hypothesis. These tests lock in the three properties
+# that justify the extraction.
+
+def test_classify_results_is_pure_and_never_touches_the_ledger(tmp_path):
+    ledger = tmp_path / "must_not_be_created.json"
+    harness.LEDGER_PATH = str(ledger)   # also monkeypatched by the autouse fixture; explicit for clarity
+    n_sig = _n_obs_for_sharpe(1.0, want_significant=True)
+    r = evaluate_strategy("Genuine", RATIONALE, in_sample_sharpe=1.0, in_sample_n_obs=n_sig,
+                          out_of_sample_sharpe=1.0, out_of_sample_n_obs=n_sig)
+    summary = harness.classify_results([r], cumulative_total=1)
+
+    assert r.status == "VALIDATED_CONFIRMED"
+    assert summary["bonferroni_alpha"] == pytest.approx(0.05)
+    assert not ledger.exists()
+
+
+def test_the_same_inputs_change_status_when_only_the_hypothesis_total_grows():
+    """
+    A status is only true AS OF a total. A result that clears the bar at a
+    total of 1 must fail once the total is large enough -- with the p-values
+    untouched. This is why every displayed status has to carry its total.
+    """
+    n_sig = _n_obs_for_sharpe(1.0, want_significant=True)
+
+    def status_at(total):
+        r = evaluate_strategy("X", RATIONALE, in_sample_sharpe=1.0, in_sample_n_obs=n_sig,
+                              out_of_sample_sharpe=1.0, out_of_sample_n_obs=n_sig)
+        harness.classify_results([r], cumulative_total=total)
+        return r.status
+
+    assert status_at(1) == "VALIDATED_CONFIRMED"
+    assert status_at(1_000_000) == "VALIDATED_FAILED"
+
+
+def test_run_harness_and_classify_results_agree_at_the_same_total():
+    for _ in range(2):
+        harness._append_to_ledger("seed", 50)          # ledger total = 50 before the run, 100 after the 2nd loop
+    n_sig = _n_obs_for_sharpe(1.0, want_significant=True)
+    n_insig = _n_obs_for_sharpe(-0.2, want_significant=False)
+    spec = [dict(name="a", rationale=RATIONALE, in_sample_sharpe=1.0, in_sample_n_obs=n_sig,
+                 out_of_sample_sharpe=1.0, out_of_sample_n_obs=n_sig),
+            dict(name="b", rationale=RATIONALE, in_sample_sharpe=-0.2, in_sample_n_obs=n_insig,
+                 out_of_sample_sharpe=1.0, out_of_sample_n_obs=n_sig)]
+
+    via_run = harness.run_harness([evaluate_strategy(**d) for d in spec], context="t")
+    pure = [evaluate_strategy(**d) for d in spec]
+    harness.classify_results(pure, cumulative_total=via_run["cumulative_hypotheses_all_time"])
+
+    assert [r.status for r in via_run["results"]] == [r.status for r in pure]
+    assert via_run["cumulative_hypotheses_all_time"] == 102   # 100 seeded + 2 registered
