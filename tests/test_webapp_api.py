@@ -1,0 +1,493 @@
+"""
+tests/test_webapp_api.py
+
+Contract tests for the read-only results API (webapp/backend/).
+
+These tests protect the rules the web app was built under:
+
+  * No Sharpe or Sortino ever leaves the API without its validation status
+    and the hypothesis count that status is "as of".
+  * The API is read-only: every route is a GET.
+  * The API layer cannot calculate anything: it does not import the engine,
+    strategies, research or data modules (checked in a fresh interpreter).
+  * An id from the URL can never be turned into a file path (traversal).
+
+They use a tiny SYNTHETIC snapshot written to a temp folder and never touch
+the real webapp/snapshots/ or the real hypothesis ledger. No network, no
+strategy run.
+"""
+
+import json
+import subprocess
+import sys
+
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from webapp.backend import schemas
+from webapp.backend.main import app
+
+
+# --- synthetic snapshot ----------------------------------------------------------
+
+def _ratio(kind, value, window, status="VALIDATED_FAILED", total=204):
+    return schemas.RiskAdjustedRatio(kind=kind, value=value, window=window, status=status, as_of_hypotheses=total,
+                                     p_value=0.2 if kind == "sharpe" else None,
+                                     bonferroni_bar=0.05 / total if kind == "sharpe" else None,
+                                     clears_bar=False if kind == "sharpe" else None)
+
+
+def _metrics(window, status="VALIDATED_FAILED", total=204):
+    return schemas.WindowMetrics(
+        sharpe=_ratio("sharpe", 0.5, window, status, total), sortino=_ratio("sortino", 0.7, window, status, total),
+        total_return_pct=10.0, cagr_pct=5.0, max_drawdown_pct=-12.0, max_drawdown_duration_days=100.0,
+        win_rate_pct=50.0, avg_win_pct=3.0, avg_loss_pct=-2.0, profit_factor=None, total_trades=5,
+        avg_holding_days=10.0, market_exposure_pct=60.0, final_equity=110000.0, n_symbols_included=3)
+
+
+def _window_info(window):
+    return schemas.WindowInfo(
+        window=window, start="2015-01-01", end="2020-06-30", n_observations=3,
+        strategy=_metrics(window), benchmark=_metrics(window, "BENCHMARK_NOT_A_HYPOTHESIS"))
+
+
+def _prov(total=204):
+    return schemas.Provenance(generated_at="2026-10-16T00:00:00+00:00", git_commit="abc1234", git_dirty=False,
+                              ledger_total_at_snapshot=total, bonferroni_bar_at_snapshot=0.05 / total,
+                              data_through="2025-12-31", in_sample_end="2020-06-30",
+                              risk_free_rate=0.065, initial_capital=100000.0)
+
+
+def _strategy_file(sid, kind="per_symbol", n_trades=7):
+    curve = schemas.EquityCurve(dates=["2020-01-01", "2020-01-02", "2020-01-03"], values=[100.0, 101.0, 102.5])
+    trades = [schemas.ClosedTrade(symbol="AAA", entry_date="2020-01-01", exit_date="2020-01-05", entry_price=10.0,
+                                  exit_price=11.0, quantity=1, return_pct=9.5, holding_days=4, total_costs=0.1)
+              for _ in range(n_trades)]
+    execs = [schemas.Execution(date="2020-01-01", symbol="AAA", side="buy", shares=1, price=10.0, costs=0.1)
+             for _ in range(n_trades)]
+    rebs = [schemas.Rebalance(formation_date="2020-01-01", execution_date="2020-01-02", n_held=1,
+                              turnover_value=10.0, portfolio_value_pre_rebalance=100.0, turnover_pct=10.0)]
+    window_data = schemas.StoredWindowData(
+        equity_strategy=curve, equity_benchmark=curve,
+        drawdown_strategy_pct=schemas.EquityCurve(dates=curve.dates, values=[0.0, 0.0, -1.5]),
+        drawdown_benchmark_pct=schemas.EquityCurve(dates=curve.dates, values=[0.0, -2.0, -3.0]),
+        exposure_strategy_pct=schemas.EquityCurve(dates=curve.dates, values=[0.0, 50.0, 100.0]),
+        exposure_definition="share of books long",
+        growth_strategy=schemas.EquityCurve(dates=curve.dates, values=[100.0, 101.0, 102.5]),
+        growth_benchmark=schemas.EquityCurve(dates=curve.dates, values=[100.0, 99.0, 105.0]),
+        closed_trades=trades if kind == "per_symbol" else [],
+        executions=execs if kind == "portfolio" else [], rebalances=rebs if kind == "portfolio" else [])
+    detail = schemas.StrategyDetail(
+        id=sid, name=sid, family="Test", universe="nifty50", kind=kind, params={}, rationale="r",
+        status="VALIDATED_FAILED", as_of_hypotheses=204, in_sample=_window_info("in_sample"),
+        out_of_sample=_window_info("out_of_sample"), provenance=_prov())
+    return schemas.StrategyFile(detail=detail, data={"in_sample": window_data, "out_of_sample": window_data})
+
+
+def _quality():
+    # AAA fails a soft check (like every real symbol failing "Missing trading days" on NSE holidays)
+    # and has a GENUINE reviewed discontinuity: it must NOT count as an "issue".
+    ok = schemas.SymbolQuality(
+        symbol="AAA", universe="nifty50", rows=10, first_date="2015-01-01", last_date="2025-12-31", usable=True,
+        checks=[schemas.QualityCheck(name="Missing trading days", passed=False, affected_rows=158)],
+        discontinuities=[schemas.Discontinuity(date="2020-03-23", magnitude_pct=-27.0, status="GENUINE",
+                                               reason="COVID crash trough")])
+    bad = schemas.SymbolQuality(
+        symbol="BBB", universe="midcap150", rows=10, first_date="2015-01-01", last_date="2025-12-31", usable=True,
+        checks=[schemas.QualityCheck(name="c", passed=True, affected_rows=0)],
+        discontinuities=[schemas.Discontinuity(date="2020-03-01", magnitude_pct=-60.0, status="UNREVIEWED")])
+    return schemas.DataQualityResponse(generated_at="x", n_symbols=2, n_usable=2,
+                                       n_with_unresolved_discontinuity=1, symbols=[ok, bad])
+
+
+def _slice_metrics(window, parent_status="VALIDATED_FAILED", total=204, sharpe=1.1):
+    return schemas.SliceMetrics(
+        sharpe=schemas.RiskAdjustedRatio(
+            kind="sharpe", value=sharpe, window=window, status="SLICE_OF_POOLED_HYPOTHESIS", as_of_hypotheses=total,
+            parent_strategy_id="alpha", parent_status=parent_status),
+        total_return_pct=12.0, cagr_pct=6.0, max_drawdown_pct=-9.0, win_rate_pct=55.0, total_trades=4,
+        market_exposure_pct=40.0, buy_hold_return_pct=30.0)
+
+
+def _slices():
+    return schemas.SymbolSlices(
+        strategy_id="alpha", parent_status="VALIDATED_FAILED", as_of_hypotheses=204,
+        windows={"in_sample": {"AAA": _slice_metrics("in_sample")},
+                 "out_of_sample": {"AAA": _slice_metrics("out_of_sample")}},
+        excluded={"in_sample": {}, "out_of_sample": {"CCC": "blocked by the discontinuity gate"}})
+
+
+def _screener_rows():
+    def row(sym, uni, sector, usable=True, flagged=False):
+        return schemas.ScreenerRow(
+            symbol=sym, universe=uni, sector=sector, rows=5, first_date="2020-01-01", last_date="2020-01-07",
+            last_close=104.0, usable=usable, has_unresolved_discontinuity=flagged,
+            buy_hold_return_in_sample_pct=10.0, buy_hold_return_out_of_sample_pct=None,
+            buy_hold_max_drawdown_out_of_sample_pct=None)
+    return [row("AAA", "nifty50", "Bank"), row("BBB", "midcap150", None, flagged=True)]
+
+
+def _prices(symbol="AAA"):
+    dates = ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-06", "2020-01-07"]
+    return schemas.PriceSeries(
+        symbol=symbol, dates=dates, open=[100.0, 101, 102, 103, 104], high=[101.0, 102, 103, 104, 105],
+        low=[99.0, 100, 101, 102, 103], close=[100.5, 101.5, 102.5, 103.5, 104.0], volume=[10.0, 11, 12, 13, 14],
+        indicators={"sma_50": [None, None, 101.0, 102.0, 103.0], "rsi_14": [None, None, None, 55.0, 60.0]},
+        indicator_sources={"sma_50": "strategies/ma_crossover.py moving_average",
+                           "rsi_14": "strategies/rsi_reversion.py rsi"})
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    snap = tmp_path / "snap"
+    (snap / "strategies").mkdir(parents=True)
+    (snap / "symbols").mkdir()
+    ids = ["alpha", "beta_portfolio"]
+    (snap / "strategies" / "alpha.json").write_text(_strategy_file("alpha").model_dump_json())
+    (snap / "strategies" / "alpha.symbols.json").write_text(_slices().model_dump_json())
+    (snap / "strategies" / "beta_portfolio.json").write_text(
+        _strategy_file("beta_portfolio", kind="portfolio").model_dump_json())
+    (snap / "screener.json").write_text(schemas.ScreenerResponse(
+        generated_at="x", data_through="2020-01-07", in_sample="a to b", out_of_sample="c to d",
+        rows=_screener_rows()).model_dump_json())
+    (snap / "symbols" / "AAA.json").write_text(_prices("AAA").model_dump_json())
+    (snap / "data_quality.json").write_text(_quality().model_dump_json())
+    (snap / "manifest.json").write_text(schemas.Manifest(provenance=_prov(), strategy_ids=ids).model_dump_json())
+    # A secret next to the snapshot, to prove a traversal id cannot reach it.
+    (tmp_path / "secret.json").write_text('{"secret": true}')
+
+    ledger = tmp_path / "ledger.json"
+    ledger.write_text(json.dumps({"cumulative_hypotheses": 204, "runs": [{
+        "run_id": "r1", "timestamp": "2026-10-15T00:00:00+00:00", "context": "c", "n_hypotheses_this_run": 204,
+        "cumulative_hypotheses_before_run": 0, "cumulative_hypotheses_after_run": 204}]}))
+    forward = tmp_path / "forward.csv"
+    forward.write_text("run_date,data_through,status,n_closed,n_open,win_rate_all_in,win_rate_closed,"
+                       "expectancy_pct,pooled_return_pct,buy_hold_return_pct\n"
+                       "2026-10-16,2026-10-15,NOT_STARTED,0,0,,,,,\n")
+    monkeypatch.setenv("WEBAPP_SNAPSHOT_DIR", str(snap))
+    monkeypatch.setenv("WEBAPP_LEDGER_PATH", str(ledger))
+    monkeypatch.setenv("WEBAPP_FORWARD_CSV", str(forward))
+    c = TestClient(app)
+    c.ledger_path = ledger
+    return c
+
+
+# --- rule 5: no bare Sharpe -----------------------------------------------------------
+
+def test_a_ratio_cannot_be_constructed_without_status_and_hypothesis_count():
+    with pytest.raises(ValidationError):
+        schemas.RiskAdjustedRatio(kind="sharpe", value=1.2, window="in_sample")
+    with pytest.raises(ValidationError):
+        schemas.RiskAdjustedRatio(kind="sharpe", value=1.2, window="in_sample", status="VALIDATED_CONFIRMED")
+
+
+def _find_bare_ratios(node, path="$"):
+    """Any key containing 'sharpe' or 'sortino' whose value is not a status-carrying object."""
+    bad = []
+    if isinstance(node, dict):
+        for k, v in node.items():
+            here = f"{path}.{k}"
+            if "sharpe" in k.lower() or "sortino" in k.lower():
+                if not (isinstance(v, dict) and "status" in v and "as_of_hypotheses" in v and "value" in v):
+                    bad.append(here)
+            bad += _find_bare_ratios(v, here)
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            bad += _find_bare_ratios(v, f"{path}[{i}]")
+    return bad
+
+
+@pytest.mark.parametrize("url", ["/api/strategies", "/api/strategies/alpha", "/api/strategies/beta_portfolio", "/api/symbols/AAA"])
+def test_no_response_contains_a_bare_sharpe_or_sortino(client, url):
+    r = client.get(url)
+    assert r.status_code == 200
+    assert _find_bare_ratios(r.json()) == []
+
+
+def test_benchmark_ratios_are_labelled_not_unlabelled(client):
+    d = client.get("/api/strategies/alpha").json()
+    assert d["in_sample"]["benchmark"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS"
+    assert d["in_sample"]["strategy"]["sharpe"]["status"] == "VALIDATED_FAILED"
+
+
+# --- rule 3: read-only -------------------------------------------------------------------
+
+def test_every_route_is_get_only():
+    methods = set()
+    for route in app.routes:
+        for m in getattr(route, "methods", None) or []:
+            methods.add(m)
+    assert methods <= {"GET", "HEAD"}, f"non-read methods exposed: {methods - {'GET', 'HEAD'}}"
+
+
+@pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
+def test_write_methods_are_rejected(client, method):
+    assert getattr(client, method)("/api/strategies").status_code == 405
+
+
+# --- rule 2: the API layer cannot calculate ----------------------------------------------------
+
+def test_api_import_pulls_in_no_engine_strategy_research_or_data_code():
+    code = (
+        "import sys\n"
+        "import webapp.backend.main\n"
+        "banned = ['backtest','metrics','costs','harness','universe','loader','validator','ma_crossover',"
+        "'rsi_reversion','dip_target','portfolio_backtest','cross_sectional_momentum','liquidity_costs',"
+        "'buy_and_hold','pandas','numpy','yfinance','scipy','statsmodels']\n"
+        "print(','.join(b for b in banned if b in sys.modules))\n"
+    )
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "", f"API pulled in: {out.stdout.strip()}"
+
+
+# --- id safety -------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad", ["nope", "..%2Fsecret", "%2e%2e%2fsecret", "..%5Csecret", "alpha.json", "alpha%00",
+                                 "manifest", "data_quality"])
+def test_unknown_or_traversal_ids_are_404_never_a_file_read(client, bad):
+    # "manifest" and "data_quality" are real files in the snapshot folder but not
+    # strategy ids: without the manifest guard they would be read (or crash with a 500).
+    for suffix in ("", "/equity?window=in_sample", "/trades?window=in_sample"):
+        r = client.get(f"/api/strategies/{bad}{suffix}")
+        assert r.status_code == 404, (bad, suffix, r.status_code)
+        assert "true" not in r.text      # the planted secret file's content never appears
+
+
+# --- shapes and pagination -----------------------------------------------------------------------------
+
+def test_strategy_list_has_statuses_and_ledger_total(client):
+    d = client.get("/api/strategies").json()
+    assert d["ledger_total_now"] == 204
+    assert [s["id"] for s in d["strategies"]] == ["alpha", "beta_portfolio"]
+    assert all(s["status"] and s["as_of_hypotheses"] == 204 and s["stale"] is False for s in d["strategies"])
+
+
+def test_status_goes_stale_when_the_ledger_grows_after_the_snapshot(client):
+    client.ledger_path.write_text(json.dumps({"cumulative_hypotheses": 205, "runs": []}))
+    d = client.get("/api/strategies").json()
+    assert d["ledger_total_now"] == 205
+    assert all(s["stale"] is True for s in d["strategies"])
+    assert client.get("/api/strategies/alpha").json()["stale"] is True
+    led = client.get("/api/ledger").json()
+    assert led["snapshot_is_stale"] is True and led["snapshot_total"] == 204
+
+
+def test_equity_is_two_parallel_equal_length_arrays(client):
+    d = client.get("/api/strategies/alpha/equity?window=out_of_sample").json()
+    assert len(d["strategy"]["dates"]) == len(d["strategy"]["values"]) == 3
+    assert len(d["benchmark"]["dates"]) == len(d["benchmark"]["values"])
+
+
+def test_trades_are_paginated_with_a_total(client):
+    d = client.get("/api/strategies/alpha/trades?window=in_sample&limit=3&offset=0").json()
+    assert d["total"] == 7 and len(d["closed_trades"]) == 3
+    d2 = client.get("/api/strategies/alpha/trades?window=in_sample&limit=3&offset=6").json()
+    assert len(d2["closed_trades"]) == 1
+    d3 = client.get("/api/strategies/alpha/trades?window=in_sample&limit=3&offset=50").json()
+    assert d3["closed_trades"] == [] and d3["total"] == 7
+
+
+def test_portfolio_strategy_returns_executions_and_rebalances_not_closed_trades(client):
+    d = client.get("/api/strategies/beta_portfolio/trades?window=in_sample").json()
+    assert d["kind"] == "portfolio" and d["closed_trades"] is None
+    assert len(d["executions"]) == 7 and len(d["rebalances"]) == 1
+
+
+@pytest.mark.parametrize("qs", ["window=sideways", "", "window=in_sample&limit=0", "window=in_sample&limit=100000",
+                                "window=in_sample&offset=-1"])
+def test_bad_query_parameters_are_422(client, qs):
+    assert client.get(f"/api/strategies/alpha/trades?{qs}").status_code == 422
+
+
+def test_data_quality_filters(client):
+    assert len(client.get("/api/data-quality").json()["symbols"]) == 2
+    assert [s["symbol"] for s in client.get("/api/data-quality?universe=midcap150").json()["symbols"]] == ["BBB"]
+    issues = client.get("/api/data-quality?only_issues=true").json()
+    assert [s["symbol"] for s in issues["symbols"]] == ["BBB"]
+    assert issues["n_symbols"] == 2     # totals still describe the whole snapshot
+    # Regression: soft-check failures + reviewed-GENUINE discontinuities are not "issues".
+    assert "AAA" not in [s["symbol"] for s in issues["symbols"]]
+
+
+def test_ledger_and_forward_test(client):
+    led = client.get("/api/ledger").json()
+    assert led["cumulative_hypotheses"] == 204 and len(led["runs"]) == 1
+    assert "bonferroni_bar_now" not in led      # the API must not compute a bar of its own
+    fwd = client.get("/api/forward-test").json()
+    assert fwd["rows"][0]["status"] == "NOT_STARTED" and fwd["rows"][0]["win_rate_all_in"] is None
+
+
+def test_missing_snapshot_is_a_helpful_503_not_a_crash(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_SNAPSHOT_DIR", str(tmp_path / "nothing_here"))
+    c = TestClient(app)
+    r = c.get("/api/strategies")
+    assert r.status_code == 503 and "webapp.backend.snapshot" in r.json()["detail"]
+    h = c.get("/api/health").json()
+    assert h["ok"] is False and h["snapshot_present"] is False
+
+
+# --- per-stock views (screener, cockpit) -----------------------------------------------
+
+def test_a_slice_ratio_must_name_its_parent():
+    base = dict(kind="sharpe", value=1.0, window="in_sample", status="SLICE_OF_POOLED_HYPOTHESIS", as_of_hypotheses=204)
+    with pytest.raises(ValidationError):
+        schemas.RiskAdjustedRatio(**base)                                    # no parent at all
+    with pytest.raises(ValidationError):
+        schemas.RiskAdjustedRatio(**base, parent_strategy_id="alpha")        # parent id but no parent status
+    with pytest.raises(ValidationError):
+        schemas.RiskAdjustedRatio(**base, parent_strategy_id="alpha",
+                                  parent_status="SLICE_OF_POOLED_HYPOTHESIS")  # a slice of a slice
+    ok = schemas.RiskAdjustedRatio(**base, parent_strategy_id="alpha", parent_status="VALIDATED_FAILED")
+    assert ok.parent_status == "VALIDATED_FAILED"
+
+
+def test_symbol_detail_has_no_bare_sharpe_and_labels_every_stock_sharpe_as_a_slice(client):
+    d = client.get("/api/symbols/AAA").json()
+    assert _find_bare_ratios(d) == []
+    alpha = next(r for r in d["results"] if r["strategy_id"] == "alpha")
+    for w in ("in_sample", "out_of_sample"):
+        s = alpha[w]["sharpe"]
+        assert s["status"] == "SLICE_OF_POOLED_HYPOTHESIS"
+        assert s["parent_strategy_id"] == "alpha" and s["parent_status"] == "VALIDATED_FAILED"
+        assert s["as_of_hypotheses"] == 204
+    assert "not independent hypotheses" in d["caveat"]
+
+
+def test_symbol_detail_includes_markers_executions_and_portfolio_note(client):
+    d = client.get("/api/symbols/AAA").json()
+    assert len(d["markers"]) == 14            # 7 closed trades x 2 windows, from the 'alpha' strategy only
+    assert {m["strategy_id"] for m in d["markers"]} == {"alpha"}
+    assert len(d["executions"]) == 14 and {e["strategy_id"] for e in d["executions"]} == {"beta_portfolio"}
+    beta = next(r for r in d["results"] if r["strategy_id"] == "beta_portfolio")
+    assert beta["in_sample"] is None and "no per-stock result" in beta["note"]
+    assert d["quality"]["symbol"] == "AAA"
+
+
+def test_a_strategy_only_appears_on_stocks_of_its_own_universe(client):
+    d = client.get("/api/symbols/BBB").json()           # a midcap stock; both test strategies are nifty50
+    assert d["results"] == [] and d["markers"] == []
+
+
+def test_screener_rows_and_filters(client):
+    d = client.get("/api/screener").json()
+    assert [r["symbol"] for r in d["rows"]] == ["AAA", "BBB"]
+    assert [r["symbol"] for r in client.get("/api/screener?universe=midcap150").json()["rows"]] == ["BBB"]
+    assert [r["symbol"] for r in client.get("/api/screener?sector=Bank").json()["rows"]] == ["AAA"]
+    assert [r["symbol"] for r in client.get("/api/screener?flagged_only=true").json()["rows"]] == ["BBB"]
+    assert not any("sharpe" in k.lower() for r in d["rows"] for k in r)   # a screener never ranks by Sharpe
+
+
+def test_prices_are_columnar_and_trimmed_by_date_with_aligned_indicators(client):
+    full = client.get("/api/symbols/AAA/prices").json()
+    assert len(full["dates"]) == 5
+    for col in ("open", "high", "low", "close", "volume"):
+        assert len(full[col]) == 5
+    assert all(len(v) == 5 for v in full["indicators"].values())
+    assert full["indicator_sources"]["sma_50"].startswith("strategies/ma_crossover.py")
+
+    cut = client.get("/api/symbols/AAA/prices?from_date=2020-01-02&to_date=2020-01-06").json()
+    assert cut["dates"] == ["2020-01-02", "2020-01-03", "2020-01-06"]
+    assert cut["indicators"]["sma_50"] == [None, 101.0, 102.0]
+    assert len(cut["close"]) == len(cut["volume"]) == 3
+
+
+@pytest.mark.parametrize("qs", ["from_date=yesterday", "to_date=2020-1-1", "from_date=2020-01-01;drop"])
+def test_bad_price_date_parameters_are_422(client, qs):
+    assert client.get(f"/api/symbols/AAA/prices?{qs}").status_code == 422
+
+
+@pytest.mark.parametrize("bad", ["NOPE", "..%2Fsecret", "%2e%2e%2fsecret", "manifest", "screener", "AAA.json"])
+def test_unknown_or_traversal_symbols_are_404(client, bad):
+    for suffix in ("", "/prices"):
+        r = client.get(f"/api/symbols/{bad}{suffix}")
+        assert r.status_code == 404, (bad, suffix, r.status_code)
+
+
+def test_symbol_with_a_url_unsafe_name_round_trips(client, tmp_path):
+    # NSE has tickers like M&M and BAJAJ-AUTO; the guard works on the decoded name.
+    snap = tmp_path / "snap"
+    rows = _screener_rows() + [_screener_rows()[0].model_copy(update={"symbol": "M&M"})]
+    (snap / "screener.json").write_text(schemas.ScreenerResponse(
+        generated_at="x", data_through="2020-01-07", in_sample="a", out_of_sample="b", rows=rows).model_dump_json())
+    (snap / "symbols" / "M&M.json").write_text(_prices("M&M").model_dump_json())
+    assert client.get("/api/symbols/M%26M/prices").status_code == 200
+
+
+def test_equity_response_carries_drawdown_exposure_and_growth_series_on_the_same_dates(client):
+    d = client.get("/api/strategies/alpha/equity?window=in_sample").json()
+    dates = d["strategy"]["dates"]
+    for key in ("drawdown_strategy_pct", "drawdown_benchmark_pct", "exposure_strategy_pct",
+                "growth_strategy", "growth_benchmark"):
+        assert d[key]["dates"] == dates and len(d[key]["values"]) == len(dates), key
+    assert all(v <= 0 for v in d["drawdown_strategy_pct"]["values"])
+    assert all(0 <= v <= 100 for v in d["exposure_strategy_pct"]["values"])
+    assert d["growth_strategy"]["values"][0] == 100.0          # both start at 100: comparable by construction
+    assert d["exposure_definition"]
+    assert "do not compare the two rupee curves" in d["note"]
+
+
+def test_health_exposes_snapshot_provenance_for_the_status_strip(client):
+    h = client.get("/api/health").json()
+    assert h["ok"] is True
+    assert h["data_through"] == "2025-12-31" and h["git_commit"] == "abc1234" and h["git_dirty"] is False
+    assert h["ledger_total_now"] == 204 and h["snapshot_ledger_total"] == 204 and h["snapshot_stale"] is False
+    client.ledger_path.write_text(json.dumps({"cumulative_hypotheses": 210, "runs": []}))
+    assert client.get("/api/health").json()["snapshot_stale"] is True
+
+
+# --- serving the built frontend (Stage E: one process, one port) ------------------------------
+
+@pytest.fixture
+def served(client, tmp_path, monkeypatch):
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<html>APP SHELL</html>")
+    (dist / "assets" / "app.js").write_text("console.log('ui')")
+    (tmp_path / "outside.txt").write_text("SECRET OUTSIDE DIST")
+    monkeypatch.setenv("WEBAPP_FRONTEND_DIST", str(dist))
+    return client
+
+
+def test_root_and_client_side_routes_get_the_app_shell(served):
+    for path in ("/", "/strategies", "/stock/RELIANCE", "/research"):
+        r = served.get(path)
+        assert r.status_code == 200 and "APP SHELL" in r.text, path
+
+
+def test_built_assets_are_served_as_files(served):
+    r = served.get("/assets/app.js")
+    assert r.status_code == 200 and "console.log" in r.text
+
+
+def test_unknown_api_routes_are_json_404_not_the_web_page(served):
+    for path in ("/api/nope", "/api/strategies/alpha/bogus", "/api"):
+        r = served.get(path)
+        assert r.status_code == 404, path
+        assert "APP SHELL" not in r.text and "detail" in r.json()
+
+
+def test_the_api_and_docs_still_win_over_the_catch_all(served):
+    assert served.get("/api/health").json()["ok"] is True
+    assert served.get("/openapi.json").json()["info"]["title"]
+    assert "swagger" in served.get("/docs").text.lower()
+
+
+@pytest.mark.parametrize("path", ["/../outside.txt", "/%2e%2e/outside.txt", "/assets/../../outside.txt",
+                                  "/..%2foutside.txt", "/%2e%2e%2foutside.txt"])
+def test_files_outside_dist_are_never_served(served, path):
+    r = served.get(path)
+    assert "SECRET OUTSIDE DIST" not in r.text
+
+
+def test_unbuilt_frontend_says_how_to_build_it(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_FRONTEND_DIST", str(tmp_path / "does_not_exist"))
+    r = client.get("/")
+    assert r.status_code == 404 and "npm run build" in r.json()["detail"]
+
+
+def test_the_ui_is_read_only_too(served):
+    assert served.post("/").status_code == 405

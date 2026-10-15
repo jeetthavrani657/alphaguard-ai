@@ -17,3 +17,7 @@ reports/output/*.png
 
 # Stray one-off run logs
 *_resolve_log.txt
+
+# Web app result snapshots: ~70 MB of JSON, fully reproducible with
+# `python -m webapp.backend.snapshot` (see README "Web app v2").
+webapp/snapshots/
