@@ -209,6 +209,159 @@ Use the same Python that has the project's packages installed (the one
 `pip install -r requirements.txt` went into). The app is research-only:
 no broker connection, no order placement.
 
+### Web app v2: the research terminal (FastAPI + React)
+
+A dark, dense research terminal that replaces the Streamlit app: a stock
+screener with a sector heatmap, a per-stock cockpit (candles, SMA/RSI, the
+strategies' own trades), every strategy with its validation status, and the
+research record (hypothesis ledger, forward test, data quality). The
+Streamlit app above still works and is untouched; retire it when you are
+satisfied with this one.
+
+It is **read-only by construction**: it never runs a strategy and never
+places an order. Strategies run from the terminal, where the harness
+discipline applies; the app only displays what they already produced.
+
+#### Quick start
+
+```bash
+# 1. Once, or whenever results are out of date: run the library and write the results (about 20 min).
+python -m webapp.backend.snapshot
+#    one strategy while experimenting (about 1 minute):
+python -m webapp.backend.snapshot --only ma_crossover_nifty50
+
+# 2. Start the app. Builds the UI the first time (needs Node.js 22+ and internet, once).
+python run_webapp.py --open          # -> http://127.0.0.1:8000     (Ctrl+C to stop)
+```
+
+Or double-click `run_webapp.bat`. Always use the Python that has the
+project's packages installed (see "Setup"); the `.bat` hard-codes that path
+the same way `run_forward_log.bat` does.
+
+| Command | What it does |
+|---|---|
+| `python run_webapp.py` | Serves the UI **and** the API from one process on port 8000. Rebuilds the UI first if its source changed. |
+| `python run_webapp.py --dev` | Two processes with hot reload for editing the UI: API on 8000, Vite dev server on 5173. |
+| `python run_webapp.py --rebuild` | Force a fresh UI build. |
+| `python run_webapp.py --port 8010` | Use another port (default mode). |
+| `python -m webapp.backend.snapshot --list` | Show the strategy ids the snapshot knows. |
+| `python webapp/smoke_check.py` | Smoke test: starts the app on a spare port and sweeps every route, every strategy and window, and all 441 stocks against the real results (about 1 minute). Run it after regenerating results or changing the backend. |
+| `python -m webapp.backend.snapshot --manifest-only` | Rewrite `manifest.json` from the strategy files already on disk (instant). Its provenance is always that of the OLDEST strategy result. |
+| `python -m webapp.backend.snapshot --prices-only` | Run no strategies: rebuild price files, screener, data quality and the manifest (about 5 min). Use it after a data refresh, or to finish a snapshot that stopped in its last step. |
+
+**When to regenerate results (step 1):** after any change to the data, the
+engine, a strategy or its parameters; after new hypotheses are registered in
+the ledger. The status strip at the top of every page tells you when you
+need to: it turns to a **STALE** warning when the ledger has grown since the
+results were generated, and it always shows the commit the results came from
+(with "+uncommitted changes" if the code was dirty).
+
+#### How it fits together
+
+```
+ python -m webapp.backend.snapshot          the ONLY thing that runs strategies (terminal, by you)
+   imports data/ engine/ strategies/ research/ as a library
+   writes webapp/snapshots/*.json           provenance-stamped, validated against schemas.py
+            |
+            v
+ FastAPI  (webapp/backend/main.py)          read-only: every route is GET, imports no calculation code
+            |  JSON, validated again by the same schemas
+            v
+ React + TypeScript  (webapp/frontend/)     draws what it is given; computes nothing
+```
+
+A number therefore exists in exactly one place: where the library computed
+it. The brief's five rules, and what enforces each:
+
+| Rule | Enforced by |
+|---|---|
+| Tested modules untouched (all tests pass) | Only three small, behaviour-preserving additions were made, each proven identical on real data first: `harness.classify_results`, `ma_crossover.moving_average` / `rsi_reversion.rsi`, and four series functions in `engine/metrics.py`. |
+| No duplicated calculation | A test imports the API in a fresh interpreter and fails if any engine/strategy/research/pandas module loads; a source-level test fails on arithmetic in the UI; the snapshot refuses to write a series that disagrees with its headline figure. |
+| Read-only | A test fails if any route is not GET; the UI is checked for non-GET requests. Starting the app never triggers a backtest. |
+| Streamlit keeps working | `app.py` is untouched; both can run at once. |
+| No bare Sharpe | `RiskAdjustedRatio` has a required `status`; the UI can only render it through `<Ratio>`; a test fails if any other file reads a ratio's value. |
+
+#### What each page shows
+
+- **Screener** (`/`): all 441 stocks with buy-and-hold returns per window,
+  filters, and a sector heatmap. It deliberately shows no Sharpe: ranking
+  441 stocks by Sharpe is a multiple comparison.
+- **Stock cockpit** (`/stock/RELIANCE`): candles with SMA 50/200 and the
+  strategies' trade markers over volume and RSI 14; each strategy's result
+  on this stock; the stock's data-quality record and reviewed discontinuities.
+- **Strategies** (`/strategies`, `/strategies/ID`): every strategy with its
+  status and "as of N hypotheses"; both windows against buy-and-hold; growth,
+  drawdown and exposure charts; the paginated trade log.
+- **Research record** (`/research`): the hypothesis ledger, the forward test,
+  and the stocks with unresolved data issues.
+
+#### Reading it correctly
+
+- **A status is only true "as of" a hypothesis count.** The Bonferroni bar
+  is 0.05 divided by that count, so it only gets harder as more is tried.
+  Every Sharpe is shown with its status chip and "as of N".
+- **A stock's Sharpe is a slice, not a verdict.** Strategies are tested as
+  pooled hypotheses across a universe; one stock's Sharpe carries the status
+  `SLICE_OF_POOLED_HYPOTHESIS` and names its parent. Judge a strategy by
+  its pooled status, never by its best stock.
+- **Equity is shown as "growth of 100".** A portfolio strategy trades one
+  account while the benchmark is the sum of one account per stock, so a
+  rupee plot of the two is off by the stock count. Each curve is divided by
+  its own starting capital; its last value minus 100 is the table's total
+  return.
+- **Exposure has two definitions** (the chart's caption says which): the
+  share of stocks' books that are long on each date, or, for momentum, the
+  engine's "non-cash days" rule (0% until the first rebalance, 100% after),
+  which does not measure cash held once invested.
+- **Low-exposure strategies show very negative Sharpe by construction**: idle
+  cash earns nothing in the engine's equity curve while Sharpe subtracts the
+  risk-free rate. Each such strategy carries a note.
+- **Prices are split/dividend-adjusted** and end at the research window's
+  last close. There is no live feed; the app never pretends otherwise.
+- **The heatmap covers Nifty 50 only** (the only universe with a sector map)
+  and shows equal tiles, not market-cap sizes.
+- **Out-of-sample 2020 to 2025 was a broad bull run**, so nearly every stock
+  and every long strategy looks good there. Compare against buy-and-hold.
+
+#### Changing things
+
+- **Colours and look:** the `--variables` at the top of
+  `webapp/frontend/src/styles.css`; the charts read the same ones.
+- **After editing `webapp/backend/schemas.py`** (an API shape), regenerate
+  the frontend's types so the compiler points at anything that no longer fits:
+  ```bash
+  python webapp/backend/export_openapi.py webapp/frontend/openapi.json
+  cd webapp/frontend && npm run gen:types
+  ```
+- **Adding a strategy to the app:** register and test it through the harness
+  first (that is what creates its hypothesis), then add an entry to `RECIPES`
+  in `webapp/backend/snapshot.py` and regenerate.
+- **API reference:** interactive docs at `http://127.0.0.1:8000/docs`.
+  Routes: `/api/strategies`, `/api/strategies/{id}` (+ `/equity`, `/trades`),
+  `/api/screener`, `/api/symbols/{symbol}` (+ `/prices`), `/api/data-quality`,
+  `/api/ledger`, `/api/forward-test`, `/api/health`.
+- **Charts** use TradingView's open-source `lightweight-charts`. The wheel
+  scrolls the page, not the chart; drag to pan and use the range buttons.
+
+#### Troubleshooting
+
+| You see | Cause and fix |
+|---|---|
+| Pages say "No snapshot found" (HTTP 503) | No results yet: `python -m webapp.backend.snapshot`. |
+| Status strip shows **STALE** | The ledger grew after the results were made: regenerate. |
+| "Port 8000 is already in use" | An earlier run is still going, or another program: close it, or `--port 8010`. |
+| `Missing package: fastapi` | Wrong Python. Use the one with the project's packages (`pip install -r requirements.txt`). |
+| "npm was not found" | Install Node.js 22+ from nodejs.org (only needed to build the UI). |
+| UI looks out of date | `python run_webapp.py --rebuild`. |
+| A chart pane says the snapshot predates drawdown/exposure | Regenerate the snapshot. |
+| Snapshot stops with "drawdown series minimum ... does not match" | Intentional integrity check: a charted series disagrees with its headline number. This means a bug, not bad luck: do not bypass it. |
+
+Files: `run_webapp.py` / `.bat` (launcher), `webapp/backend/` (`snapshot.py`,
+`main.py`, `schemas.py`, `store.py`, `export_openapi.py`),
+`webapp/frontend/` (`src/pages`, `src/components`, `src/styles.css`),
+`webapp/snapshots/` (generated, git-ignored, about 70 MB). Tests:
+`tests/test_webapp_*.py`.
+
 ## How to run something
 
 **Single symbol, one strategy, full report** (metrics, benchmarks,
@@ -393,6 +546,13 @@ FORWARD_TEST.md                  pre-registered forward paper-trade test (frozen
 MIDCAP_SMALLCAP_FINDINGS.md      full construction detail for the Midcap/Smallcap universes
 METHODOLOGY.md                   pairs cointegration methodology, frozen before any result
 CLAUDE.md                        project working rules for whoever (human or AI) works on this next
+run_webapp.py / run_webapp.bat   start the research terminal (UI + API); see "Web app v2"
+
+webapp/                          the research terminal (read-only; never runs a strategy)
+  backend/snapshot.py            the ONLY place results are computed for the app: runs the library, writes JSON
+  backend/main.py, schemas.py    read-only FastAPI + the contract every response is validated against
+  frontend/                      React + TypeScript UI (src/pages, src/components, src/styles.css)
+  snapshots/                     generated JSON (git-ignored)
 
 data/
   loader.py                      download + cache + clean NSE price data
@@ -447,7 +607,13 @@ app.py                           web app (Streamlit) front-end
 
 ## Test coverage
 
-86 tests, all passing (`python -m pytest tests/ -q`). This is a
+171 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
+code, 6 for the chart series added to `test_metrics.py`, and 76 for the web
+app: the API contract and static serving in `tests/test_webapp_api.py` (62),
+the indicator exports, snapshot price files and manifest provenance in
+`tests/test_webapp_snapshot.py` (8), and source-level rules for the frontend
+in `tests/test_webapp_frontend_rules.py` (6). `webapp/smoke_check.py` is the
+complementary end-to-end check on the real results (not part of pytest). This is a
 deliberately targeted suite, not full coverage — the same honesty
 applies now as when it was first written: know what's covered, know
 what isn't, don't assume either.
