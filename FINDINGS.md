@@ -10,11 +10,16 @@ measurement code, not in the market — see Section 6, which documents
 that in detail because it is arguably the most useful thing this project
 produced.
 
-> **Data-vintage note (2026-10-16).** Midcap 150 and Smallcap 250 results end on the 2025-12-30 bar
-> (yfinance's `end` is exclusive, so the window's last day was never downloaded); the Nifty 50 cache was
-> later extended and now includes 2025-12-31. Re-running Nifty 50 today therefore gives figures about
-> 0.01 Sharpe higher than those printed below (e.g. MA crossover out-of-sample 0.983 vs 0.974;
-> momentum 1.413 vs 1.405). No status or conclusion changes. Details and the proposed fix:
+> **Data note (2026-10-16): a loader bug was found and fixed; figures below are the values as first computed.**
+> yfinance's `end` is exclusive, so the last day of the window was never downloaded (Midcap/Smallcap ended
+> 2025-12-30), and the Nifty 50 cache had a fake one-day move on 2025-12-31 for four stocks where a tail was
+> spliced on at a different dividend-adjustment basis. The loader is fixed, the cache re-downloaded on one
+> basis, and all three universes now run through 2025-12-31. **No status and no conclusion changed.** The
+> figures printed in this document move by about 0.01 Sharpe at most; current values for the headline results,
+> out-of-sample: MA crossover Nifty 50 **0.984** (printed 0.974), Midcap **1.450** (1.440), Smallcap **1.508**
+> (1.505); momentum **1.414** (1.405); RSI reversion **-1.326** (printed -1.331). The one result near its bar: Smallcap
+> MA crossover's out-of-sample p = 0.000231 against 0.05/204 = 0.000245, which would fail at 217 hypotheses
+> (it is `OOS_ONLY_SIGNIFICANT` regardless). Full before/after table and method:
 > `data/known_issues.md`, "The last day of the research window is never downloaded".
 
 This document is the complete, current research record. It supersedes

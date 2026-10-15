@@ -244,9 +244,9 @@ Full reasoning per date is in `data/discontinuity_registry.py`.
 
 ### The last day of the research window is never downloaded (yfinance `end` is exclusive)
 
-- **Status: OPEN** (found by the web app smoke test; deliberately NOT fixed, see below)
+- **Status: RESOLVED 2026-10-16** (loader fix + cache repair; see "Resolution" at the end of this entry)
 - **Reviewed:** 2026-10-16
-- **What happens:** `config.END_DATE` is `2025-12-31` and `data/loader.py` passes it
+- **What happened:** `config.END_DATE` is `2025-12-31` and `data/loader.py` passed it
   straight to `yfinance` as `end=`. Yahoo treats `end` as **exclusive**, so a fresh
   download stops at 2025-12-30. On every later load the cache check
   (`cache.max >= end`) fails, the loader asks for the "missing" tail
@@ -264,11 +264,73 @@ Full reasoning per date is in `data/discontinuity_registry.py`.
   0.9831 with the 2025-12-31 bar (what the cache produces today). Momentum
   1.4051 vs 1.4135 likewise. No conclusion changes: every strategy's status and
   every strategy-vs-benchmark ordering is the same either way.
-- **Proposed fix (needs the owner's decision, because it changes published
-  numbers):** request `end + 1 day` from Yahoo in `_download_with_retry` /
-  Case 3 of `load_price_data`, then clip to `end` as already done. Then re-run the
-  Midcap/Smallcap work and update the affected figures in FINDINGS.md,
-  MIDCAP_SMALLCAP_FINDINGS.md and MOMENTUM_FINDINGS.md.
-- **Until then:** the web app's status strip shows the conservative
-  "data through" date (the earliest across strategies: 2025-12-30), and every
-  figure in the app is reproducible from the cache as it stands.
+- **Related defect found while fixing it (adjustment-basis splice):** extending
+  a cache by appending a downloaded tail joined two adjustment bases. Yahoo
+  re-scales adjusted history whenever a dividend goes ex, so the join showed a
+  fake one-day move. In the Nifty 50 cache the 2025-12-30 -> 2025-12-31 move was
+  wrong for four stocks: COALINDIA -1.25 pts, TCS -0.53, POWERGRID -0.46,
+  ONGC -0.42. Midcap would have had the same had the missing day simply been
+  appended.
+
+#### Resolution (2026-10-16)
+
+- **Loader (`data/loader.py`):**
+  1. `end` is now inclusive: Yahoo is asked for `end + 1 day` and the result is
+     clipped to the window.
+  2. A cache that does not reach the requested window is no longer patched.
+     The whole range (the union of the request and what is held) is
+     re-downloaded and replaces the cache, so one series = one adjustment
+     basis. The cache never shrinks.
+  3. Vendor-truncation guard: if the cache holds data at the start of the
+     requested range and the download no longer does, the cache is kept and a
+     warning printed. Found live: **HEG.NS is now served by Yahoo only from
+     2026-07-17**; a plain refresh would have discarded 2,714 rows of
+     2015-2025. HEG's cache (through 2025-12-30) is therefore intact but has no
+     2025-12-31 bar; every other symbol has one. An empty download also keeps
+     the cache.
+  - Tests: `tests/test_loader_end_date.py` (13 tests, 7 of the first 11 fail on
+    the old loader).
+- **Cache repair:** `python data/refresh_cache.py` re-downloaded all 441
+  symbols in one pass (399 s, 0 failures). Measured against the backup taken
+  first: Midcap +145 rows (one 2025-12-31 bar each) and 18 stock-days whose
+  return moved by at most 0.00014 pt; Smallcap +1 day for 245 of 246 stocks and
+  39 stock-days moved by at most 0.0075 pt; Nifty 50 12 stock-days moved, the
+  largest being the COALINDIA seam (1.25 pt). A fresh download compared with
+  the repaired cache at the 12-30/12-31 seam: no scale mismatch in the Nifty 50
+  or in 40 sampled Midcap stocks.
+- **Effect on results** (web app snapshot regenerated; no hypothesis was
+  registered, the ledger is unchanged at 204). Every strategy now runs through
+  2025-12-31, in all three universes. **No status changed.**
+
+  | Strategy (out-of-sample) | Sharpe before | Sharpe after | Strategy return before -> after |
+  |---|---|---|---|
+  | MA crossover, Nifty 50 | 0.983 | 0.984 | 157.4% -> 157.6% |
+  | MA crossover, Midcap 150 | 1.440 | 1.450 | 270.7% -> 273.7% |
+  | MA crossover, Smallcap 250 | 1.505 | 1.508 | 346.3% -> 347.7% |
+  | RSI reversion, Nifty 50 | -1.326 | -1.326 | 12.1% -> 12.1% |
+  | Momentum, Nifty 50 | 1.413 | 1.414 | 441.7% -> 441.7% |
+  | Dip A / Dip B / Dip uptrend | 0.477 / -1.873 / -6.920 | 0.479 / -1.872 / -6.920 | (within 0.1 pt) |
+
+  In-sample Sharpe ratios are unchanged to three decimals for all eight
+  strategies. The largest move anywhere is +0.010 (Midcap out-of-sample).
+  "Before" is the cache as it stood when the issue was found, which for Nifty 50
+  already included 2025-12-31 (with the fake seam moves) and for Midcap/Smallcap
+  ended 2025-12-30.
+- **One result is close to its bar and worth knowing:** the Smallcap 250 MA
+  crossover's out-of-sample p-value is 0.000231 against the Bonferroni bar
+  0.05/204 = 0.000245, a pass by a hair. It stays `OOS_ONLY_SIGNIFICANT`, and
+  it would fail once the ledger reaches **217** hypotheses (it was 210 before
+  the repair). It is "OOS only" in any case: the in-sample leg (p = 0.47) never
+  replicated.
+- **Not changed:** the narrative figures printed in FINDINGS.md,
+  MIDCAP_SMALLCAP_FINDINGS.md and MOMENTUM_FINDINGS.md (for example 0.974 /
+  1.324 for the Nifty 50, 1.4397 / 1.5048 hard-coded in
+  `research/run_survivorship_and_exposure_check.py`). They are the values as
+  computed at the time and the table above gives the current ones. Re-running
+  the research scripts would register new hypotheses and change the ledger
+  count, so it is deliberately not done; none of the differences affect a
+  conclusion.
+- **Going forward:** `python data/refresh_cache.py` is the supported way to
+  refresh the cache. Cost of the new policy: a window whose last day has no bar
+  (weekend/holiday), or a stock that listed after `start`, re-downloads that
+  symbol on every load (one request per symbol, as before, larger payload).

@@ -249,6 +249,8 @@ the same way `run_forward_log.bat` does.
 | `python -m webapp.backend.snapshot --manifest-only` | Rewrite `manifest.json` from the strategy files already on disk (instant). Its provenance is always that of the OLDEST strategy result. |
 | `python -m webapp.backend.snapshot --prices-only` | Run no strategies: rebuild price files, screener, data quality and the manifest (about 5 min). Use it after a data refresh, or to finish a snapshot that stopped in its last step. |
 
+**After refreshing prices:** `python data/refresh_cache.py` re-downloads every symbol in one pass (about 7 minutes). Do it, not an ad-hoc append, whenever you want newer data: Yahoo re-scales adjusted history after every dividend, so a cache patched from downloads made on different days carries fake one-day moves at the seams. Then regenerate the results below.
+
 **When to regenerate results (step 1):** after any change to the data, the
 engine, a strategy or its parameters; after new hypotheses are registered in
 the ledger. The status strip at the top of every page tells you when you
@@ -556,6 +558,7 @@ webapp/                          the research terminal (read-only; never runs a 
 
 data/
   loader.py                      download + cache + clean NSE price data
+  refresh_cache.py               re-download the whole cache on one adjustment basis (see known_issues.md)
   validator.py                   data-quality checks + the discontinuity gate
   discontinuity_registry.py      GENUINE/ARTIFACT/UNREVIEWED review log (machine-readable)
   known_issues.md                same log, human-readable, with full evidence
@@ -607,9 +610,10 @@ app.py                           web app (Streamlit) front-end
 
 ## Test coverage
 
-171 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
-code, 6 for the chart series added to `test_metrics.py`, and 76 for the web
-app: the API contract and static serving in `tests/test_webapp_api.py` (62),
+184 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
+code, 13 for the loader's end-date / adjustment-basis behaviour in
+`tests/test_loader_end_date.py`, 6 for the chart series added to
+`test_metrics.py`, and 76 for the web app: the API contract and static serving in `tests/test_webapp_api.py` (62),
 the indicator exports, snapshot price files and manifest provenance in
 `tests/test_webapp_snapshot.py` (8), and source-level rules for the frontend
 in `tests/test_webapp_frontend_rules.py` (6). `webapp/smoke_check.py` is the
