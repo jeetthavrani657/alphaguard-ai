@@ -1,0 +1,69 @@
+{
+  "runs": [
+    {
+      "run_id": "run_20260905T142323Z_0",
+      "timestamp": "2026-09-05T14:23:23.034617+00:00",
+      "context": "MA crossover parameter sweep (Stage 5, backfilled): 109 (fast,slow) combinations, pooled across the 48-symbol universe, tested for CAGR/Sharpe -- best cell (13.27% CAGR, Sharpe 0.63) shown in FINDINGS.md to be within one sampling-noise SE of the grid mean.",
+      "n_hypotheses_this_run": 109,
+      "cumulative_hypotheses_before_run": 0,
+      "cumulative_hypotheses_after_run": 109
+    },
+    {
+      "run_id": "run_20260905T142323Z_1",
+      "timestamp": "2026-09-05T14:23:23.070233+00:00",
+      "context": "Pairs cointegration screen (this session, backfilled): 51 same-sector pairs tested for Engle-Granger cointegration in the 2015-2020-06 selection window -- 5 raw-significant, 1 survived Bonferroni, 3 survived BH-FDR, 0 of 5 replicated on fresh out-of-sample retest.",
+      "n_hypotheses_this_run": 51,
+      "cumulative_hypotheses_before_run": 109,
+      "cumulative_hypotheses_after_run": 160
+    },
+    {
+      "run_id": "run_20260906T154111Z_2",
+      "timestamp": "2026-09-06T15:41:11.771565+00:00",
+      "context": "MA crossover vs RSI reversion, both on the 48-symbol universe, in-sample vs out-of-sample (first harness-governed run)",
+      "n_hypotheses_this_run": 2,
+      "cumulative_hypotheses_before_run": 160,
+      "cumulative_hypotheses_after_run": 162
+    },
+    {
+      "run_id": "run_20260906T155920Z_3",
+      "timestamp": "2026-09-06T15:59:20.402014+00:00",
+      "context": "MA crossover (fast=50, slow=200, unchanged) on Midcap150 and Smallcap250 -- control comparison for the universe-dependence question, liquidity-adjusted slippage",
+      "n_hypotheses_this_run": 2,
+      "cumulative_hypotheses_before_run": 162,
+      "cumulative_hypotheses_after_run": 164
+    },
+    {
+      "run_id": "run_20260920T201159Z_4",
+      "timestamp": "2026-09-20T20:11:59.771458+00:00",
+      "context": "Cross-sectional momentum (12-1, top-10, monthly, Nifty 50, long-only) -- new strategy family, pre-registered in MOMENTUM_METHODOLOGY.md before any result existed",
+      "n_hypotheses_this_run": 1,
+      "cumulative_hypotheses_before_run": 164,
+      "cumulative_hypotheses_after_run": 165
+    },
+    {
+      "run_id": "run_20261015T182102Z_5",
+      "timestamp": "2026-10-15T18:21:02.058516+00:00",
+      "context": "Dip + take-profit (RSI<30 entry, +3% target; A: no stop, B: 10% stop), Nifty 50 -- built to maximize win rate at the owner's request",
+      "n_hypotheses_this_run": 2,
+      "cumulative_hypotheses_before_run": 165,
+      "cumulative_hypotheses_after_run": 167
+    },
+    {
+      "run_id": "run_20261015T182739Z_6",
+      "timestamp": "2026-10-15T18:27:39.906245+00:00",
+      "context": "Dip in uptrend (RSI<30 & above 200d avg; +4% target, -12% stop, 60-day limit), Nifty 50 -- one pre-registered attempt at profit AND ~90% win rate",
+      "n_hypotheses_this_run": 1,
+      "cumulative_hypotheses_before_run": 167,
+      "cumulative_hypotheses_after_run": 168
+    },
+    {
+      "run_id": "run_20261015T191317Z_7",
+      "timestamp": "2026-10-15T19:13:17.094419+00:00",
+      "context": "Bounded 36-variant dip-buying search for >=90% net win rate (search 2015-2025, single holdout run on 2026 data) at the owner's request",
+      "n_hypotheses_this_run": 36,
+      "cumulative_hypotheses_before_run": 168,
+      "cumulative_hypotheses_after_run": 204
+    }
+  ],
+  "cumulative_hypotheses": 204
+}

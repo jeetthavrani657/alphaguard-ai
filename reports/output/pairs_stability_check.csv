@@ -1,0 +1,6 @@
+symbol_a,symbol_b,sector,in_sample_min_p,in_sample_bh_survives,holdout_status,holdout_min_p,holdout_both_pass
+HDFCLIFE,SBILIFE,Insurance,0.0004580986616986446,True,tested,0.30839673664751077,False
+HCLTECH,TCS,IT Services,0.0028741697111581165,True,tested,0.4040409933128264,False
+INFY,TCS,IT Services,0.0013092315776620951,True,tested,0.25795091607942755,False
+HINDALCO,TATASTEEL,Metals,0.023015609806637,False,tested,0.14776083713815447,False
+ASIANPAINT,TRENT,Consumer Discretionary,0.003975843390585303,False,tested,0.10413950947568795,False
