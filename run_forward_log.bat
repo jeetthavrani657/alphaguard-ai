@@ -17,4 +17,16 @@ rem which gains one row per data date.
 cd /d "%~dp0"
 if not exist "reports\output" mkdir "reports\output"
 "C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\forward_log.py > "reports\output\forward_last_run.log" 2>&1
-exit /b %ERRORLEVEL%
+set FORWARD_RESULT=%ERRORLEVEL%
+
+rem Forward paper books (FORWARD_BOOKS.md): the frozen momentum and Smallcap MA candidates, run on
+rem data that did not exist when they were frozen. Research only; places no orders. Independent of
+rem the steps around it. Output overwrites reports\output\forward_books_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\forward_books.py > "reports\output\forward_books_last_run.log" 2>&1
+
+rem Also accumulate the point-in-time news archive (research\news_logger.py). It is independent
+rem of the forward test: if one fails the other has still run. Its output overwrites
+rem reports\output\news_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\news_logger.py > "reports\output\news_last_run.log" 2>&1
+
+exit /b %FORWARD_RESULT%
