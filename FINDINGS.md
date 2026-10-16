@@ -22,6 +22,10 @@ produced.
 > (it is `OOS_ONLY_SIGNIFICANT` regardless). Full before/after table and method:
 > `data/known_issues.md`, "The last day of the research window is never downloaded".
 
+> **Ledger update (2026-10-16): 204 became 205.** The quality + value forward book
+> (`FUNDAMENTALS_PREREG.md`) was registered and counted. No backtest was run for it, so none of the
+> results in this document changed; Bonferroni bar is now 0.05/205 = 0.000244.
+
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a
 number changed from an earlier version of this file, the reason is in

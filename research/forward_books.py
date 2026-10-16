@@ -11,8 +11,10 @@ the frozen dip-buying rule and is not touched):
   * Everything is recomputed from raw prices with the same engine, costs and
     benchmark as the backtests, so the report is idempotent: running it twice on
     the same data gives the same answer.
-  * No new hypothesis is created. Every book here was already counted in the
-    ledger; this only collects out-of-time evidence for it.
+  * No book is added without being counted. The first two were already in the
+    ledger when frozen; the quality + value book was registered later
+    (FUNDAMENTALS_PREREG.md) and counted when it was. This only collects
+    out-of-time evidence for them.
   * Nothing is judged early. Sharpe is withheld until MIN_DAYS_FOR_SHARPE
     trading days of forward data exist; before that the numbers are monitoring.
 
@@ -40,9 +42,12 @@ import pandas as pd
 
 import buy_and_hold
 import config
+import fundamentals_snapshot
 import ma_crossover
+import quality_value
 from liquidity_costs import build_slippage_map
 from metrics import drawdown_series_pct, exposure_series_pct, growth_of_100, non_cash_exposure_series_pct
+from portfolio_backtest import _eligible_symbols
 from run_momentum_strategy import _run_window, build_window_inputs
 from universe import load_universe, run_strategy_on_universe
 
@@ -71,6 +76,18 @@ BOOKS = [
         "rationale": "Once a trend is established (fast MA above slow MA), price is more likely to continue than reverse.",
         "why_forward_tested": "The only configuration to clear the cumulative bar out-of-sample (by a hair), and only out-of-sample; "
                               "the zero-skill test shows its Sharpe is explained by partial exposure, not timing.",
+    },
+    {
+        # Registered 2026-10-16 in FUNDAMENTALS_PREREG.md, AFTER the two books above (their document is frozen and
+        # untouched). This one IS a new hypothesis and was counted in the ledger when it was registered (204 -> 205).
+        "id": "quality_value_nifty50",
+        "name": "Quality + value (ROE and earnings yield), top 10, yearly",
+        "kind": "fundamental", "universe": "nifty50",
+        "params": {"top_n": quality_value.TOP_N},
+        "rationale": "Companies that earn high returns on their equity while trading at a low price relative to those earnings "
+                     "have historically beaten the market; the two measures guard against each other's traps.",
+        "why_forward_tested": "Never backtested: only ~3 usable annual cross-sections exist in free data, too few to test anything. "
+                              "Registered as a forward book so the evidence can only come from data that does not exist yet.",
     },
 ]
 STRATEGY_MODULES = {"ma_crossover": ma_crossover}
@@ -113,9 +130,36 @@ def _pending_per_symbol(universe_data: dict, module, params: dict) -> list:
     return out
 
 
+def _report_kind(book: dict) -> str:
+    """What the report calls the book. A fundamentals book is a one-account portfolio, and the web app's API
+    only knows 'per_symbol' and 'portfolio', so it is reported as 'portfolio' (the dispatch above still sees 'fundamental')."""
+    return "portfolio" if book["kind"] == "fundamental" else book["kind"]
+
+
+def _fundamental_formation_dates(universe_data: dict, last: pd.Timestamp) -> list:
+    """
+    Freeze day, then the last trading day of each June after it, up to the data end (FUNDAMENTALS_PREREG.md).
+    June, because the annual statements to 31 March are assumed public by 29 June (period end + 90 days).
+    """
+    calendar = sorted(set().union(*(e["df"].index for e in universe_data.values())))
+    dates = [pd.Timestamp(FORWARD_START)]
+    for year in range(pd.Timestamp(FORWARD_START).year + 1, last.year + 1):
+        june = [d for d in calendar if d.year == year and d.month == 6]
+        if june and june[-1] <= last:
+            dates.append(june[-1])
+    return dates
+
+
+def _fundamental_weights(universe_data: dict, last: pd.Timestamp) -> pd.DataFrame:
+    """Target weights of the quality + value book on every formation date so far, as known on each date (strict)."""
+    return quality_value.generate_target_weights(
+        universe_data, fundamentals_snapshot.load_snapshot(), fundamentals_snapshot.load_currency(),
+        _fundamental_formation_dates(universe_data, last), top_n=quality_value.TOP_N, strict=True)
+
+
 def _empty_report(book: dict, last: pd.Timestamp, pending: list, note: str) -> dict:
     return {
-        "id": book["id"], "name": book["name"], "kind": book["kind"], "universe": book["universe"],
+        "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"],
         "rationale": book["rationale"], "why_forward_tested": book["why_forward_tested"],
         "status": "NOT_STARTED", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": 0, "sharpe_withheld_until_days": MIN_DAYS_FOR_SHARPE,
@@ -148,6 +192,9 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
     if last < pd.Timestamp(FIRST_COUNTED_DAY):
         note = (f"The first countable session is {FIRST_COUNTED_DAY}; data currently ends {last.date()}. "
                 "Nothing to evaluate yet: the clock has started.")
+        if book["kind"] == "fundamental":
+            w = _fundamental_weights(universe_data, last).iloc[0]            # the picks frozen on the freeze day
+            note += " Frozen picks: " + ", ".join(t.replace(".NS", "") for t in w[w > 0].index) + "."
         return _empty_report(book, last, pending, note)
 
     end = last.strftime("%Y-%m-%d")
@@ -178,8 +225,12 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
         if run["blocked"]:
             notes.append(f"{len(run['blocked'])} stock(s) could not run the rule (data gate or too little history).")
     else:
-        eligible, weights, blocked = build_window_inputs(universe_data, FORWARD_START, end)
-        mom = _run_window(eligible, weights, FORWARD_START, end, "momentum", verbose=False)
+        if book["kind"] == "fundamental":
+            eligible, blocked = _eligible_symbols(universe_data, FORWARD_START, end, override_discontinuity_gate=False)
+            weights = _fundamental_weights(eligible, last)                  # ranks only symbols the data gate allows
+        else:
+            eligible, weights, blocked = build_window_inputs(universe_data, FORWARD_START, end)
+        mom = _run_window(eligible, weights, FORWARD_START, end, book["id"], verbose=False)
         curve, bench_curve = mom["result"]["equity_curve"], None
         bench = run_strategy_on_universe(eligible, buy_and_hold, {}, FORWARD_START, end, verbose=False)
         bench_curve = bench["combined_equity_curve"]
@@ -200,11 +251,12 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
             pending = [{"symbol": "(portfolio)", "action": f"rebalance to the {len(holdings)} targets formed "
                                                          f"{weights.index[-1].date()}, at the next open"}]
         n_open, n_closed = len(holdings), None
-        notes.append("Holdings shown are the latest month-end targets, executed at the next session's open.")
+        notes.append("Holdings shown are the latest formation's targets, executed at the next session's open."
+                     + (" Rebalanced once a year, on the last trading day of June." if book["kind"] == "fundamental" else ""))
 
     n_days = int(len(curve))
     return {
-        "id": book["id"], "name": book["name"], "kind": book["kind"], "universe": book["universe"],
+        "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"],
         "rationale": book["rationale"], "why_forward_tested": book["why_forward_tested"],
         "status": "RUNNING", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": n_days,

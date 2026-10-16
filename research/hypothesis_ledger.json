@@ -63,7 +63,15 @@
       "n_hypotheses_this_run": 36,
       "cumulative_hypotheses_before_run": 168,
       "cumulative_hypotheses_after_run": 204
+    },
+    {
+      "run_id": "run_20261016T121243Z_8",
+      "timestamp": "2026-10-16T12:12:43.336311+00:00",
+      "context": "Pre-registered quality+value (ROE + earnings yield) forward book, FUNDAMENTALS_PREREG.md; 1 hypothesis, no backtest run",
+      "n_hypotheses_this_run": 1,
+      "cumulative_hypotheses_before_run": 204,
+      "cumulative_hypotheses_after_run": 205
     }
   ],
-  "cumulative_hypotheses": 204
+  "cumulative_hypotheses": 205
 }

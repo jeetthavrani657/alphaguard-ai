@@ -61,7 +61,9 @@ MOM_BOOK = {
 
 def test_the_books_are_exactly_what_the_research_registered():
     ids = [b["id"] for b in forward_books.BOOKS]
-    assert ids == ["momentum_nifty50", "ma_crossover_smallcap250"] and len(set(ids)) == len(ids)
+    assert ids == ["momentum_nifty50", "ma_crossover_smallcap250", "quality_value_nifty50"] and len(set(ids)) == len(ids)
+    qv = next(b for b in forward_books.BOOKS if b["id"] == "quality_value_nifty50")
+    assert qv["kind"] == "fundamental" and qv["params"] == {"top_n": 10} and qv["universe"] == "nifty50"
     mom = next(b for b in forward_books.BOOKS if b["id"] == "momentum_nifty50")
     assert mom["params"] == {"lookback_days": cross_sectional_momentum.LOOKBACK_DAYS,
                              "skip_days": cross_sectional_momentum.SKIP_DAYS, "top_n": cross_sectional_momentum.TOP_N}
@@ -69,7 +71,7 @@ def test_the_books_are_exactly_what_the_research_registered():
     assert ma["params"] == config.MA_CROSSOVER_PARAMS and ma["liquidity_costs"] is True
     for b in forward_books.BOOKS:
         assert b["universe"] in forward_books.UNIVERSES
-        assert b["kind"] == "portfolio" or b.get("strategy") in forward_books.STRATEGY_MODULES
+        assert b["kind"] in ("portfolio", "fundamental") or b.get("strategy") in forward_books.STRATEGY_MODULES
 
 
 def test_the_frozen_dates_and_gate_have_not_been_edited():
@@ -116,6 +118,87 @@ def test_a_portfolio_book_runs_and_its_charts_match_its_headline_numbers(window)
     _reconcile(rep)
     assert 0 < len(rep["holdings"]) <= 10
     assert sum(h["target_weight_pct"] for h in rep["holdings"]) == pytest.approx(100.0, abs=0.1)
+
+
+# --- the quality + value (fundamentals) book --------------------------------------------------------------
+
+QV_BOOK = {
+    "id": "toy_qv", "name": "toy quality value", "kind": "fundamental", "universe": "nifty50",
+    "params": {"top_n": 10}, "rationale": "r", "why_forward_tested": "w",
+}
+
+
+def _toy_archive(n=25, seen="2026-08-01"):
+    """Archive-shaped facts for S00..S{n-1}: higher k = more profit on the same equity and price = better."""
+    rows = []
+    for k in range(n):
+        ni, shares = 100.0 + k, 10.0
+        for item, v in (("Net Income Common Stockholders", ni), ("Stockholders Equity", 500.0),
+                        ("Ordinary Shares Number", shares), ("Basic EPS", ni / shares)):
+            rows.append({"symbol": f"S{k:02d}", "freq": "annual", "period_end": pd.Timestamp("2026-03-31"), "item": item,
+                         "value": v, "assumed_available_from": pd.Timestamp("2026-06-29"),
+                         "first_seen_date": pd.Timestamp(seen)})
+    return pd.DataFrame(rows), {f"S{k:02d}": "INR" for k in range(n)}
+
+
+def _same_price_universe(n):
+    """n stocks sharing one price path, so only the fundamentals (not price) can separate them."""
+    base = _toy_universe(n_symbols=1)["S00.NS"]
+    return {f"S{k:02d}.NS": {"df": base["df"].copy(), "report": REPORT, "symbol": f"S{k:02d}"} for k in range(n)}
+
+
+def _use_archive(monkeypatch, facts, ccy):
+    monkeypatch.setattr(forward_books.fundamentals_snapshot, "load_snapshot", lambda: facts)
+    monkeypatch.setattr(forward_books.fundamentals_snapshot, "load_currency", lambda: ccy)
+
+
+def test_the_fundamental_book_runs_picks_the_top_ten_and_reconciles(window, monkeypatch):
+    _use_archive(monkeypatch, *_toy_archive())
+    rep = forward_books.build_book_report(QV_BOOK, _same_price_universe(25))
+    assert rep["status"] == "RUNNING"
+    _reconcile(rep)
+    assert {h["symbol"] for h in rep["holdings"]} == {f"S{k:02d}" for k in range(15, 25)}      # the ten most profitable
+    assert all(h["target_weight_pct"] == pytest.approx(10.0) for h in rep["holdings"])
+    assert any("once a year" in n for n in rep["notes"])
+
+
+def test_the_report_calls_a_fundamental_book_a_portfolio_because_the_api_only_knows_two_kinds(window, monkeypatch):
+    _use_archive(monkeypatch, *_toy_archive())
+    assert forward_books.build_book_report(QV_BOOK, _same_price_universe(25))["kind"] == "portfolio"
+    monkeypatch.setattr(forward_books, "FIRST_COUNTED_DAY", "2027-01-04")           # and in the not-started report too
+    assert forward_books.build_book_report(QV_BOOK, _same_price_universe(25))["kind"] == "portfolio"
+
+
+def test_the_fundamental_book_with_nothing_archived_holds_cash_and_does_not_crash(window, monkeypatch):
+    _use_archive(monkeypatch, pd.DataFrame(), {})
+    rep = forward_books.build_book_report(QV_BOOK, _toy_universe(n_symbols=25))
+    assert rep["status"] == "RUNNING" and rep["holdings"] == []
+    assert rep["summary"]["return_pct"] == 0.0
+
+
+def test_figures_first_seen_after_the_freeze_day_cannot_form_the_first_portfolio(window, monkeypatch):
+    """Strict point in time: the archive had not seen these numbers on the formation date, so the book cannot use them."""
+    _use_archive(monkeypatch, *_toy_archive(seen="2026-09-15"))                    # seen after the 2026-09-01 formation
+    assert forward_books.build_book_report(QV_BOOK, _toy_universe(n_symbols=25))["holdings"] == []
+
+
+def test_before_the_first_counted_day_the_fundamental_book_shows_its_frozen_picks(monkeypatch):
+    monkeypatch.setattr(forward_books, "FIRST_COUNTED_DAY", "2027-01-04")
+    monkeypatch.setattr(forward_books, "FORWARD_START", "2026-10-20")
+    _use_archive(monkeypatch, *_toy_archive())
+    rep = forward_books.build_book_report(QV_BOOK, _toy_universe(n_symbols=25))
+    assert rep["status"] == "NOT_STARTED"
+    assert "Frozen picks: " in rep["notes"][0] and "S24" in rep["notes"][0]
+
+
+def test_formation_dates_are_the_freeze_day_then_the_last_trading_day_of_each_june(monkeypatch):
+    monkeypatch.setattr(forward_books, "FORWARD_START", "2026-10-16")
+    idx = pd.bdate_range("2026-09-01", "2028-07-31")
+    uni = {"X.NS": {"df": pd.DataFrame({"close": 1.0}, index=idx)}}
+    got = forward_books._fundamental_formation_dates(uni, pd.Timestamp("2028-07-15"))
+    assert got == [pd.Timestamp("2026-10-16"), pd.Timestamp("2027-06-30"), pd.Timestamp("2028-06-30")]
+    early = forward_books._fundamental_formation_dates(uni, pd.Timestamp("2028-06-20"))   # June 2028 not over yet
+    assert early == [pd.Timestamp("2026-10-16"), pd.Timestamp("2027-06-30")]
 
 
 def test_sharpe_is_withheld_until_a_year_of_forward_days_exists(window, monkeypatch):
