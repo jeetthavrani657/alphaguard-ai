@@ -49,6 +49,7 @@ import config
 
 SNAPSHOT_PATH = os.path.join(PROJECT_ROOT, "data", "fundamentals", "yf_snapshot.csv")
 LAST_RUN_PATH = os.path.join(PROJECT_ROOT, "data", "fundamentals", "yf_last_run.txt")
+CURRENCY_PATH = os.path.join(PROJECT_ROOT, "data", "fundamentals", "yf_currency.csv")
 COLUMNS = ["symbol", "statement", "freq", "period_end", "item", "value", "first_seen_utc",
            "assumed_available_from", "pit_quality"]
 # (statement, freq) -> the yfinance Ticker attribute that serves it
@@ -125,6 +126,47 @@ def append_new(rows: list, path: str | None = None) -> int:
             w.writeheader()
         w.writerows(fresh)
     return len(fresh)
+
+
+def fetch_currency(symbol: str, ticker_factory=None):
+    """
+    The currency yfinance reports the statements in ("INR", "USD", ...), or None if it cannot be read.
+    It matters: two Nifty 50 names (Infosys, HCLTech) are served in US dollars, which makes any ratio of
+    a statement figure to a rupee share price off by ~80x. Raw values are archived as served, so the
+    currency has to be archived next to them.
+    """
+    if ticker_factory is None:
+        import yfinance as yf
+        ticker_factory = yf.Ticker
+    try:
+        return ticker_factory(f"{symbol}.NS").get_info().get("financialCurrency")
+    except Exception:
+        return None
+
+
+def load_currency(path: str | None = None) -> dict:
+    """{symbol: currency} using the newest row stored for each symbol (rows are only added when it changes)."""
+    path = path or CURRENCY_PATH
+    if not os.path.exists(path):
+        return {}
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return {r["symbol"]: r["financial_currency"] for r in sorted(rows, key=lambda r: r["first_seen_utc"])}
+
+
+def append_currency(symbol: str, currency, seen_at: str, path: str | None = None) -> bool:
+    """Store a symbol's currency if it is new or changed. Returns True if a row was written."""
+    if not currency or load_currency(path).get(symbol) == currency:
+        return False
+    path = path or CURRENCY_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    new_file = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["symbol", "financial_currency", "first_seen_utc"])
+        if new_file:
+            w.writeheader()
+        w.writerow({"symbol": symbol, "financial_currency": currency, "first_seen_utc": seen_at})
+    return True
 
 
 def fetch_symbol(symbol: str, seen_at: str, ticker_factory=None) -> tuple:
@@ -268,6 +310,11 @@ def main(argv=None) -> int:
     for i, symbol in enumerate(config.UNIVERSE):
         rows, probs = fetch_symbol(symbol, seen_at)
         problems += probs
+        ccy = fetch_currency(symbol)
+        if ccy is None:
+            problems.append(f"{symbol}: reporting currency unavailable")
+        else:
+            append_currency(symbol, ccy, seen_at)
         if rows:
             stocks_ok += 1
             new_total += append_new(rows)

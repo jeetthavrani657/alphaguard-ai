@@ -186,6 +186,8 @@ def test_status_summarises_the_archive(tmp_path):
 def redirected(monkeypatch, tmp_path):
     monkeypatch.setattr(fs, "SNAPSHOT_PATH", str(tmp_path / "s.csv"))
     monkeypatch.setattr(fs, "LAST_RUN_PATH", str(tmp_path / "last.txt"))
+    monkeypatch.setattr(fs, "CURRENCY_PATH", str(tmp_path / "ccy.csv"))         # never the real archive
+    monkeypatch.setattr(fs, "fetch_currency", lambda symbol: "INR")             # never the network
     monkeypatch.setattr(fs, "SLEEP_SECONDS", 0)
     return tmp_path
 
@@ -203,6 +205,16 @@ def test_the_weekly_gate_skips_a_second_run_unless_forced(redirected, monkeypatc
     assert fs.main([]) == 0 and calls == []                                   # ran today: skipped
     assert "already ran" in capsys.readouterr().out
     assert fs.main(["--force"]) == 0 and len(calls) == len(config.UNIVERSE)   # forced: runs again
+
+
+def test_the_command_archives_each_stocks_currency_and_reports_an_unreadable_one(redirected, monkeypatch, capsys):
+    monkeypatch.setattr(fs, "fetch_symbol", lambda sym, seen: (fs.tidy(BALANCE, sym, "balance", "annual", seen), []))
+    first = config.UNIVERSE[0]
+    monkeypatch.setattr(fs, "fetch_currency", lambda symbol: None if symbol == first else "INR")
+    assert fs.main(["--force"]) == 0
+    stored = fs.load_currency()
+    assert first not in stored and len(stored) == len(config.UNIVERSE) - 1          # unreadable: not stored, not guessed
+    assert "reporting currency unavailable" in capsys.readouterr().out
 
 
 def test_status_works_when_only_annual_figures_are_stored(tmp_path):
@@ -233,3 +245,32 @@ def test_cash_flow_quality_ignores_rounding_but_flags_a_real_gap(tmp_path):
     q = fs.quality_report(fs.load_snapshot(path)).set_index(["symbol", "period_end"])
     assert q.loc[("R", "2024-03-31"), "cashflow_ok"] == True
     assert q.loc[("G", "2024-03-31"), "cashflow_ok"] == False
+
+
+# --- reporting currency (two Nifty 50 names are served in US dollars) -------------------------------------
+
+class _InfoTicker:
+    def __init__(self, info=None, boom=False):
+        self._info, self._boom = info, boom
+
+    def get_info(self):
+        if self._boom:
+            raise RuntimeError("rate limited")
+        return self._info
+
+
+def test_the_reporting_currency_is_read_and_a_failure_gives_none_not_a_guess():
+    assert fs.fetch_currency("INFY", lambda sym: _InfoTicker({"financialCurrency": "USD"})) == "USD"
+    assert fs.fetch_currency("INFY", lambda sym: _InfoTicker({})) is None
+    assert fs.fetch_currency("INFY", lambda sym: _InfoTicker(boom=True)) is None
+
+
+def test_currency_rows_are_added_only_when_new_or_changed(tmp_path):
+    p = str(tmp_path / "ccy.csv")
+    assert fs.load_currency(p) == {}
+    assert fs.append_currency("INFY", "USD", "2026-10-16T00:00:00Z", p) is True
+    assert fs.append_currency("INFY", "USD", "2026-10-23T00:00:00Z", p) is False      # same again: nothing written
+    assert fs.append_currency("INFY", None, "2026-10-23T00:00:00Z", p) is False       # unknown is never stored
+    assert fs.append_currency("INFY", "INR", "2026-11-01T00:00:00Z", p) is True       # a change is kept as a new row
+    assert fs.load_currency(p) == {"INFY": "INR"}                                     # newest wins
+    assert len(open(p).read().strip().splitlines()) == 3                              # header + the two real rows
