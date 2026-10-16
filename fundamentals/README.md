@@ -16,11 +16,46 @@ nothing. The PDF/Claude pipeline below is for later, if that cheap test shows
 something and more history is needed (roughly Rs 2,000-5,000 for ~390 reports, to be
 confirmed against Anthropic's own pricing page).
 
-**Status of the PDF pipeline: the engine is built and tested; it has not yet read a real annual report.**
-That needs an API key and real PDFs (see "What it needs next"). Until then it is
-proven only against a synthetic PDF and a fake model, which tests the checking logic,
-not how well Claude reads real filings. Do not treat any number as real until a real
-document has been read and hand-checked.
+**Status of the PDF pipeline: engine built and tested (63 tests); piloted on 6 real annual reports; no API key used yet.**
+The pilot (TCS, Asian Paints, Maruti; FY2022-23 and FY2025-26; consolidated) had the
+reading step done by hand in a Claude Code session, then ran the real verification
+code on it. So it tests the page locator, quote/number/unit checks, accounting
+identities and the yfinance comparison. It does NOT measure how accurately an
+independent model reads a filing: that still needs the API and a repeat of this pilot.
+
+### Pilot results (what it found)
+
+| Report | Status | Why | yfinance vs the printed filing |
+|---|---|---|---|
+| TCS FY2022-23 | verified | all checks pass | 19 of 20 comparable fields equal |
+| TCS FY2025-26 | verified | all checks pass | 20 of 21 equal |
+| Asian Paints FY2022-23 | needs_review | no single "Revenue from operations" total is printed | 19 of 20 equal |
+| Asian Paints FY2025-26 | needs_review | same | 19 of 20 equal |
+| Maruti FY2022-23 | verified | NCI printed as a dash (nil) was rejected, so one soft check skipped | **1 of 20 equal** |
+| Maruti FY2025-26 | verified | no NCI / owners' equity line this year | 17 of 19 equal |
+
+- **The checks did their job:** every record's balance sheet balanced, cash flows
+  reconciled, and a missing required figure was reported instead of guessed.
+- **yfinance is exact on profit, balance sheet and cash flow for 5 of 6 reports**, but
+  its "Total Revenue" and "Total Expenses" use their own definitions (Maruti revenue
+  about 3% off in both years; Asian Paints total expenses 2-4% off; TCS 0.5-0.7%). Do not
+  build a margin or revenue-growth rule on those two lines without a reconciliation.
+- **Maruti FY2022-23 in yfinance is not what the company first reported**: assets +18.7%,
+  D&A +71%, EPS 262.84 vs 271.82 printed. It is not the standalone statement either.
+  Its FY2024-25 figures equal the comparative column of the FY2025-26 report. The size
+  of the gap fits a later restatement for the Suzuki Motor Gujarat merger, but that is
+  a hypothesis: confirming it needs the FY2023-24 and FY2024-25 reports. Either way it
+  is the point-in-time problem this project worries about, and it appeared in 1 of 3
+  companies on the first try.
+- **Design findings, not yet acted on:** (1) when a P&L prints revenue as separate lines
+  with no total (Asian Paints), the engine correctly refuses to sum them, so such
+  companies need a `revenue_components` field that the CODE adds up; (2) a printed
+  dash is read as "not found", not 0, which is the safe choice but skips the equity
+  check when minorities are nil.
+- **Locator bug found and fixed on real data:** Maruti FY2025-26's cash flow starts under
+  the equity statement, one page before the page the locator picked; it now also takes
+  the page before a statement when that page has the heading and a signal (and skips a
+  page that qualifies as its own copy, e.g. the standalone statement).
 
 ## The one rule
 
@@ -93,9 +128,10 @@ personal research).
 ## What it needs next
 
 1. **An API key** from console.anthropic.com, set as a user environment variable.
-2. **A pilot on real documents**, hand-checked against the printed statements, to
-   measure how often the checks pass and how often a passing record is still wrong.
-   Three or four companies is enough to learn that. No scaling before this.
+2. **Repeat the pilot with the API doing the reading** (6 reports cost a few rupees),
+   to measure how often an independent model passes the checks and how often a passing
+   record is still wrong. The hand-read pilot above already proved the locator and
+   checks on real filings. No scaling before this.
 3. **A source of PDFs.** Roughly 39 non-financial Nifty 50 companies by 10 years is
    about 390 annual reports. Exchange and company sites have no stable bulk API and
    scraping them has terms-of-use and fragility problems; this needs a deliberate
