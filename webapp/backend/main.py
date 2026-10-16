@@ -274,6 +274,40 @@ def ledger():
         runs=[schemas.LedgerRun(**{k: r[k] for k in schemas.LedgerRun.model_fields}) for r in raw["runs"]])
 
 
+@api.get("/forward-books", response_model=schemas.ForwardBooksResponse,
+         summary="The frozen paper-trading books (FORWARD_BOOKS.md): forward performance against buy-and-hold.")
+def forward_books():
+    raw = store.load_forward_books_raw()
+    total = store.ledger_total_now() or 0
+    needed = int(raw["min_days_for_sharpe"])
+
+    def ratio(value):
+        # Labelling only: a forward Sharpe is out-of-time but not yet judged against its pre-registered
+        # criteria, so it is UNVALIDATED, and it carries the hypothesis count like every other ratio.
+        return None if value is None else schemas.RiskAdjustedRatio(
+            kind="sharpe", value=value, window="out_of_sample", status="UNVALIDATED", as_of_hypotheses=total)
+
+    books = []
+    for b in raw["books"]:
+        sm = b.get("summary")
+        risk = schemas.BookRiskAdjusted(withheld_reason="no forward days yet" if sm is None else None)
+        if sm is not None:
+            risk = schemas.BookRiskAdjusted(book=ratio(sm.get("sharpe")), benchmark=ratio(sm.get("benchmark_sharpe")),
+                                            withheld_reason=sm.get("sharpe_note") or None)
+        books.append(schemas.ForwardBook(
+            id=b["id"], name=b["name"], kind=b["kind"], universe=b["universe"], rationale=b["rationale"],
+            why_forward_tested=b["why_forward_tested"], status=b["status"], data_through=b["data_through"],
+            start=b["start"], first_counted_day=b["first_counted_day"], n_trading_days=b["n_trading_days"],
+            days_needed_for_verdict=needed,
+            summary=None if sm is None else schemas.BookSummary(**{k: sm.get(k) for k in schemas.BookSummary.model_fields}),
+            risk_adjusted=risk, growth_book=b.get("growth_book"), growth_benchmark=b.get("growth_benchmark"),
+            drawdown_book=b.get("drawdown_book"), drawdown_benchmark=b.get("drawdown_benchmark"),
+            exposure=b.get("exposure"), holdings=b.get("holdings", []), pending=b.get("pending", []),
+            notes=b.get("notes", [])))
+    return schemas.ForwardBooksResponse(generated_at=raw["generated_at"], start=raw["start"],
+                                        first_counted_day=raw["first_counted_day"], books=books)
+
+
 @api.get("/forward-test", response_model=schemas.ForwardResponse,
          summary="The pre-registered forward paper-trade log (FORWARD_TEST.md).")
 def forward_test():

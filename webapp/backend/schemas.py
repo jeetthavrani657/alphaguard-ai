@@ -463,6 +463,80 @@ class ForwardResponse(BaseModel):
     rows: list[ForwardRow]
 
 
+# --- forward paper books ---------------------------------------------------------------
+
+class BookSummary(BaseModel):
+    """The headline figures of one forward book, as research/forward_books.py computed them."""
+    return_pct: Optional[float]
+    benchmark_return_pct: Optional[float]
+    max_drawdown_pct: Optional[float]
+    benchmark_max_drawdown_pct: Optional[float]
+    market_exposure_pct: Optional[float]
+    n_open_positions: Optional[int]
+    n_closed_trades: Optional[int]
+
+
+class BookRiskAdjusted(BaseModel):
+    """
+    A forward book's Sharpe, when it exists. Withheld (both null, with a reason) until a full year of
+    forward days; once shown it is a RiskAdjustedRatio like every other, so it cannot appear without a
+    status. Status is UNVALIDATED because the pre-registered criteria (FORWARD_BOOKS.md) are judged by
+    a person at the gate, never automatically.
+    """
+    book: Optional[RiskAdjustedRatio] = None
+    benchmark: Optional[RiskAdjustedRatio] = None
+    withheld_reason: Optional[str] = None
+
+
+class BookHolding(BaseModel):
+    symbol: str
+    since: Optional[str] = None
+    entry_price: Optional[float] = None
+    last_close: Optional[float] = None
+    target_weight_pct: Optional[float] = None
+    as_of_formation_date: Optional[str] = None
+
+
+class BookPending(BaseModel):
+    symbol: str
+    action: str
+
+
+class ForwardBook(BaseModel):
+    id: str
+    name: str
+    kind: Kind
+    universe: str
+    rationale: str
+    why_forward_tested: str
+    status: Literal["NOT_STARTED", "RUNNING"]
+    data_through: str
+    start: str
+    first_counted_day: str
+    n_trading_days: int
+    days_needed_for_verdict: int
+    summary: Optional[BookSummary] = None
+    risk_adjusted: BookRiskAdjusted
+    growth_book: Optional[EquityCurve] = None
+    growth_benchmark: Optional[EquityCurve] = None
+    drawdown_book: Optional[EquityCurve] = None
+    drawdown_benchmark: Optional[EquityCurve] = None
+    exposure: Optional[EquityCurve] = None
+    holdings: list[BookHolding] = []
+    pending: list[BookPending] = []
+    notes: list[str] = []
+
+
+class ForwardBooksResponse(BaseModel):
+    generated_at: str
+    start: str
+    first_counted_day: str
+    criteria_document: str = "FORWARD_BOOKS.md"
+    disclaimer: str = ("Paper trading only: nothing here places an order. No verdict is allowed before a full year "
+                       "of forward days; until then these numbers are monitoring, not evidence.")
+    books: list[ForwardBook]
+
+
 # --- housekeeping ------------------------------------------------------------
 
 class Manifest(BaseModel):

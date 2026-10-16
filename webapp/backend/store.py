@@ -57,6 +57,10 @@ def forward_path() -> str:
     return os.environ.get("WEBAPP_FORWARD_CSV", os.path.join(ROOT, "reports", "output", "forward_snapshots.csv"))
 
 
+def forward_books_path() -> str:
+    return os.environ.get("WEBAPP_FORWARD_BOOKS", os.path.join(ROOT, "reports", "output", "forward_books_latest.json"))
+
+
 def _read_json(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -166,3 +170,12 @@ def load_forward_rows() -> list[dict]:
                 "buy_hold_return_pct": num(r["buy_hold_return_pct"]),
             })
     return rows
+
+
+def load_forward_books_raw() -> dict:
+    """research/forward_books.py's latest output, untouched (the API only labels and validates it)."""
+    path = forward_books_path()
+    if not os.path.exists(path):
+        raise NotFound("No forward paper books yet. Generate them from the project root with: "
+                       "python research/forward_books.py")
+    return _read_json(path)

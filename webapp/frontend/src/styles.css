@@ -262,3 +262,13 @@ button.on { border-color: var(--accent); color: var(--accent); }
   .hero-title { font-size: 34px; }
   .brand-name { font-size: 15px; }
 }
+
+
+/* ---- paper trading: the forward clock ---- */
+.mono { font-family: var(--mono); }
+.clock { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: rgba(22, 31, 42, .5); }
+.clock-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+progress { width: 100%; height: 10px; border: 0; border-radius: 999px; overflow: hidden; background: #1b2634; accent-color: var(--grad-b); }
+progress::-webkit-progress-bar { background: #1b2634; border-radius: 999px; }
+progress::-webkit-progress-value { background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); border-radius: 999px; }
+progress::-moz-progress-bar { background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); border-radius: 999px; }

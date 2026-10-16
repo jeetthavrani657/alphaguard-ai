@@ -8,6 +8,16 @@ import { num, pct } from "../../fmt";
 import { baseChartOptions, chartColors } from "./theme";
 
 type Curve = { dates: string[]; values: number[] };
+
+/**
+ * What the chart needs, and nothing about where it came from. A strategy page passes an EquityResponse;
+ * the paper-trading page passes a forward book's series. Rupee curves are only a fallback for old
+ * snapshots: growth-of-100 is what gets drawn.
+ */
+export type ChartData = Pick<
+  EquityResponse,
+  "growth_strategy" | "growth_benchmark" | "drawdown_strategy_pct" | "drawdown_benchmark_pct" | "exposure_strategy_pct" | "exposure_definition"
+> & Partial<Pick<EquityResponse, "strategy" | "benchmark">>;
 const toData = (c: Curve) => c.dates.map((d, i) => ({ time: d as Time, value: c.values[i] }));
 
 /**
@@ -20,7 +30,7 @@ const toData = (c: Curve) => c.dates.map((d, i) => ({ time: d as Time, value: c.
  * (compute_metrics' own drawdown function, so the deepest point on pane 2 IS the
  * max-drawdown figure in the table). This file only draws them.
  */
-export function StrategyChart({ data }: { data: EquityResponse }) {
+export function StrategyChart({ data }: { data: ChartData }) {
   const host = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [log, setLog] = useState(false);
@@ -36,6 +46,7 @@ export function StrategyChart({ data }: { data: EquityResponse }) {
     // portfolio and a one-account-per-stock benchmark are drawn on the same footing)
     const growthS = data.growth_strategy ?? data.strategy;
     const growthB = data.growth_benchmark ?? data.benchmark;
+    if (!growthS || !growthB) { chart.remove(); return; }
     const s = chart.addSeries(LineSeries, { color: colors.strategy, lineWidth: 2, title: "Strategy", priceLineVisible: false }, 0);
     s.setData(toData(growthS));
     chart.addSeries(LineSeries, { color: colors.benchmark, lineWidth: 2, title: "Buy & hold", priceLineVisible: false }, 0)

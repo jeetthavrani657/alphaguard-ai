@@ -22,5 +22,7 @@ export type PriceSeries = S["PriceSeries"];
 export type DataQualityResponse = S["DataQualityResponse"];
 export type LedgerResponse = S["LedgerResponse"];
 export type ForwardResponse = S["ForwardResponse"];
+export type ForwardBooksResponse = S["ForwardBooksResponse"];
+export type ForwardBook = S["ForwardBook"];
 export type Health = S["Health"];
 export type Window = "in_sample" | "out_of_sample";

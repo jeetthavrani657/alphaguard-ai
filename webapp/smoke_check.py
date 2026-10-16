@@ -115,7 +115,7 @@ def run_checks(base: str) -> None:
     check(bool(h.get("data_through")) and bool(h.get("git_commit")), "health carries data_through and git_commit")
 
     print("[smoke] pages (the app shell serves every client-side route)")
-    for p in ("/", "/screener", "/strategies", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
+    for p in ("/", "/screener", "/strategies", "/paper", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
         st, body = fetch(base, p)
         check(st == 200 and "<div id=\"root\">" in body, f"page {p} returns the app shell (got {st})")
     st, body = fetch(base, "/")
@@ -218,6 +218,20 @@ def run_checks(base: str) -> None:
           "ledger total equals the last run's cumulative count")
     st, fw = fetch(base, "/api/forward-test")
     check(st == 200 and "rows" in fw, "forward-test responds")
+
+    print("[smoke] forward paper books")
+    st, fb = fetch(base, "/api/forward-books")
+    check(st == 200 and len(fb["books"]) >= 1, "forward books respond with at least one book")
+    check(bare_ratios(fb) == [], "no bare ratio in the forward books")
+    for b in fb["books"]:
+        check(b["status"] in ("NOT_STARTED", "RUNNING"), f"{b['id']}: status is NOT_STARTED or RUNNING")
+        check(b["days_needed_for_verdict"] == 252, f"{b['id']}: the verdict gate is the frozen 252 days")
+        if b["n_trading_days"] < b["days_needed_for_verdict"]:
+            check(b["risk_adjusted"]["book"] is None, f"{b['id']}: Sharpe is withheld before a year of forward days")
+        if b["status"] == "RUNNING":
+            gb, dd = b["growth_book"], b["drawdown_book"]
+            check(len(gb["dates"]) == b["n_trading_days"] and max(dd["values"]) <= 0, f"{b['id']}: series aligned, drawdown <= 0")
+            check(abs((gb["values"][-1] - 100) - b["summary"]["return_pct"]) < 1e-2, f"{b['id']}: final growth - 100 equals return")
 
     print("[smoke] refusals")
     check(fetch(base, "/api/strategies/definitely_not_one")[0] == 404, "unknown strategy id is 404")

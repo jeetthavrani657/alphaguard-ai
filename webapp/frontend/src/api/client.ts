@@ -5,7 +5,7 @@
 // whatever the API sends is what the screen shows.
 
 import type {
-  DataQualityResponse, EquityResponse, ForwardResponse, Health, LedgerResponse, PriceSeries,
+  DataQualityResponse, EquityResponse, ForwardBooksResponse, ForwardResponse, Health, LedgerResponse, PriceSeries,
   ScreenerResponse, StrategyDetail, StrategyList, SymbolDetail, TradePage, Window,
 } from "./types";
 
@@ -54,4 +54,5 @@ export const api = {
   dataQuality: (p: { universe?: string; only_issues?: boolean }) => get<DataQualityResponse>("/data-quality", p),
   ledger: () => get<LedgerResponse>("/ledger"),
   forwardTest: () => get<ForwardResponse>("/forward-test"),
+  forwardBooks: () => get<ForwardBooksResponse>("/forward-books"),
 };

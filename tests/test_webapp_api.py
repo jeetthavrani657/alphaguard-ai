@@ -491,3 +491,66 @@ def test_unbuilt_frontend_says_how_to_build_it(client, tmp_path, monkeypatch):
 
 def test_the_ui_is_read_only_too(served):
     assert served.post("/").status_code == 405
+
+
+# --- forward paper books (FORWARD_BOOKS.md) -----------------------------------------------------
+
+def _book_json(running: bool, sharpe=None):
+    series = {"dates": ["2026-10-19", "2026-10-20", "2026-10-21"], "values": [100.0, 101.5, 100.8]}
+    dd = {"dates": series["dates"], "values": [0.0, 0.0, -0.69]}
+    exp = {"dates": series["dates"], "values": [0.0, 50.0, 50.0]}
+    base = {"id": "toy_book", "name": "Toy book", "kind": "per_symbol", "universe": "nifty50", "rationale": "r",
+            "why_forward_tested": "w", "start": "2026-10-16", "first_counted_day": "2026-10-19", "pending": [], "notes": [],
+            "holdings": [{"symbol": "AAA", "since": "2026-10-20", "entry_price": 10.0, "last_close": 10.5}]}
+    if not running:
+        return dict(base, status="NOT_STARTED", data_through="2026-10-16", n_trading_days=0, summary=None, growth_book=None,
+                    growth_benchmark=None, drawdown_book=None, drawdown_benchmark=None, exposure=None, holdings=[])
+    return dict(base, status="RUNNING", data_through="2026-10-21", n_trading_days=3, growth_book=series,
+                growth_benchmark=series, drawdown_book=dd, drawdown_benchmark=dd, exposure=exp,
+                summary={"return_pct": 0.8, "benchmark_return_pct": 0.8, "max_drawdown_pct": -0.69,
+                         "benchmark_max_drawdown_pct": -0.69, "market_exposure_pct": 50.0, "n_open_positions": 1,
+                         "n_closed_trades": 0, "sharpe": sharpe, "benchmark_sharpe": None if sharpe is None else 0.4,
+                         "sharpe_note": "withheld: 3 of 252 trading days of forward data" if sharpe is None else ""})
+
+
+@pytest.fixture
+def books(client, tmp_path, monkeypatch):
+    def write(book):
+        path = tmp_path / "books.json"
+        path.write_text(json.dumps({"generated_at": "2026-10-21T14:00:00Z", "start": "2026-10-16",
+                                    "first_counted_day": "2026-10-19", "min_days_for_sharpe": 252, "books": [book]}))
+        monkeypatch.setenv("WEBAPP_FORWARD_BOOKS", str(path))
+        return client
+    return write
+
+
+def test_a_book_that_has_not_started_shows_no_numbers_and_says_so(books):
+    d = books(_book_json(running=False)).get("/api/forward-books").json()
+    b = d["books"][0]
+    assert b["status"] == "NOT_STARTED" and b["summary"] is None and b["growth_book"] is None
+    assert b["risk_adjusted"]["book"] is None and b["days_needed_for_verdict"] == 252
+    assert "monitoring, not evidence" in d["disclaimer"]
+
+
+def test_a_running_book_withholds_sharpe_until_a_year_of_days(books):
+    d = books(_book_json(running=True, sharpe=None)).get("/api/forward-books").json()
+    b = d["books"][0]
+    assert b["risk_adjusted"]["book"] is None and "withheld" in b["risk_adjusted"]["withheld_reason"]
+    assert len(b["growth_book"]["dates"]) == len(b["growth_book"]["values"]) == b["n_trading_days"]
+    assert b["summary"]["return_pct"] == 0.8 and b["holdings"][0]["symbol"] == "AAA"
+
+
+def test_once_shown_a_forward_sharpe_carries_status_and_the_hypothesis_count(books):
+    d = books(_book_json(running=True, sharpe=1.2)).get("/api/forward-books").json()
+    r = d["books"][0]["risk_adjusted"]
+    assert _find_bare_ratios(d) == []
+    for side in ("book", "benchmark"):
+        assert r[side]["status"] == "UNVALIDATED" and r[side]["as_of_hypotheses"] == 204
+        assert r[side]["kind"] == "sharpe" and r[side]["window"] == "out_of_sample"
+    assert r["book"]["value"] == 1.2 and r["benchmark"]["value"] == 0.4
+
+
+def test_forward_books_missing_is_a_helpful_404_not_a_crash(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_FORWARD_BOOKS", str(tmp_path / "nope.json"))
+    r = client.get("/api/forward-books")
+    assert r.status_code == 404 and "forward_books.py" in r.json()["detail"]

@@ -5,6 +5,7 @@ import { Screener } from "./pages/Screener";
 import { Stock } from "./pages/Stock";
 import { Strategies } from "./pages/Strategies";
 import { StrategyPage } from "./pages/StrategyPage";
+import { PaperTrading } from "./pages/PaperTrading";
 import { Research } from "./pages/Research";
 
 // One URL per page. A page is just a React component: a function that returns what to
@@ -15,6 +16,7 @@ import { Research } from "./pages/Research";
 //   /stock/:symbol        Stock cockpit   one stock: chart, strategy slices, data quality
 //   /strategies           Strategies      every strategy with its validation status
 //   /strategies/:id       (detail of one strategy)
+//   /paper                Paper trading   frozen candidates run forward, against buy-and-hold
 //   /research             Research record hypothesis ledger, forward test, data quality
 export default function App() {
   const tab = ({ isActive }: { isActive: boolean }) => (isActive ? "tab active" : "tab");
@@ -29,6 +31,7 @@ export default function App() {
         <NavLink to="/" end className={tab}>Overview</NavLink>
         <NavLink to="/screener" className={tab}>Screener</NavLink>
         <NavLink to="/strategies" className={tab}>Strategies</NavLink>
+        <NavLink to="/paper" className={tab}>Paper trading</NavLink>
         <NavLink to="/research" className={tab}>Research record</NavLink>
         <span className="spacer" />
         <span className="readonly">read-only · no orders, ever</span>
@@ -40,6 +43,7 @@ export default function App() {
           <Route path="/stock/:symbol" element={<Stock />} />
           <Route path="/strategies" element={<Strategies />} />
           <Route path="/strategies/:id" element={<StrategyPage />} />
+          <Route path="/paper" element={<PaperTrading />} />
           <Route path="/research" element={<Research />} />
           <Route path="*" element={<p>No such page.</p>} />
         </Routes>

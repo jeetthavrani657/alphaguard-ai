@@ -174,6 +174,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/forward-books": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The frozen paper-trading books (FORWARD_BOOKS.md): forward performance against buy-and-hold. */
+        get: operations["forward_books_api_forward_books_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/forward-test": {
         parameters: {
             query?: never;
@@ -195,6 +212,61 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** BookHolding */
+        BookHolding: {
+            /** Symbol */
+            symbol: string;
+            /** Since */
+            since?: string | null;
+            /** Entry Price */
+            entry_price?: number | null;
+            /** Last Close */
+            last_close?: number | null;
+            /** Target Weight Pct */
+            target_weight_pct?: number | null;
+            /** As Of Formation Date */
+            as_of_formation_date?: string | null;
+        };
+        /** BookPending */
+        BookPending: {
+            /** Symbol */
+            symbol: string;
+            /** Action */
+            action: string;
+        };
+        /**
+         * BookRiskAdjusted
+         * @description A forward book's Sharpe, when it exists. Withheld (both null, with a reason) until a full year of
+         *     forward days; once shown it is a RiskAdjustedRatio like every other, so it cannot appear without a
+         *     status. Status is UNVALIDATED because the pre-registered criteria (FORWARD_BOOKS.md) are judged by
+         *     a person at the gate, never automatically.
+         */
+        BookRiskAdjusted: {
+            book?: components["schemas"]["RiskAdjustedRatio"] | null;
+            benchmark?: components["schemas"]["RiskAdjustedRatio"] | null;
+            /** Withheld Reason */
+            withheld_reason?: string | null;
+        };
+        /**
+         * BookSummary
+         * @description The headline figures of one forward book, as research/forward_books.py computed them.
+         */
+        BookSummary: {
+            /** Return Pct */
+            return_pct: number | null;
+            /** Benchmark Return Pct */
+            benchmark_return_pct: number | null;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number | null;
+            /** Benchmark Max Drawdown Pct */
+            benchmark_max_drawdown_pct: number | null;
+            /** Market Exposure Pct */
+            market_exposure_pct: number | null;
+            /** N Open Positions */
+            n_open_positions: number | null;
+            /** N Closed Trades */
+            n_closed_trades: number | null;
+        };
         /** ClosedTrade */
         ClosedTrade: {
             /** Symbol */
@@ -302,6 +374,82 @@ export interface components {
             price: number;
             /** Costs */
             costs: number;
+        };
+        /** ForwardBook */
+        ForwardBook: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "per_symbol" | "portfolio";
+            /** Universe */
+            universe: string;
+            /** Rationale */
+            rationale: string;
+            /** Why Forward Tested */
+            why_forward_tested: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "NOT_STARTED" | "RUNNING";
+            /** Data Through */
+            data_through: string;
+            /** Start */
+            start: string;
+            /** First Counted Day */
+            first_counted_day: string;
+            /** N Trading Days */
+            n_trading_days: number;
+            /** Days Needed For Verdict */
+            days_needed_for_verdict: number;
+            summary?: components["schemas"]["BookSummary"] | null;
+            risk_adjusted: components["schemas"]["BookRiskAdjusted"];
+            growth_book?: components["schemas"]["EquityCurve"] | null;
+            growth_benchmark?: components["schemas"]["EquityCurve"] | null;
+            drawdown_book?: components["schemas"]["EquityCurve"] | null;
+            drawdown_benchmark?: components["schemas"]["EquityCurve"] | null;
+            exposure?: components["schemas"]["EquityCurve"] | null;
+            /**
+             * Holdings
+             * @default []
+             */
+            holdings: components["schemas"]["BookHolding"][];
+            /**
+             * Pending
+             * @default []
+             */
+            pending: components["schemas"]["BookPending"][];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+        };
+        /** ForwardBooksResponse */
+        ForwardBooksResponse: {
+            /** Generated At */
+            generated_at: string;
+            /** Start */
+            start: string;
+            /** First Counted Day */
+            first_counted_day: string;
+            /**
+             * Criteria Document
+             * @default FORWARD_BOOKS.md
+             */
+            criteria_document: string;
+            /**
+             * Disclaimer
+             * @default Paper trading only: nothing here places an order. No verdict is allowed before a full year of forward days; until then these numbers are monitoring, not evidence.
+             */
+            disclaimer: string;
+            /** Books */
+            books: components["schemas"]["ForwardBook"][];
         };
         /** ForwardResponse */
         ForwardResponse: {
@@ -1213,6 +1361,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LedgerResponse"];
+                };
+            };
+        };
+    };
+    forward_books_api_forward_books_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForwardBooksResponse"];
                 };
             };
         };
