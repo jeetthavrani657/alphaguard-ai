@@ -22,6 +22,11 @@ non-obvious line does.
 Python, pandas, numpy, matplotlib, yfinance. Nothing else unless
 I explicitly ask.
 
+Approved additions (each explicitly requested by the owner in chat):
+FastAPI + React/TypeScript for the web app (`webapp/`); the Anthropic SDK and
+pypdf for fundamentals extraction (`fundamentals/`). Rule 5 (no broker code) is
+unchanged.
+
 ## Target structure (build progressively, not all at once)
 ```
 project/

@@ -399,6 +399,16 @@ scheduled task (`run_forward_log.bat`), after the close.
   one forward so it can be tested honestly in a year. It computes no signal.
   `python research/news_logger.py --status` shows what has been collected.
 
+- **Fundamentals extraction** (`fundamentals/`, `research/extract_fundamentals.py`):
+  reads annual-report PDFs with the Claude API into verified, point-in-time
+  financial statements, so a value / quality / earnings-momentum strategy can
+  eventually be tested (every strategy so far uses prices only). The model reads
+  and the code computes and verifies: each figure must be traceable to a quoted
+  line on a page, and accounting identities (the balance sheet balances, cash flow
+  reconciles) must hold, or the record is `needs_review` and never used. **Built
+  and tested on a synthetic PDF with a fake model; it has not yet read a real
+  filing.** See `fundamentals/README.md`.
+
 The frozen dip rule keeps its own, separate forward test (`FORWARD_TEST.md`).
 None of this connects to a broker; rule 5 in `CLAUDE.md` still stands until a
 candidate passes its forward test.
@@ -651,8 +661,8 @@ app.py                           web app (Streamlit) front-end
 
 ## Test coverage
 
-207 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
-code, 13 for the loader's end-date / adjustment-basis behaviour in
+261 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
+code, 54 for the fundamentals extractor (`tests/test_fundamentals.py`), 13 for the loader's end-date / adjustment-basis behaviour in
 `tests/test_loader_end_date.py`, 9 for the forward paper books
 (`tests/test_forward_books.py`), 9 for the news archive
 (`tests/test_news_logger.py`), 6 for the chart series added to
