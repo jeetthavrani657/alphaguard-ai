@@ -21,3 +21,10 @@ reports/output/*.png
 # Web app result snapshots: ~70 MB of JSON, fully reproducible with
 # `python -m webapp.backend.snapshot` (see README "Web app v2").
 webapp/snapshots/
+
+# Point-in-time news archive (research/news_logger.py): personal research data, not redistributed.
+data/news/
+reports/output/news_last_run.log
+
+reports/output/forward_books_last_run.log
+reports/output/forward_books_latest.json
