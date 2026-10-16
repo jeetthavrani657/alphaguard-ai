@@ -35,7 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from . import schemas, store
 
 app = FastAPI(
-    title="NSE Backtest Results API",
+    title="AlphaGuard AI: results API",
     description=(
         "Read-only access to precomputed backtest results. Every Sharpe/Sortino "
         "is returned together with its validation status and the hypothesis "

@@ -1,5 +1,5 @@
 @echo off
-rem Start the NSE research terminal (read-only; never runs a strategy).
+rem Start AlphaGuard AI, the research terminal (read-only; never runs a strategy).
 rem Double-click to run. Opens http://127.0.0.1:8000 in your browser; close this
 rem window (or press Ctrl+C) to stop it.
 rem

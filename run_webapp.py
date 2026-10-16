@@ -1,5 +1,5 @@
 """
-run_webapp.py -- start the research terminal with one command.
+run_webapp.py -- start AlphaGuard AI (the research terminal) with one command.
 
     python run_webapp.py            # build the UI if needed, then serve UI + API on http://127.0.0.1:8000
     python run_webapp.py --open     # same, and open it in your browser
@@ -150,7 +150,7 @@ def open_when_up(url: str, port: int) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Start the NSE research terminal (read-only; never runs a strategy).")
+    ap = argparse.ArgumentParser(description="Start AlphaGuard AI, the research terminal (read-only; never runs a strategy).")
     ap.add_argument("--dev", action="store_true", help="API on :8000 plus the Vite dev server on :5173 (hot reload)")
     ap.add_argument("--rebuild", action="store_true", help="force a fresh UI build")
     ap.add_argument("--no-build", action="store_true", help="never build; serve whatever is in webapp/frontend/dist")
@@ -192,7 +192,7 @@ def main() -> int:
         return 1
     require_port(args.port, "app")
     url = f"http://{HOST}:{args.port}"
-    say(f"Serving the research terminal at {url}   (API docs: {url}/docs)   Ctrl+C to stop.")
+    say(f"Serving AlphaGuard AI at {url}   (API docs: {url}/docs)   Ctrl+C to stop.")
     if args.open:
         threading.Thread(target=open_when_up, args=(url, args.port), daemon=True).start()
     uvicorn.run("webapp.backend.main:app", host=HOST, port=args.port, log_level="info")
