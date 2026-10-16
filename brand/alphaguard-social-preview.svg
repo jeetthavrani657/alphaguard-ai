@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="AlphaGuard AI: every edge, tested against the number of things you tried">
+  <title>AlphaGuard AI</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d1624"/><stop offset="1" stop-color="#070b11"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="330" cy="300" r="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2fd0c0" stop-opacity=".24"/><stop offset="1" stop-color="#2fd0c0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="1180" cy="30" r="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4da3ff" stop-opacity=".22"/><stop offset="1" stop-color="#4da3ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6cb8ff"/><stop offset="1" stop-color="#2fd0c0"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="32" y1="4" x2="32" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16263a"/><stop offset="1" stop-color="#0b121b"/>
+    </linearGradient>
+    <linearGradient id="alpha" x1="16" y1="26" x2="48" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#3fe0c8"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#3fe0c8"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1280" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6cb8ff"/><stop offset="1" stop-color="#2fd0c0"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#ffffff" stroke-opacity=".035"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <rect width="1280" height="640" fill="url(#glowA)"/>
+  <rect width="1280" height="640" fill="url(#glowB)"/>
+
+  <!-- an equity curve rising behind everything -->
+  <path d="M0 560 C140 548 230 574 350 530 C480 484 540 546 680 498 C820 450 890 520 1030 440 C1150 372 1210 400 1280 330"
+        fill="none" stroke="url(#edge)" stroke-width="3" stroke-opacity=".30"/>
+  <path d="M0 560 C140 548 230 574 350 530 C480 484 540 546 680 498 C820 450 890 520 1030 440 C1150 372 1210 400 1280 330 V640 H0 Z"
+        fill="url(#edge)" fill-opacity=".05"/>
+
+  <!-- the mark, large -->
+  <g transform="translate(96 150) scale(5.4)">
+    <path d="M32 3.5 L55.5 11.5 V30 C55.5 45.2 46.2 55 32 60.5 C17.8 55 8.5 45.2 8.5 30 V11.5 Z" fill="url(#fill)" stroke="url(#edge)" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M46.5 44.5 C41 44.5 38 38 34 33 C30 28 22 27 19 33 C16 39.5 21 45.5 28 43 C34 40.5 38 33 41.5 28.5 C43 26.5 45 26 47 27" fill="none" stroke="url(#alpha)" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 14 L32 7.5" stroke="#fff" stroke-opacity=".18" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+
+  <text x="500" y="262" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="98" font-weight="700" letter-spacing="-2" fill="#f1f5fa">Alpha<tspan fill="url(#word)">Guard</tspan><tspan fill="#8494a8" font-weight="500" dx="20">AI</tspan></text>
+  <text x="504" y="336" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="38" font-weight="400" fill="#c3d0df">Every edge, tested against</text>
+  <text x="504" y="384" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="38" font-weight="400" fill="#c3d0df">the number of things you tried.</text>
+  <text x="506" y="456" font-family="ui-monospace, Consolas, 'Courier New', monospace" font-size="22" letter-spacing="2.5" fill="#70839a">READ-ONLY  ·  VALIDATION-FIRST  ·  NSE EQUITIES</text>
+
+  <rect x="0" y="632" width="1280" height="8" fill="url(#bar)"/>
+</svg>
