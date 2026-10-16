@@ -92,8 +92,12 @@ TMPV rule 2, NESTLEIND has no EPS archived).
      books keep their 0.025 each from `FORWARD_BOOKS.md`);
   3. its forward Sharpe is at or above the **90th percentile** of random
      10-stock portfolios drawn from the same scoreable pool on the same
-     formation dates. That control will be written and tested before any verdict
-     is read, and must not be altered once the result is known.
+     formation dates. The control is `research/quality_value_control.py`,
+     written and tested (10 tests) before any forward day exists, and must not
+     be altered once a result is known. Frozen: 500 random portfolios, seed
+     20261016, pass bar 90th percentile, same engine, costs and pool. It
+     refuses to give a verdict before the age gate above; `--rehearse` only
+     exercises the machinery and is labelled as not a result.
 - **What a pass would justify:** continued forward tracking and a longer record.
   Not money. Two years of one portfolio is thin evidence even when it passes.
 - **What a failure means:** the candidacy ends. No re-tuning; a variant is a new
