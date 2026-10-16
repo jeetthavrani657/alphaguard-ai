@@ -12,3 +12,7 @@ fastapi==0.143.2
 pydantic==2.14.1
 uvicorn==0.53.0
 httpx==0.28.1  # needed only by the API tests (FastAPI TestClient)
+
+# Fundamentals extraction (fundamentals/): Claude API client and PDF text
+anthropic==1.15.0
+pypdf==6.20.1

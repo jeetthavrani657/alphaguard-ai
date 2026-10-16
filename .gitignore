@@ -28,3 +28,6 @@ reports/output/news_last_run.log
 
 reports/output/forward_books_last_run.log
 reports/output/forward_books_latest.json
+
+# Verified fundamentals extracted from public filings (fundamentals/): personal research data.
+data/fundamentals/
