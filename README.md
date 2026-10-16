@@ -306,6 +306,8 @@ it. The brief's five rules, and what enforces each:
 - **Strategies** (`/strategies`, `/strategies/ID`): every strategy with its
   status and "as of N hypotheses"; both windows against buy-and-hold; growth,
   drawdown and exposure charts; the paginated trade log.
+- **Paper trading** (`/paper`): the frozen candidate strategies run forward on new data, against
+  buy-and-hold, with a clock that shows how many of the 252 days needed for any verdict have passed.
 - **Research record** (`/research`): the hypothesis ledger, the forward test,
   and the stocks with unresolved data issues.
 
@@ -353,7 +355,7 @@ it. The brief's five rules, and what enforces each:
 - **API reference:** interactive docs at `http://127.0.0.1:8000/docs`.
   Routes: `/api/strategies`, `/api/strategies/{id}` (+ `/equity`, `/trades`),
   `/api/screener`, `/api/symbols/{symbol}` (+ `/prices`), `/api/data-quality`,
-  `/api/ledger`, `/api/forward-test`, `/api/health`.
+  `/api/ledger`, `/api/forward-test`, `/api/forward-books`, `/api/health`.
 - **Charts** use TradingView's open-source `lightweight-charts`. The wheel
   scrolls the page, not the chart; drag to pan and use the range buttons.
 
@@ -375,6 +377,31 @@ Files: `run_webapp.py` / `.bat` (launcher), `webapp/backend/` (`snapshot.py`,
 `webapp/frontend/` (`src/pages`, `src/components`, `src/styles.css`),
 `webapp/snapshots/` (generated, git-ignored, about 70 MB). Tests:
 `tests/test_webapp_*.py`.
+
+## Paper trading and the news archive (the path toward live trading)
+
+Nothing in this project has a validated edge (`FINDINGS.md` Section 7), so the
+next steps are about collecting the one kind of evidence that can still change
+that: data that did not exist when a rule was frozen. Both run daily from the
+scheduled task (`run_forward_log.bat`), after the close.
+
+- **Forward paper books** (`FORWARD_BOOKS.md`, `research/forward_books.py`):
+  the momentum and Smallcap MA crossover configurations, frozen on 2026-10-16
+  and recomputed from raw prices with the same engine, costs and benchmark as
+  the backtests. They create no new hypothesis (both were already counted).
+  No verdict and no Sharpe before 252 forward trading days; the pass criteria
+  were written first. Shown on the web app's **Paper trading** page.
+  `python research/forward_books.py` runs it by hand.
+- **News archive** (`research/news_logger.py`): headlines for each Nifty 50
+  stock, logged with the publisher's time and the time we first saw them, in
+  `data/news/news_log.csv` (git-ignored). A news-sentiment signal cannot be
+  backtested on 2015-2025 because no timestamped archive exists; this builds
+  one forward so it can be tested honestly in a year. It computes no signal.
+  `python research/news_logger.py --status` shows what has been collected.
+
+The frozen dip rule keeps its own, separate forward test (`FORWARD_TEST.md`).
+None of this connects to a broker; rule 5 in `CLAUDE.md` still stands until a
+candidate passes its forward test.
 
 ## How to run something
 
@@ -604,7 +631,9 @@ research/
   run_dip_uptrend_strategy.py    dip in an uptrend, +4% / -12% / 60d
   search_dip_win_rate.py         bounded 36-variant search for a 90% win rate, with a 2026 holdout
   forward_test_2026.py           one-off forward test of two fixed configs on 2026 data
-  forward_log.py                 the forward paper-trade log (FORWARD_TEST.md)
+  forward_log.py                 the forward paper-trade log for the frozen dip rule (FORWARD_TEST.md)
+  forward_books.py               forward paper books for the momentum and Smallcap MA candidates (FORWARD_BOOKS.md)
+  news_logger.py                 point-in-time Nifty 50 news archive, for a sentiment signal to be tested on one day
 
 reports/
   plots.py                       equity curve, underwater, monthly heatmap, trade histogram, sweep heatmap
@@ -622,10 +651,12 @@ app.py                           web app (Streamlit) front-end
 
 ## Test coverage
 
-185 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
+207 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
 code, 13 for the loader's end-date / adjustment-basis behaviour in
-`tests/test_loader_end_date.py`, 6 for the chart series added to
-`test_metrics.py`, and 77 for the web app: the API contract and static serving in `tests/test_webapp_api.py` (62),
+`tests/test_loader_end_date.py`, 9 for the forward paper books
+(`tests/test_forward_books.py`), 9 for the news archive
+(`tests/test_news_logger.py`), 6 for the chart series added to
+`test_metrics.py`, and 81 for the web app: the API contract and static serving in `tests/test_webapp_api.py` (66),
 the indicator exports, snapshot price files and manifest provenance in
 `tests/test_webapp_snapshot.py` (8), and source-level rules for the frontend
 in `tests/test_webapp_frontend_rules.py` (7). `webapp/smoke_check.py` is the
