@@ -92,3 +92,15 @@ def test_generated_types_cover_every_backend_schema():
         assert re.search(rf"^\s{{8}}{re.escape(name)}: \{{", dts, flags=re.M), \
             f"schema.d.ts is out of date: '{name}' missing -- regenerate the types"
     assert "SLICE_OF_POOLED_HYPOTHESIS" in dts
+
+
+def test_brand_assets_exist_and_the_old_product_name_is_gone_from_the_ui():
+    """AlphaGuard AI's logo files ship with the UI, and no page still calls the product 'NSE Research'."""
+    public = os.path.join(os.path.dirname(SRC), "public")
+    for name in ("alphaguard-mark.svg", "favicon.svg", "alphaguard-banner.svg"):
+        text = open(os.path.join(public, name), encoding="utf-8").read()
+        assert text.lstrip().startswith("<svg") and "AlphaGuard" in text, name
+    html = open(os.path.join(os.path.dirname(SRC), "index.html"), encoding="utf-8").read()
+    assert "<title>AlphaGuard AI</title>" in html and "/favicon.svg" in html
+    for name, text in _source_files():
+        assert not re.search(r"NSE[\s·_-]*RESEARCH|NSE Research Terminal", text, flags=re.I), f"{name} still uses the old name"

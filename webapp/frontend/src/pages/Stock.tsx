@@ -69,7 +69,7 @@ export function Stock() {
 
   return (
     <div>
-      <Link to="/" className="back">← Screener</Link>
+      <Link to="/screener" className="back">← Screener</Link>
       <Async state={detail}>
         {(d) => (
           <div className="pagehead">

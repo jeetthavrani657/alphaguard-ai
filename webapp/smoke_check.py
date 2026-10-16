@@ -115,12 +115,17 @@ def run_checks(base: str) -> None:
     check(bool(h.get("data_through")) and bool(h.get("git_commit")), "health carries data_through and git_commit")
 
     print("[smoke] pages (the app shell serves every client-side route)")
-    for p in ("/", "/strategies", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
+    for p in ("/", "/screener", "/strategies", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
         st, body = fetch(base, p)
         check(st == 200 and "<div id=\"root\">" in body, f"page {p} returns the app shell (got {st})")
     st, body = fetch(base, "/")
     asset = body.split('/assets/')[1].split('"')[0] if "/assets/" in body else None
     check(asset is not None and fetch(base, "/assets/" + asset)[0] == 200, "built JS asset is served")
+    for brand_file in ("/favicon.svg", "/alphaguard-mark.svg", "/alphaguard-banner.svg"):
+        st, body = fetch(base, brand_file)
+        check(st == 200 and "<svg" in body, f"brand asset {brand_file} is served as an SVG")
+    st, shell = fetch(base, "/")
+    check("<title>AlphaGuard AI</title>" in shell, "the page title is AlphaGuard AI")
 
     print("[smoke] strategies")
     st, sl = fetch(base, "/api/strategies")
