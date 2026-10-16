@@ -225,8 +225,8 @@ def run_checks(base: str) -> None:
     check(bare_ratios(fb) == [], "no bare ratio in the forward books")
     for b in fb["books"]:
         check(b["status"] in ("NOT_STARTED", "RUNNING"), f"{b['id']}: status is NOT_STARTED or RUNNING")
-        check(b["days_needed_for_verdict"] == 252, f"{b['id']}: the verdict gate is the frozen 252 days")
-        if b["n_trading_days"] < b["days_needed_for_verdict"]:
+        check(b["days_needed_for_verdict"] >= 252, f"{b['id']}: the verdict gate is at least the frozen 252 days")
+        if b["n_trading_days"] < 252:                      # a Sharpe is shown only after a full year, whatever the verdict gate
             check(b["risk_adjusted"]["book"] is None, f"{b['id']}: Sharpe is withheld before a year of forward days")
         if b["status"] == "RUNNING":
             gb, dd = b["growth_book"], b["drawdown_book"]

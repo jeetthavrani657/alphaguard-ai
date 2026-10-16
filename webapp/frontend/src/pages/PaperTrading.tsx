@@ -32,7 +32,7 @@ function Clock({ book }: { book: ForwardBook }) {
       <progress value={book.n_trading_days} max={book.days_needed_for_verdict} aria-label="forward days toward a verdict" />
       <span className="muted">
         Started {book.start}; first countable session {book.first_counted_day}. No verdict before{" "}
-        {book.days_needed_for_verdict} days.
+        {book.days_needed_for_verdict} days{book.verdict_note ? ` ${book.verdict_note}` : ""} (criteria: {book.criteria_document}).
       </span>
     </div>
   );
@@ -149,7 +149,10 @@ export function PaperTrading() {
           <>
             <p className="note info">
               {d.disclaimer} The books and their pass criteria were frozen before any forward data existed, in{" "}
-              <code>{d.criteria_document}</code>. The dip-buying rule's own forward test is on the{" "}
+              {Array.from(new Set(d.books.map((b) => b.criteria_document))).map((doc, i) => (
+                <span key={doc}>{i > 0 && " and "}<code>{doc}</code></span>
+              ))}
+              . The dip-buying rule's own forward test is on the{" "}
               <Link to="/research">Research record</Link> page.
             </p>
             {d.books.map((b) => <BookCard key={b.id} book={b} />)}

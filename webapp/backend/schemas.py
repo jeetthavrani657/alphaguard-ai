@@ -515,6 +515,8 @@ class ForwardBook(BaseModel):
     first_counted_day: str
     n_trading_days: int
     days_needed_for_verdict: int
+    verdict_note: Optional[str] = None      # extra pre-registered condition besides the days, e.g. completed rebalances
+    criteria_document: str = "FORWARD_BOOKS.md"   # where this book's pass criteria were frozen
     summary: Optional[BookSummary] = None
     risk_adjusted: BookRiskAdjusted
     growth_book: Optional[EquityCurve] = None
@@ -532,8 +534,9 @@ class ForwardBooksResponse(BaseModel):
     start: str
     first_counted_day: str
     criteria_document: str = "FORWARD_BOOKS.md"
-    disclaimer: str = ("Paper trading only: nothing here places an order. No verdict is allowed before a full year "
-                       "of forward days; until then these numbers are monitoring, not evidence.")
+    disclaimer: str = ("Paper trading only: nothing here places an order. No verdict is allowed before each book's own "
+                       "pre-registered gate (a full year of forward days at the least); until then these numbers are "
+                       "monitoring, not evidence.")
     books: list[ForwardBook]
 
 

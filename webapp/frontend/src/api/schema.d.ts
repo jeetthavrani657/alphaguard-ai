@@ -407,6 +407,13 @@ export interface components {
             n_trading_days: number;
             /** Days Needed For Verdict */
             days_needed_for_verdict: number;
+            /** Verdict Note */
+            verdict_note?: string | null;
+            /**
+             * Criteria Document
+             * @default FORWARD_BOOKS.md
+             */
+            criteria_document: string;
             summary?: components["schemas"]["BookSummary"] | null;
             risk_adjusted: components["schemas"]["BookRiskAdjusted"];
             growth_book?: components["schemas"]["EquityCurve"] | null;
@@ -445,7 +452,7 @@ export interface components {
             criteria_document: string;
             /**
              * Disclaimer
-             * @default Paper trading only: nothing here places an order. No verdict is allowed before a full year of forward days; until then these numbers are monitoring, not evidence.
+             * @default Paper trading only: nothing here places an order. No verdict is allowed before each book's own pre-registered gate (a full year of forward days at the least); until then these numbers are monitoring, not evidence.
              */
             disclaimer: string;
             /** Books */
