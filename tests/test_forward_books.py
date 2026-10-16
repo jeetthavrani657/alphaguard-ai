@@ -74,6 +74,19 @@ def test_the_books_are_exactly_what_the_research_registered():
         assert b["kind"] in ("portfolio", "fundamental") or b.get("strategy") in forward_books.STRATEGY_MODULES
 
 
+def test_each_report_carries_its_own_verdict_gate_and_criteria_document(window, monkeypatch):
+    """The page must not claim 252 days for a book whose pre-registered gate is 504 days and two rebalances."""
+    old = forward_books.build_book_report(MA_BOOK, _toy_universe())
+    assert (old["verdict_gate_days"], old["verdict_note"], old["criteria_document"]) == (252, None, "FORWARD_BOOKS.md")
+    qv = next(b for b in forward_books.BOOKS if b["id"] == "quality_value_nifty50")
+    assert forward_books._gate_fields(qv) == {"verdict_gate_days": 504, "criteria_document": "FUNDAMENTALS_PREREG.md",
+                                              "verdict_note": "and two completed June rebalances (2027 and 2028)"}
+    _use_archive(monkeypatch, *_toy_archive())                                 # and the running report carries it too
+    rep = forward_books.build_book_report(dict(QV_BOOK, verdict_days=504, criteria_document="FUNDAMENTALS_PREREG.md"),
+                                          _same_price_universe(25))
+    assert rep["verdict_gate_days"] == 504 and rep["criteria_document"] == "FUNDAMENTALS_PREREG.md"
+
+
 def test_the_frozen_dates_and_gate_have_not_been_edited():
     assert forward_books.FORWARD_START == "2026-10-16"
     assert forward_books.FIRST_COUNTED_DAY == "2026-10-19"

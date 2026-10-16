@@ -84,6 +84,9 @@ BOOKS = [
         "name": "Quality + value (ROE and earnings yield), top 10, yearly",
         "kind": "fundamental", "universe": "nifty50",
         "params": {"top_n": quality_value.TOP_N},
+        # this book's own pre-registered verdict gate (the older two use the 252 days in FORWARD_BOOKS.md)
+        "verdict_days": 504, "verdict_note": "and two completed June rebalances (2027 and 2028)",
+        "criteria_document": "FUNDAMENTALS_PREREG.md",
         "rationale": "Companies that earn high returns on their equity while trading at a low price relative to those earnings "
                      "have historically beaten the market; the two measures guard against each other's traps.",
         "why_forward_tested": "Never backtested: only ~3 usable annual cross-sections exist in free data, too few to test anything. "
@@ -130,6 +133,12 @@ def _pending_per_symbol(universe_data: dict, module, params: dict) -> list:
     return out
 
 
+def _gate_fields(book: dict) -> dict:
+    """Where this book's pass criteria live and when a verdict becomes allowed. Defaults are FORWARD_BOOKS.md's."""
+    return {"verdict_gate_days": book.get("verdict_days", MIN_DAYS_FOR_SHARPE), "verdict_note": book.get("verdict_note"),
+            "criteria_document": book.get("criteria_document", "FORWARD_BOOKS.md")}
+
+
 def _report_kind(book: dict) -> str:
     """What the report calls the book. A fundamentals book is a one-account portfolio, and the web app's API
     only knows 'per_symbol' and 'portfolio', so it is reported as 'portfolio' (the dispatch above still sees 'fundamental')."""
@@ -159,7 +168,7 @@ def _fundamental_weights(universe_data: dict, last: pd.Timestamp) -> pd.DataFram
 
 def _empty_report(book: dict, last: pd.Timestamp, pending: list, note: str) -> dict:
     return {
-        "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"],
+        "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"], **_gate_fields(book),
         "rationale": book["rationale"], "why_forward_tested": book["why_forward_tested"],
         "status": "NOT_STARTED", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": 0, "sharpe_withheld_until_days": MIN_DAYS_FOR_SHARPE,
@@ -256,7 +265,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
 
     n_days = int(len(curve))
     return {
-        "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"],
+        "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"], **_gate_fields(book),
         "rationale": book["rationale"], "why_forward_tested": book["why_forward_tested"],
         "status": "RUNNING", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": n_days,
