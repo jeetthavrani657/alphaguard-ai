@@ -159,11 +159,88 @@ def test_the_statements_are_found_and_consolidated_is_preferred(pages):
     assert 1 not in sum((found[s] for s in ("income", "balance", "cashflow")), [])   # narrative never sent
 
 
-def test_standalone_can_be_requested_and_a_missing_basis_falls_back_and_says_so(pages):
-    assert fund_pdf.find_statement_pages(pages, "standalone")["balance"] == [2]
-    only_cons = [pages[i] for i in (0, 2, 3, 4, 5)]                  # drop the standalone balance sheet
-    f = fund_pdf.find_statement_pages(only_cons, "standalone")
-    assert f["basis_found"]["balance"] == "consolidated"             # fell back, and reported it
+def _txt(title, rows, header="(Rs in crore)"):
+    """An in-memory statement page (no PDF needed) shaped like the extracted text of a real one."""
+    return f"{title}\n{header}\n" + "\n".join(rows)
+
+
+NARR = "Chairman's letter. We had a good year with strong growth across all our businesses and markets."
+S_BAL, S_INC, S_CF = (_txt("Standalone Balance Sheet", BALANCE), _txt("Standalone Statement of Profit and Loss", INCOME),
+                      _txt("Standalone Statement of Cash Flows", CASHFLOW))
+C_BAL, C_INC, C_CF = (_txt("Consolidated Balance Sheet", BALANCE), _txt("Consolidated Statement of Profit and Loss", INCOME),
+                      _txt("Consolidated Statement of Cash Flows", CASHFLOW))
+
+
+def test_each_basis_returns_its_own_complete_set():
+    pages = [NARR, S_BAL, S_INC, S_CF, NARR, C_BAL, C_INC, C_CF]
+    cons = fund_pdf.find_statement_pages(pages, "consolidated")
+    assert (cons["balance"], cons["income"], cons["cashflow"]) == ([6], [7], [8])
+    stand = fund_pdf.find_statement_pages(pages, "standalone")
+    assert (stand["balance"], stand["income"], stand["cashflow"]) == ([2], [3], [4])
+    assert set(stand["basis_found"].values()) == {"standalone"}
+
+
+def test_a_missing_basis_falls_back_to_the_other_and_says_so():
+    pages = [NARR, C_BAL, C_INC, C_CF]                                  # no standalone statements at all
+    f = fund_pdf.find_statement_pages(pages, "standalone")
+    assert f["balance"] == [2] and set(f["basis_found"].values()) == {"consolidated"}
+
+
+def test_a_statement_page_with_no_consolidated_heading_takes_its_basis_from_its_neighbours():
+    """Seen in a real Asian Paints report: the balance sheet's title is a graphic, so its text never says
+    'Consolidated'; its neighbours (P&L, cash flow) do, and a standalone summary lies far away."""
+    headless_bal = "Asian Paints Limited\n374\nIntegrated Annual Report\n(` in Crores)\n" + "\n".join(BALANCE)
+    far_summary = _txt("Standalone Balance Sheet", BALANCE)
+    pages = [NARR, far_summary] + [NARR] * 150 + [headless_bal, C_INC, C_CF]
+    f = fund_pdf.find_statement_pages(pages, "consolidated")
+    assert f["balance"] == [153] and f["income"] == [154] and f["cashflow"] == [155]
+    assert set(f["basis_found"].values()) == {"consolidated"}
+
+
+def test_a_summary_table_in_the_directors_report_is_not_mistaken_for_the_statement():
+    """Seen in a real TCS report: a P&L summary in the Directors' Report scored like a statement."""
+    summary = ("Directors' Report: consolidated financial performance\nRevenue from operations 2,40,000.00\nTotal income 2,44,000.00\n"
+               "Profit before tax 44,000.00\nTax expenses 11,000.00")
+    pages = [NARR, summary] + [NARR] * 100 + [C_BAL, C_INC, C_CF]
+    assert fund_pdf.find_statement_pages(pages)["income"] == [104]
+
+
+def test_a_contd_page_right_after_a_statement_is_included_but_other_pages_are_not():
+    contd = ("Consolidated Statement of Cash Flows (Contd.)\nNet cash used in financing activities (15,000.00)\n"
+             "Net increase in cash and cash equivalents 3,000.00")
+    pages = [NARR, C_BAL, C_INC, C_CF, contd, NARR, NARR]
+    f = fund_pdf.find_statement_pages(pages)
+    assert f["cashflow"] == [4, 5] and f["balance"] == [2] and f["income"] == [3]
+
+
+def test_statements_sharing_one_page_are_handled():
+    """Seen in a real Maruti report: a two-page spread puts the balance sheet and the P&L on one PDF page."""
+    spread = C_BAL + "\n\n" + C_INC
+    f = fund_pdf.find_statement_pages([NARR, spread, C_CF])
+    assert f["balance"] == [2] and f["income"] == [2] and f["cashflow"] == [3]
+
+
+def test_a_statement_that_starts_partway_down_the_page_before_its_main_page_is_included():
+    """Seen in a real Maruti report: the cash flow begins under the statement of changes in equity, so its
+    operating-activities half sits on a page that scores too low to be the main page on its own."""
+    starts_here = ("Consolidated Statement of Changes in Equity\nBalance as at April 01, 2024 1,572\n"
+                   "Consolidated Statement of Cash Flows\nA. Cash flow from operating activities:\nProfit before tax 191,185")
+    f = fund_pdf.find_statement_pages([NARR, C_BAL, C_INC, starts_here, C_CF])
+    assert f["cashflow"] == [4, 5] and f["balance"] == [2] and f["income"] == [3]
+
+
+def test_the_page_before_a_statement_is_not_added_without_its_heading_or_if_another_statement_owns_it():
+    no_heading = "Notes\nNet cash from operating activities were strong this year."
+    f = fund_pdf.find_statement_pages([NARR, C_BAL, C_INC, no_heading, C_CF])
+    assert f["cashflow"] == [5]                                           # a signal alone, with no heading, is not enough
+    income_mentions_cf = C_INC + "\nSee the Statement of Cash Flows for operating activities."
+    g = fund_pdf.find_statement_pages([NARR, C_BAL, income_mentions_cf, C_CF])
+    assert g["cashflow"] == [4] and g["income"] == [3]                    # the income statement's page is not taken over
+
+
+def test_an_incomplete_document_reports_what_it_has_and_what_is_missing():
+    f = fund_pdf.find_statement_pages([NARR, C_BAL, NARR])
+    assert f["balance"] == [2] and f["income"] == [] and f["cashflow"] == []
 
 
 def test_a_scanned_pdf_is_refused_not_guessed(tmp_path):

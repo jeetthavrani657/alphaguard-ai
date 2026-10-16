@@ -31,7 +31,6 @@ _TITLES = {
     "balance": r"(consolidated)?balancesheet",
     "cashflow": r"(consolidated)?(statementof)?cashflows?",
 }
-PAGES_PER_STATEMENT = 2        # a statement can run over two pages
 
 
 def read_pages(path: str) -> list:
@@ -56,38 +55,95 @@ def _squash(text: str) -> str:
     return re.sub(r"\s+", "", text).lower()
 
 
-def _score(text: str, statement: str) -> int:
+def _signal_count(text: str, statement: str) -> int:
     flat = _squash(text)
-    s = sum(1 for pat in _SIGNALS[statement] if re.search(pat, flat))
-    if re.search(_TITLES[statement], flat[:600]):
+    return sum(1 for pat in _SIGNALS[statement] if re.search(pat, flat))
+
+
+def _score(text: str, statement: str) -> int:
+    s = _signal_count(text, statement)
+    if re.search(_TITLES[statement], _squash(text)[:600]):
         s += 2                                        # the heading near the top is a strong signal
     return s
 
 
+# The heading anywhere on a page (not just near the top): a statement can START part-way down a page that
+# also holds the end of the previous statement (seen in a real Maruti report: cash flow begins under the
+# statement of changes in equity).
+_HEADING_ANYWHERE = {
+    "income": r"statementofprofitandloss",
+    "balance": r"balancesheet",
+    "cashflow": r"statementofcashflows?",
+}
+
+
+_CONSOLIDATED_TITLES = r"consolidated(balancesheet|statementofprofitandloss|statementofcashflows?|statementofassetsandliabilities)"
+CONTINUATION_MIN_SCORE = 3      # a "(Contd.)" page repeats few of the signals
+MAX_CLUSTER_SPAN = 30           # the three statements are consecutive pages; farther apart than this is coincidence
+
+
 def _is_consolidated(text: str) -> bool:
-    return "consolidated" in _squash(text)[:600]
+    flat = _squash(text)
+    return bool(re.search(_CONSOLIDATED_TITLES, flat)) or "consolidated" in flat[:600]
 
 
 def find_statement_pages(pages: list, basis: str = "consolidated") -> dict:
     """
-    {"income": [page numbers], "balance": [...], "cashflow": [...], "basis_found": {...}}.
-    Page numbers are 1-based. Prefers the requested basis ('consolidated' or 'standalone'); if a
-    statement exists only on the other basis it is returned and reported in basis_found.
-    A statement with no qualifying page maps to [].
+    {"income": [page numbers], "balance": [...], "cashflow": [...], "basis_found": {...}}  (1-based pages).
+
+    The three primary statements sit together in a real annual report, so rather than taking the best-scoring
+    page for each statement independently (which picks up a Directors' Report summary table or a note), this
+    looks for the TIGHTEST set of one page per statement and takes its basis from the whole set. That matters
+    because a statement page often carries no "Consolidated" heading in its extracted text (it is in a graphic;
+    seen in a real Asian Paints report), but its neighbours do. A set matching the requested basis wins; among
+    those, the smallest page span, then the highest score. A "(Contd.)" page directly after a statement is
+    added. A statement with no qualifying page maps to [].
     """
-    out, basis_found = {}, {}
-    for st in ("income", "balance", "cashflow"):
-        scored = []
-        for i, text in enumerate(pages, start=1):
-            sc = _score(text, st)
-            if sc >= _MIN_SIGNALS[st]:
-                scored.append((sc, _is_consolidated(text), i))
-        want_cons = basis == "consolidated"
-        preferred = [t for t in scored if t[1] == want_cons]
-        chosen_pool = preferred or scored
-        chosen = sorted(chosen_pool, key=lambda t: (-t[0], t[2]))[:PAGES_PER_STATEMENT]
-        out[st] = sorted(t[2] for t in chosen)
-        basis_found[st] = ("consolidated" if chosen[0][1] else "standalone") if chosen else None
+    scores = {st: {i: _score(t, st) for i, t in enumerate(pages, start=1)} for st in _SIGNALS}
+    cands = {st: [i for i, sc in scores[st].items() if sc >= _MIN_SIGNALS[st]] for st in _SIGNALS}
+    out = {st: [] for st in ("income", "balance", "cashflow")}
+    basis_found = {st: None for st in out}
+    if not all(cands[st] for st in out):
+        # no complete set: return whatever each statement alone has (best-scoring page), so the caller sees what is missing
+        for st in out:
+            if cands[st]:
+                best = max(cands[st], key=lambda i: (scores[st][i], -i))
+                out[st], basis_found[st] = [best], ("consolidated" if _is_consolidated(pages[best - 1]) else "standalone")
+        out["basis_found"] = basis_found
+        return out
+
+    want_cons = basis == "consolidated"
+    best_key, best = None, None
+    for inc in cands["income"]:
+        for bal in cands["balance"]:
+            for cf in cands["cashflow"]:
+                combo = (inc, bal, cf)
+                span = max(combo) - min(combo)
+                is_cons = any(_is_consolidated(pages[i - 1]) for i in set(combo))
+                total = scores["income"][inc] + scores["balance"][bal] + scores["cashflow"][cf]
+                key = (is_cons != want_cons, span > MAX_CLUSTER_SPAN, span, -total, combo)
+                if best_key is None or key < best_key:
+                    best_key, best = key, (combo, is_cons)
+    combo, is_cons = best
+    mains = {"income": combo[0], "balance": combo[1], "cashflow": combo[2]}
+    for st, main in mains.items():
+        chosen = [main]
+        nxt = main + 1
+        if nxt <= len(pages) and nxt not in mains.values() and scores[st][nxt] >= CONTINUATION_MIN_SCORE:
+            chosen.append(nxt)
+        out[st] = chosen
+        basis_found[st] = "consolidated" if is_cons else "standalone"
+    # A statement that starts part-way down the page BEFORE its best page: take that page too if it carries the
+    # statement's heading and at least one of its signals, and no other statement already uses it. A page that
+    # qualifies as this statement ON ITS OWN is skipped: that is a different copy (the standalone balance sheet
+    # printed just before the consolidated one), not the missing start.
+    taken = {p for pages_ in out.values() for p in pages_}
+    for st, main in mains.items():
+        prev = main - 1
+        if (prev >= 1 and prev not in taken and prev not in cands[st] and _signal_count(pages[prev - 1], st) >= 1
+                and re.search(_HEADING_ANYWHERE[st], _squash(pages[prev - 1]))):
+            out[st] = [prev] + out[st]
+            taken.add(prev)
     out["basis_found"] = basis_found
     return out
 
