@@ -1,6 +1,16 @@
-# NSE Backtesting System
+<p align="center">
+  <img src="webapp/frontend/public/alphaguard-banner.svg" alt="AlphaGuard AI: every edge, tested against the number of things you tried" width="100%">
+</p>
 
-A backtesting system for NSE (India) equities research, daily timeframe.
+# AlphaGuard AI
+
+*Every edge, tested against the number of things you tried.*
+
+AlphaGuard AI is a backtesting system and research terminal for NSE (India)
+equities, daily timeframe. (Developed under the working title "NSE
+Backtesting System".) For clarity about what is inside: there is no
+machine-learning model in this project. Every number comes from the backtest,
+cost and statistics code in this repository, which you can read and test.
 **Research only — no live order placement, no broker integration, ever.**
 
 It exists to answer one kind of question honestly: "if I had traded this
@@ -209,10 +219,10 @@ Use the same Python that has the project's packages installed (the one
 `pip install -r requirements.txt` went into). The app is research-only:
 no broker connection, no order placement.
 
-### Web app v2: the research terminal (FastAPI + React)
+### Web app v2: the AlphaGuard AI research terminal (FastAPI + React)
 
-A dark, dense research terminal that replaces the Streamlit app: a stock
-screener with a sector heatmap, a per-stock cockpit (candles, SMA/RSI, the
+A dark, dense research terminal that replaces the Streamlit app: an overview
+scoreboard, a stock screener with a sector heatmap, a per-stock cockpit (candles, SMA/RSI, the
 strategies' own trades), every strategy with its validation status, and the
 research record (hypothesis ledger, forward test, data quality). The
 Streamlit app above still works and is untouched; retire it when you are
@@ -285,7 +295,9 @@ it. The brief's five rules, and what enforces each:
 
 #### What each page shows
 
-- **Screener** (`/`): all 441 stocks with buy-and-hold returns per window,
+- **Overview** (`/`): the front door: hypothesis count, the significance bar, data date and a
+  scoreboard of every strategy's status, read straight from the API.
+- **Screener** (`/screener`): all 441 stocks with buy-and-hold returns per window,
   filters, and a sector heatmap. It deliberately shows no Sharpe: ranking
   441 stocks by Sharpe is a multiple comparison.
 - **Stock cockpit** (`/stock/RELIANCE`): candles with SMA 50/200 and the
@@ -610,13 +622,13 @@ app.py                           web app (Streamlit) front-end
 
 ## Test coverage
 
-184 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
+185 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
 code, 13 for the loader's end-date / adjustment-basis behaviour in
 `tests/test_loader_end_date.py`, 6 for the chart series added to
-`test_metrics.py`, and 76 for the web app: the API contract and static serving in `tests/test_webapp_api.py` (62),
+`test_metrics.py`, and 77 for the web app: the API contract and static serving in `tests/test_webapp_api.py` (62),
 the indicator exports, snapshot price files and manifest provenance in
 `tests/test_webapp_snapshot.py` (8), and source-level rules for the frontend
-in `tests/test_webapp_frontend_rules.py` (6). `webapp/smoke_check.py` is the
+in `tests/test_webapp_frontend_rules.py` (7). `webapp/smoke_check.py` is the
 complementary end-to-end check on the real results (not part of pytest). This is a
 deliberately targeted suite, not full coverage — the same honesty
 applies now as when it was first written: know what's covered, know
