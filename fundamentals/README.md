@@ -7,7 +7,16 @@ dip-buying, momentum, pairs) uses prices only. Value, quality and earnings-momen
 need fundamentals, and there is no free, point-in-time, 10-year fundamentals source
 for NSE stocks. So we build one from the filings.
 
-**Status: the engine is built and tested; it has not yet read a real annual report.**
+**Read this first: the cheaper path comes before this one.** For a first look at
+whether fundamentals help at all, `research/fundamentals_snapshot.py` archives the
+free structured statements yfinance serves (no PDFs, no paid API). It has 4-5 years
+of annual data, restated and not point-in-time, so its retrospective results are weak
+evidence; but it starts a genuinely point-in-time archive from today and costs
+nothing. The PDF/Claude pipeline below is for later, if that cheap test shows
+something and more history is needed (roughly Rs 2,000-5,000 for ~390 reports, to be
+confirmed against Anthropic's own pricing page).
+
+**Status of the PDF pipeline: the engine is built and tested; it has not yet read a real annual report.**
 That needs an API key and real PDFs (see "What it needs next"). Until then it is
 proven only against a synthetic PDF and a fake model, which tests the checking logic,
 not how well Claude reads real filings. Do not treat any number as real until a real

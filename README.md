@@ -399,6 +399,16 @@ scheduled task (`run_forward_log.bat`), after the close.
   one forward so it can be tested honestly in a year. It computes no signal.
   `python research/news_logger.py --status` shows what has been collected.
 
+- **Fundamentals archive** (`research/fundamentals_snapshot.py`): the free annual
+  and quarterly statements yfinance serves for the Nifty 50, archived with when
+  each figure was first seen (a restatement adds a row, never overwrites), so it
+  becomes genuinely point-in-time from the day it started. Weekly, from the
+  scheduled task. Raw values only; it computes no ratio or signal. Two ways to
+  read it: `strict` (only what had been seen by a date) and `retrospective`
+  (assumed public date, restated numbers; results must be labelled non-PIT).
+  Measured on the first run: 55,454 figures, 50 stocks, 4-5 annual periods; the
+  balance sheet identity holds in 199 of 199 evaluable stock-years, the cash flow
+  identity in 171 of 191.
 - **Fundamentals extraction** (`fundamentals/`, `research/extract_fundamentals.py`):
   reads annual-report PDFs with the Claude API into verified, point-in-time
   financial statements, so a value / quality / earnings-momentum strategy can
@@ -661,8 +671,9 @@ app.py                           web app (Streamlit) front-end
 
 ## Test coverage
 
-261 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
-code, 54 for the fundamentals extractor (`tests/test_fundamentals.py`), 13 for the loader's end-date / adjustment-basis behaviour in
+281 tests, all passing (`python -m pytest tests/ -q`): 89 for the research
+code, 55 for the fundamentals PDF extractor (`tests/test_fundamentals.py`), 19 for the
+fundamentals archive (`tests/test_fundamentals_snapshot.py`), 13 for the loader's end-date / adjustment-basis behaviour in
 `tests/test_loader_end_date.py`, 9 for the forward paper books
 (`tests/test_forward_books.py`), 9 for the news archive
 (`tests/test_news_logger.py`), 6 for the chart series added to

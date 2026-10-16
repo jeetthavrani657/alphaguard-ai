@@ -29,4 +29,9 @@ rem of the forward test: if one fails the other has still run. Its output overwr
 rem reports\output\news_last_run.log.
 "C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\news_logger.py > "reports\output\news_last_run.log" 2>&1
 
+rem Weekly point-in-time archive of free yfinance fundamentals (research\fundamentals_snapshot.py). The
+rem script gates itself to once every 7 days, so calling it daily costs nothing. Output overwrites
+rem reports\output\fundamentals_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\fundamentals_snapshot.py > "reports\output\fundamentals_last_run.log" 2>&1
+
 exit /b %FORWARD_RESULT%
