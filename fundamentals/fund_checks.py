@@ -14,8 +14,14 @@ REL_TOL = 0.002
 ABS_TOL_CRORE = 0.05
 
 
-def _close(a, b):
-    return abs(a - b) <= max(REL_TOL * max(abs(a), abs(b)), ABS_TOL_CRORE)
+def _close(a, b, scale=None):
+    """
+    a and b agree within printed rounding. `scale` is the size of the numbers that were ADDED to make them:
+    rounding error comes from the components, so a small net change (say 30) built from flows of 30,000
+    must not be judged against 0.2% of 30. Defaults to the larger of a and b (fine for two-term identities).
+    """
+    scale = max(abs(a), abs(b)) if scale is None else scale
+    return abs(a - b) <= max(REL_TOL * scale, ABS_TOL_CRORE)
 
 
 def _check(check_id, severity, values, needed, test, describe):
@@ -37,18 +43,18 @@ def run_checks(values: dict) -> list:
                _close, lambda a, b: f"total assets {a:,.2f} vs total equity and liabilities {b:,.2f}"),
         _check("equity_parts_add_up", "hard", values,
                ("equity_attributable_to_owners", "non_controlling_interests", "total_equity"),
-               lambda o, n, t: _close(o + n, t),
+               lambda o, n, t: _close(o + n, t, scale=max(abs(o), abs(n), abs(t))),
                lambda o, n, t: f"owners {o:,.2f} + minorities {n:,.2f} vs total equity {t:,.2f}"),
         _check("cash_flow_reconciles", "hard", values,
                ("cash_from_operations", "cash_from_investing", "cash_from_financing", "net_change_in_cash"),
-               lambda o, i, f, n: _close(o + i + f, n),
+               lambda o, i, f, n: _close(o + i + f, n, scale=max(abs(o), abs(i), abs(f), abs(n))),
                lambda o, i, f, n: f"operating {o:,.2f} + investing {i:,.2f} + financing {f:,.2f} vs net change {n:,.2f}"),
         _check("total_income_adds_up", "hard", values, ("revenue_from_operations", "other_income", "total_income"),
-               lambda r, o, t: _close(r + o, t),
+               lambda r, o, t: _close(r + o, t, scale=max(abs(r), abs(o), abs(t))),
                lambda r, o, t: f"revenue {r:,.2f} + other income {o:,.2f} vs total income {t:,.2f}"),
         # Warnings only: legitimate statements can break these (associates' profit, discontinued operations).
         _check("profit_chain", "warn", values, ("profit_before_tax", "tax_expense", "profit_after_tax"),
-               lambda p, t, a: _close(p - t, a),
+               lambda p, t, a: _close(p - t, a, scale=max(abs(p), abs(t), abs(a))),
                lambda p, t, a: f"PBT {p:,.2f} - tax {t:,.2f} vs profit after tax {a:,.2f}"),
         _check("equity_not_above_assets", "warn", values, ("total_equity", "total_assets"),
                lambda e, a: e <= a + ABS_TOL_CRORE,

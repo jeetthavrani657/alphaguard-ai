@@ -401,3 +401,14 @@ def test_a_file_that_is_not_a_pdf_gives_a_plain_error_not_a_traceback(tmp_path):
         fund_extract.prepare(str(fake))
     with pytest.raises(ValueError, match="not a readable PDF"):
         fund_pdf.read_pages(str(tmp_path / "does_not_exist.pdf"))
+
+
+def test_cash_flow_rounding_is_judged_against_the_flows_not_the_small_net_change():
+    """Regression: a net change of 30 built from flows of ~30,000 carries rounding error from the flows."""
+    v = {"cash_from_operations": 30000.4, "cash_from_investing": -12000.5, "cash_from_financing": -17969.6,
+         "net_change_in_cash": 30.0}                                  # sum = 30.3, i.e. rounding, not an error
+    c = next(x for x in fund_checks.run_checks(v) if x["id"] == "cash_flow_reconciles")
+    assert c["passed"] is True
+    v["net_change_in_cash"] = 3000.0                                  # a genuinely wrong figure is still caught
+    c = next(x for x in fund_checks.run_checks(v) if x["id"] == "cash_flow_reconciles")
+    assert c["passed"] is False
