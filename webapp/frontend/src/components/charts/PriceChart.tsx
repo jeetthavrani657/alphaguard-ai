@@ -18,6 +18,9 @@ type Marker = SymbolDetail["markers"][number];
  * indicator lines come from the strategy modules' own functions (the API's
  * `indicator_sources` says which), so a line here is the line a strategy trades on.
  */
+// Fixed container height: see the note in StrategyChart.tsx (autoSize can otherwise keep growing at fractional zoom).
+const CHART_HEIGHT = 560;
+
 export function PriceChart({ prices, markers }: { prices: PriceSeries; markers: Marker[] }) {
   const host = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -29,7 +32,7 @@ export function PriceChart({ prices, markers }: { prices: PriceSeries; markers: 
   useEffect(() => {
     if (!host.current) return;
     const p = prices;
-    const chart = createChart(host.current, { ...baseChartOptions(), height: 560 });
+    const chart = createChart(host.current, { ...baseChartOptions(), height: CHART_HEIGHT });
     const colors = chartColors();
     chartRef.current = chart;
 
@@ -117,7 +120,7 @@ export function PriceChart({ prices, markers }: { prices: PriceSeries; markers: 
           </label>
         ))}
       </div>
-      <div className="chartbox"><div ref={host} /></div>
+      <div className="chartbox"><div ref={host} style={{ height: CHART_HEIGHT, width: "100%" }} /></div>
       <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
         ▲ entry · ▼ exit (green = profitable, red = loss; label is the trade's net return). Orange SMA 50, purple
         SMA 200. Lower panes: volume, RSI 14 (Wilder). Drag to pan; use the range buttons to zoom.

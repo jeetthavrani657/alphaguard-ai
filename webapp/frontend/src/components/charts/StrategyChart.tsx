@@ -18,6 +18,10 @@ export type ChartData = Pick<
   EquityResponse,
   "growth_strategy" | "growth_benchmark" | "drawdown_strategy_pct" | "drawdown_benchmark_pct" | "exposure_strategy_pct" | "exposure_definition"
 > & Partial<Pick<EquityResponse, "strategy" | "benchmark">>;
+// The container has a FIXED height. With autoSize and a container whose height comes from the chart itself, a
+// browser at a fractional zoom (125% or 150% on Windows) can grow the chart a pixel or two on every resize pass,
+// so it slowly stretches down the page. A fixed container height breaks that loop.
+const CHART_HEIGHT = 620;
 const toData = (c: Curve) => c.dates.map((d, i) => ({ time: d as Time, value: c.values[i] }));
 
 /**
@@ -38,7 +42,7 @@ export function StrategyChart({ data }: { data: ChartData }) {
 
   useEffect(() => {
     if (!host.current) return;
-    const chart = createChart(host.current, { ...baseChartOptions(), height: 620 });
+    const chart = createChart(host.current, { ...baseChartOptions(), height: CHART_HEIGHT });
     const colors = chartColors();
     chartRef.current = chart;
 
@@ -106,7 +110,7 @@ export function StrategyChart({ data }: { data: ChartData }) {
         <label><input type="checkbox" checked={log} onChange={(e) => setLog(e.target.checked)} /> log scale (growth)</label>
         <button onClick={() => chartRef.current?.timeScale().fitContent()}>Reset zoom</button>
       </div>
-      <div className="chartbox"><div ref={host} /></div>
+      <div className="chartbox"><div ref={host} style={{ height: CHART_HEIGHT, width: "100%" }} /></div>
       <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
         Exposure: {data.exposure_definition ?? "not in this snapshot — regenerate it"}
       </p>
