@@ -590,3 +590,9 @@ class Health(BaseModel):
     ledger_total_now: Optional[int] = None
     snapshot_ledger_total: Optional[int] = None
     snapshot_stale: Optional[bool] = None
+    # The forward test's own health (research/health_check.py, run at the start of each daily run): is the
+    # unattended recording still happening? `forward_health_stale` means the checker itself has stopped.
+    forward_health: Optional[Literal["OK", "WARN", "FAIL"]] = None
+    forward_health_generated_at: Optional[str] = None
+    forward_health_stale: Optional[bool] = None
+    forward_health_problems: list[str] = []

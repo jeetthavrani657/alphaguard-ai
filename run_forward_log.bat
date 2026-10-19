@@ -16,6 +16,11 @@ rem which gains one row per data date.
 
 cd /d "%~dp0"
 if not exist "reports\output" mkdir "reports\output"
+
+rem Health check FIRST (research\health_check.py): it judges the footprints the PREVIOUS run left (fresh files,
+rem no crashed step, the Windows task's last result), so a silent failure shows up on the web app's status
+rem bar. It reads files only; it fetches nothing. Output overwrites reports\output\health_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\health_check.py > "reports\output\health_last_run.log" 2>&1
 "C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\forward_log.py > "reports\output\forward_last_run.log" 2>&1
 set FORWARD_RESULT=%ERRORLEVEL%
 

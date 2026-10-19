@@ -21,6 +21,17 @@ export function StatusBar() {
       <span>DATA THROUGH <b>{h.data_through ?? "—"}</b></span>
       <span>LEDGER <b>{h.ledger_total_now ?? "—"}</b> hypotheses</span>
       {h.snapshot_stale && <span className="warn">⚠ RESULTS COMPUTED AT {h.snapshot_ledger_total} — STALE</span>}
+      {h.forward_health && (
+        h.forward_health_stale ? (
+          <span className="warn">⚠ FORWARD-TEST HEALTH CHECK HAS STOPPED (last {h.forward_health_generated_at?.slice(0, 16).replace("T", " ")} UTC)</span>
+        ) : h.forward_health === "OK" ? (
+          <span>FORWARD TEST <b className="ok">OK</b></span>
+        ) : (
+          <span className={h.forward_health === "FAIL" ? "bad" : "warn"}>
+            ⚠ FORWARD TEST {h.forward_health}: {h.forward_health_problems.join(" · ")}
+          </span>
+        )
+      )}
       <span>RESULTS GENERATED <b>{h.snapshot_generated_at?.slice(0, 16).replace("T", " ") ?? "—"}</b> UTC</span>
       <span>
         CODE <b>{h.git_commit ?? "?"}</b>

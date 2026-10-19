@@ -542,6 +542,17 @@ export interface components {
             snapshot_ledger_total?: number | null;
             /** Snapshot Stale */
             snapshot_stale?: boolean | null;
+            /** Forward Health */
+            forward_health?: ("OK" | "WARN" | "FAIL") | null;
+            /** Forward Health Generated At */
+            forward_health_generated_at?: string | null;
+            /** Forward Health Stale */
+            forward_health_stale?: boolean | null;
+            /**
+             * Forward Health Problems
+             * @default []
+             */
+            forward_health_problems: string[];
         };
         /** LedgerResponse */
         LedgerResponse: {

@@ -600,3 +600,37 @@ def test_no_live_file_yet_explains_how_to_start_the_writer(client, tmp_path, mon
     monkeypatch.setenv("WEBAPP_LIVE_QUOTES", str(tmp_path / "nope.json"))
     r = client.get("/api/live-quotes")
     assert r.status_code == 200 and r.json()["available"] is False and "live_quotes.py" in r.json()["reason"]
+
+
+# --- the forward test's own health in the status strip -------------------------------------------------------------
+
+def _health_file(tmp_path, monkeypatch, hours_old=1, overall="OK", checks=None):
+    from datetime import datetime, timedelta, timezone
+    when = datetime.now(timezone.utc) - timedelta(hours=hours_old)
+    checks = checks or [{"id": "a", "label": "A", "status": "OK", "detail": "fine"}]
+    path = tmp_path / "health.json"
+    path.write_text(json.dumps({"generated_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "overall": overall, "checks": checks}))
+    monkeypatch.setenv("WEBAPP_HEALTH_LATEST", str(path))
+
+
+def test_the_status_strip_gets_the_forward_tests_health(client, tmp_path, monkeypatch):
+    _health_file(tmp_path, monkeypatch, overall="WARN", checks=[
+        {"id": "a", "label": "News archive", "status": "OK", "detail": "fine"},
+        {"id": "b", "label": "Paper books history", "status": "WARN", "detail": "newest entry 2026-10-15, 2 weekday(s) ago"}])
+    h = client.get("/api/health").json()
+    assert h["forward_health"] == "WARN" and h["forward_health_stale"] is False
+    assert h["forward_health_problems"] == ["Paper books history: newest entry 2026-10-15, 2 weekday(s) ago"]   # only the non-OK ones
+
+
+def test_a_health_checker_that_has_itself_stopped_is_reported_as_stale(client, tmp_path, monkeypatch):
+    """The dead-man guard: silence from the monitor must not look like good news."""
+    _health_file(tmp_path, monkeypatch, hours_old=100)
+    assert client.get("/api/health").json()["forward_health_stale"] is True
+    _health_file(tmp_path, monkeypatch, hours_old=72)                           # a normal Friday-to-Monday gap
+    assert client.get("/api/health").json()["forward_health_stale"] is False
+
+
+def test_no_health_file_yet_leaves_the_fields_empty_without_breaking_health(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_HEALTH_LATEST", str(tmp_path / "nope.json"))
+    h = client.get("/api/health").json()
+    assert h["ok"] is True and h["forward_health"] is None and h["forward_health_problems"] == []

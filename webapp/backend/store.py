@@ -67,6 +67,16 @@ def load_live_quotes_raw() -> Optional[dict]:
     return _read_json(path) if os.path.exists(path) else None
 
 
+def health_latest_path() -> str:
+    return os.environ.get("WEBAPP_HEALTH_LATEST", os.path.join(ROOT, "reports", "output", "health_latest.json"))
+
+
+def load_health_latest_raw() -> Optional[dict]:
+    """research/health_check.py's latest file, or None if it has never run."""
+    path = health_latest_path()
+    return _read_json(path) if os.path.exists(path) else None
+
+
 def forward_books_path() -> str:
     return os.environ.get("WEBAPP_FORWARD_BOOKS", os.path.join(ROOT, "reports", "output", "forward_books_latest.json"))
 

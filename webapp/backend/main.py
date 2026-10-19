@@ -86,6 +86,21 @@ def _summary(detail: schemas.StrategyDetail) -> schemas.StrategySummary:
 
 # --- routes -------------------------------------------------------------------------
 
+# The health checker runs once per weekday, so Friday evening to Monday evening is 72 hours of silence by design.
+FORWARD_HEALTH_STALE_HOURS = 80
+
+
+def _forward_health_fields() -> dict:
+    raw = store.load_health_latest_raw()
+    if raw is None:
+        return {}
+    age_hours = (datetime.now(timezone.utc) - datetime.strptime(raw["generated_at"], "%Y-%m-%dT%H:%M:%SZ")
+                 .replace(tzinfo=timezone.utc)).total_seconds() / 3600
+    return {"forward_health": raw["overall"], "forward_health_generated_at": raw["generated_at"],
+            "forward_health_stale": age_hours > FORWARD_HEALTH_STALE_HOURS,
+            "forward_health_problems": [f"{c['label']}: {c['detail']}" for c in raw["checks"] if c["status"] != "OK"]}
+
+
 @api.get("/health", response_model=schemas.Health, summary="Is the API up, and is there data behind it?")
 def health():
     manifest = None
@@ -105,7 +120,8 @@ def health():
         snapshot_generated_at=prov.generated_at if prov else None,
         git_commit=prov.git_commit if prov else None, git_dirty=prov.git_dirty if prov else None,
         ledger_total_now=now, snapshot_ledger_total=prov.ledger_total_at_snapshot if prov else None,
-        snapshot_stale=(now != prov.ledger_total_at_snapshot) if (prov and ledger) else None)
+        snapshot_stale=(now != prov.ledger_total_at_snapshot) if (prov and ledger) else None,
+        **_forward_health_fields())
 
 
 @api.get("/strategies", response_model=schemas.StrategyList,
