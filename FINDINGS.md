@@ -25,6 +25,10 @@ produced.
 > **Ledger update (2026-10-16): 204 became 205.** The quality + value forward book
 > (`FUNDAMENTALS_PREREG.md`) was registered and counted. No backtest was run for it, so none of the
 > results in this document changed; Bonferroni bar is now 0.05/205 = 0.000244.
+>
+> **Second ledger update (2026-10-19): 205 became 208.** The three risk profiles of the multi-asset advisory tool
+> (`ADVISORY.md`, `research/advisory.py`) were registered and judged once; all three are `VALIDATED_FAILED`.
+> Bonferroni bar is now 0.05/208 = 0.000240. No result in this document changed (Smallcap MA, p = 0.000231, still clears it).
 
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a

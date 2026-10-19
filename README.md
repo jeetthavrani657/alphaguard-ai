@@ -818,3 +818,16 @@ what isn't, don't assume either.
   OPEN ITEMS section for the one confirmed case (ADANIENT.NS
   2015-06-03) and why a fix needs deliberate threshold-tuning rather
   than a reactive patch.
+
+
+### Multi-asset advisory (`research/advisory.py`, the web app's **Advisory** page)
+
+A risk-managed allocation tool across Nifty 50, Midcap 150, Nasdaq-100, gold, government bonds, Bitcoin and cash:
+a five-question risk questionnaire picks a profile (conservative, moderate, aggressive), and the page shows the
+recommended mix, its risk measures (volatility, maximum drawdown, Value at Risk, Expected Shortfall, Calmar) and a
+historical simulation next to the Nifty 50 ETF. The rule is frozen in `ADVISORY.md`; the three profiles are counted
+in the hypothesis ledger (208) and all are `VALIDATED_FAILED`. Educational only: not investment advice, no orders.
+
+```
+python research/advisory.py              # regenerate reports/output/advisory_latest.json (no ledger change)
+```

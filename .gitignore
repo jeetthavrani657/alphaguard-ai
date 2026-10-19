@@ -38,3 +38,7 @@ data/upstox/
 reports/output/live_quotes_latest.json
 reports/output/health_latest.json
 reports/output/health_last_run.log
+
+# Multi-asset advisory (research/advisory.py): cached ETF prices and the generated file.
+data/advisory/
+reports/output/advisory_latest.json
