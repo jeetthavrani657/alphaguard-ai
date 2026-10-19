@@ -830,7 +830,15 @@ in the hypothesis ledger (208) and all are `VALIDATED_FAILED`. Educational only:
 
 The page also explains each weight (role, volatility, share of risk), turns an amount in rupees into an indicative
 shopping list of whole units (printable; `GET /api/advisory/basket`), and shows a display-only trend monitor
-(price against its 210-day average, never back-tested, no performance claim).
+(price against its 210-day average, never back-tested, no performance claim). It can also work out what to buy or sell
+from holdings you type in (`GET /api/advisory/rebalance`, with a 1% drift band and the rule's cost estimate), and shows
+how each profile behaved in four named bad stretches (COVID 2020, the 2021-22 bear, the 2022 rate-hike year, crypto
+winter), including where it did not help. The Paper trading page lists each book's simulated fills (a paper blotter), and
+the Methodology page explains how every result was produced. None of this adds a hypothesis or places an order.
+
+The **Multi-asset** page holds the trading side of the topic: two trend-filter rules over the same six assets (`MULTIASSET_TREND.md`,
+`research/multiasset_trend.py`), registered once as hypotheses (ledger 210), judged by the same harness against a no-timing benchmark
+and the Nifty 50 ETF. Both are `VALIDATED_FAILED`: the filter lowered drawdowns but did not beat holding the same assets without timing.
 
 ```
 python research/advisory.py              # regenerate reports/output/advisory_latest.json (no ledger change)

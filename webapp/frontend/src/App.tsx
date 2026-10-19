@@ -8,6 +8,8 @@ import { StrategyPage } from "./pages/StrategyPage";
 import { PaperTrading } from "./pages/PaperTrading";
 import { Advisory } from "./pages/Advisory";
 import { Research } from "./pages/Research";
+import { Methodology } from "./pages/Methodology";
+import { MultiAsset } from "./pages/MultiAsset";
 
 // One URL per page. A page is just a React component: a function that returns what to
 // draw. The router picks which one by looking at the URL.
@@ -17,8 +19,10 @@ import { Research } from "./pages/Research";
 //   /stock/:symbol        Stock cockpit   one stock: chart, strategy slices, data quality
 //   /strategies           Strategies      every strategy with its validation status
 //   /strategies/:id       (detail of one strategy)
+//   /multiasset           Multi-asset     trend-filter trading rules over six asset classes, against no timing
 //   /paper                Paper trading   frozen candidates run forward, against buy-and-hold
 //   /research             Research record hypothesis ledger, forward test, data quality
+//   /methodology          Methodology     how the results were produced and what they cannot show
 export default function App() {
   const tab = ({ isActive }: { isActive: boolean }) => (isActive ? "tab active" : "tab");
   return (
@@ -32,9 +36,11 @@ export default function App() {
         <NavLink to="/" end className={tab}>Overview</NavLink>
         <NavLink to="/screener" className={tab}>Screener</NavLink>
         <NavLink to="/strategies" className={tab}>Strategies</NavLink>
+        <NavLink to="/multiasset" className={tab}>Multi-asset</NavLink>
         <NavLink to="/advisory" className={tab}>Advisory</NavLink>
         <NavLink to="/paper" className={tab}>Paper trading</NavLink>
         <NavLink to="/research" className={tab}>Research record</NavLink>
+        <NavLink to="/methodology" className={tab}>Methodology</NavLink>
         <span className="spacer" />
         <span className="readonly">read-only · no orders, ever</span>
       </nav>
@@ -45,9 +51,11 @@ export default function App() {
           <Route path="/stock/:symbol" element={<Stock />} />
           <Route path="/strategies" element={<Strategies />} />
           <Route path="/strategies/:id" element={<StrategyPage />} />
+          <Route path="/multiasset" element={<MultiAsset />} />
           <Route path="/advisory" element={<Advisory />} />
           <Route path="/paper" element={<PaperTrading />} />
           <Route path="/research" element={<Research />} />
+          <Route path="/methodology" element={<Methodology />} />
           <Route path="*" element={<p>No such page.</p>} />
         </Routes>
       </main>

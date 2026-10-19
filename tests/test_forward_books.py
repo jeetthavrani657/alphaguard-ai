@@ -272,3 +272,23 @@ def test_latest_json_is_valid_and_a_nan_is_refused_not_written(tmp_path):
     with pytest.raises(ValueError):
         forward_books.write_latest([{"id": "x", "value": float("nan")}], str(tmp_path / "bad.json"))
     assert not (tmp_path / "bad.json").exists()
+
+
+def test_simulated_orders_list_only_fills_from_the_first_countable_day_and_never_invent_costs():
+    import forward_books as fb
+    log = pd.DataFrame([
+        {"date": pd.Timestamp("2026-10-16"), "symbol": "OLD.NS", "side": "buy", "shares": 5, "price": 10.0, "costs": 1.0},     # the freeze day: held from the start
+        {"date": pd.Timestamp("2026-10-19"), "symbol": "AAA.NS", "side": "buy", "shares": 7, "price": 12.345, "costs": 2.0},
+        {"date": pd.Timestamp("2026-10-20"), "symbol": "BBB.NS", "side": "sell", "shares": 3, "price": 20.0, "costs": 0.5},
+    ])
+    rows = fb._orders_portfolio(log)
+    assert [(r["symbol"], r["side"], r["shares"], r["price"]) for r in rows] == [("AAA", "BUY", 7, 12.35), ("BBB", "SELL", 3, 20.0)]
+    assert fb._orders_portfolio(pd.DataFrame()) == []
+    closed = pd.DataFrame([{"symbol": "CCC.NS", "entry_date": pd.Timestamp("2026-10-12"), "exit_date": pd.Timestamp("2026-10-19"),
+                            "entry_price": 5.0, "exit_price": 6.0, "quantity": 100}])
+    run = {"pooled_trade_log": closed, "per_symbol": {"DDD.NS": {"open_position_at_end": {"entry_date": pd.Timestamp("2026-10-20"), "entry_price": 8.0,
+                                                                                       "quantity": 50, "buy_costs_total": 4.0}},
+                                                      "EEE.NS": {"open_position_at_end": None}}}
+    rows = fb._orders_per_symbol(run)
+    assert [(r["symbol"], r["side"]) for r in rows] == [("CCC", "SELL"), ("DDD", "BUY")]            # CCC's entry predates the clock, so only its exit is a forward fill
+    assert rows[0]["costs"] is None and rows[1]["costs"] == 4.0

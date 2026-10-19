@@ -115,7 +115,7 @@ def run_checks(base: str) -> None:
     check(bool(h.get("data_through")) and bool(h.get("git_commit")), "health carries data_through and git_commit")
 
     print("[smoke] pages (the app shell serves every client-side route)")
-    for p in ("/", "/screener", "/strategies", "/advisory", "/paper", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
+    for p in ("/", "/screener", "/strategies", "/advisory", "/multiasset", "/paper", "/research", "/methodology", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
         st, body = fetch(base, p)
         check(st == 200 and "<div id=\"root\">" in body, f"page {p} returns the app shell (got {st})")
     st, body = fetch(base, "/")
@@ -256,16 +256,39 @@ def run_checks(base: str) -> None:
         spent = sum(l["rupees_used"] for l in b["lines"] if l["asset_id"] != "cash")
         check(st == 200 and spent <= 500000 and abs(b["cash_left"] - (500000 - spent)) < 0.05, f"{p['id']}: the basket never spends more than the amount")
         check(all(l["units"] == int(l["units"]) for l in b["lines"] if l["units"] is not None and l["asset_id"] != "crypto"), f"{p['id']}: funds are bought in whole units")
+    st, rb = fetch(base, "/api/advisory/rebalance?profile=moderate&holdings=cash:500000")
+    check(st == 200 and rb["total"] == 500000 and any(l["action"] == "BUY" for l in rb["lines"]), "rebalance from all cash lists purchases")
+    check(fetch(base, "/api/advisory/rebalance?profile=moderate&holdings=nope:1000")[0] == 422, "rebalance refuses an unknown asset")
     check(fetch(base, "/api/advisory/basket?profile=moderate&amount=5")[0] == 422, "a basket amount below the minimum is refused")
+    covered = [e for e in ad["stress"] if e["covered"]]
+    check(len(covered) >= 3 and all(len(e["profiles"]) == 3 and e["benchmark"] and all(p["max_drawdown_pct"] <= 0 for p in e["profiles"]) for e in covered),
+          "stress test: covered stretches have all three profiles, a benchmark and drawdowns <= 0")
     check(len(ad["trend"]) == 6 and all(t["signal"] in ("UPTREND", "DOWNTREND") for t in ad["trend"]), "trend monitor covers the six risky assets")
+
+    print("[smoke] multi-asset trading rules")
+    st, ma = fetch(base, "/api/multiasset")
+    check(st == 200 and [s["id"] for s in ma["strategies"]] == ["trend_equal_weight", "trend_risk_managed"], "multi-asset responds with the two registered rules")
+    check(bare_ratios(ma) == [] and ma["is_stale"] is False, "no bare ratio in multi-asset, and its results are not stale against the ledger")
+    for s in ma["strategies"]:
+        gs = s["growth"]
+        check(gs["values"][0] == 100.0 and len(gs["dates"]) == len(s["exposure_pct"]["dates"]) and max(s["drawdown_pct"]["values"]) <= 0 and max(s["exposure_pct"]["values"]) <= 100.0001,
+              f"{s['id']}: series aligned, drawdown <= 0, exposure never above 100%")
+        o = s["metrics"]["out_of_sample"]["sharpe"]
+        check(o["status"] == s["harness_status"] and o["as_of_hypotheses"] == ma["ledger_total_at_generation"], f"{s['id']}: Sharpe carries its status and count")
+    check(ma["static_benchmark"]["metrics"]["out_of_sample"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS", "the no-timing benchmark is not counted as a hypothesis")
+    check(len(ma["signals_now"]) == 6, "today's trend signals cover the six assets")
 
     print("[smoke] advisory forward paper tracking")
     st, af = fetch(base, "/api/advisory/forward")
-    check(st == 200 and len(af["profiles"]) == 3, "advisory forward responds with three profiles")
+    check(st == 200 and [p["id"] for p in af["profiles"]] == ["conservative", "moderate", "aggressive", "trend_equal_weight", "trend_risk_managed"],
+          "advisory forward responds with the three profiles and the two trend rules")
     check(bare_ratios(af) == [] and all("sharpe" not in (p["summary"] or {}) for p in af["profiles"]), "no Sharpe is served before the forward gate")
     for p in af["profiles"]:
-        check(p["growth_strategy"]["values"][0] == 100.0 and p["n_trading_days"] == len(p["growth_strategy"]["dates"]) - 1,
-              f"{p['id']}: forward base is 100 and the freeze day is not counted as a forward day")
+        if p["status"] == "RUNNING":
+            check(p["growth_strategy"]["values"][0] == 100.0 and p["n_trading_days"] == len(p["growth_strategy"]["dates"]) - 1,
+                  f"{p['id']}: forward base is 100 and the base day is not counted as a forward day")
+        else:
+            check(p["n_trading_days"] == 0 and p["summary"] is None and p["growth_strategy"] is None, f"{p['id']}: not started means no numbers at all")
 
     print("[smoke] refusals")
     check(fetch(base, "/api/strategies/definitely_not_one")[0] == 404, "unknown strategy id is 404")

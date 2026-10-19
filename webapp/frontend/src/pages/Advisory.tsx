@@ -135,6 +135,67 @@ function Basket({ p }: { p: AdvisoryProfile }) {
   );
 }
 
+/**
+ * "I already hold some of these": type what each holding is worth today and the API (GET /api/advisory/rebalance)
+ * returns what to buy, sell or leave to reach the recommended mix. This component only collects the amounts and shows
+ * the answer; it adds nothing up. A list to think with, never an order.
+ */
+function Rebalance({ p, d }: { p: AdvisoryProfile; d: AdvisoryResponse }) {
+  const [held, setHeld] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState("");
+  // Wait for the typing to pause, then send only the boxes that have a number in them.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const parts = Object.entries(held).filter(([, v]) => v.trim() !== "" && Number.isFinite(Number(v.replace(/,/g, "")))).map(([k, v]) => `${k}:${v.replace(/,/g, "")}`);
+      setQuery(parts.join(","));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [held]);
+  const state = useApi(() => (query ? api.rebalance(p.id, query) : Promise.reject(new Error("nothing entered yet"))), [p.id, query]);
+  return (
+    <>
+      <p className="muted">What is each holding worth today, in rupees? Leave a box empty for “none”. You will see what to buy, sell or leave to reach the {p.name} mix.</p>
+      <div className="holdgrid">
+        {d.assets.map((a) => (
+          <label key={a.id}>
+            <span>{a.name.split(" (")[0]}</span>
+            <input className="amount" inputMode="numeric" placeholder="0" value={held[a.id] ?? ""} aria-label={`Value of your ${a.name} holding in rupees`}
+              onChange={(e) => setHeld({ ...held, [a.id]: e.target.value })} />
+          </label>
+        ))}
+      </div>
+      {!query && <p className="muted">Type what at least one holding is worth today (₹10,000 in total at the least) to see the list.</p>}
+      {query && <Async state={state}>
+        {(r) => (
+          <div className="printable">
+            <h3 className="printonly">AlphaGuard AI: moving to the {r.profile_name} mix (as of {r.recommended_on})</h3>
+            <div className="tablewrap">
+              <table>
+                <thead>
+                  <tr><th>Asset</th><th className="num">You hold</th><th className="num">Now</th><th className="num">Target</th><th>Action</th><th className="num">Units</th><th className="num">Rupees</th></tr>
+                </thead>
+                <tbody>
+                  {r.lines.map((l) => (
+                    <tr key={l.asset_id}>
+                      <td>{l.name.split(" (")[0]}{l.ticker ? <span className="muted"> · {l.ticker}</span> : null}</td>
+                      <td className="num">{int(l.current_rupees)}</td><td className="num">{pct(l.current_pct, 1)}</td><td className="num">{pct(l.target_pct, 1)}</td>
+                      <td><span className={`act ${l.action.toLowerCase()}`}>{l.asset_id === "cash" ? "the rest" : l.action}</span></td>
+                      <td className="num">{l.units === null || l.units === undefined ? "—" : l.units < 1 ? num(l.units, 6) : int(l.units)}</td>
+                      <td className="num">{l.rupees_to_trade ? int(l.rupees_to_trade) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p>Estimated cost of these trades at the rule’s {pct(d.rule.cost_pct_per_side, 2)} each way: <b className="num">₹{int(r.estimated_cost)}</b></p>
+            <ul className="muted">{r.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+          </div>
+        )}
+      </Async>}
+    </>
+  );
+}
+
 function Trend({ d }: { d: AdvisoryResponse }) {
   const name = (id: string) => d.assets.find((a) => a.id === id)?.name ?? id;
   return (
@@ -158,6 +219,68 @@ function Trend({ d }: { d: AdvisoryResponse }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+/**
+ * How the selected mix, the Nifty 50 ETF and every asset behaved in named bad stretches. The stretches were fixed in
+ * advance; this describes history and says nothing about the next crisis. All numbers come from research/advisory.py.
+ */
+function Stress({ d, p }: { d: AdvisoryResponse; p: AdvisoryProfile }) {
+  const name = (id: string) => (d.assets.find((a) => a.id === id)?.name ?? id).split(" (")[0];
+  return (
+    <>
+      <p className="muted">
+        Each stretch is read from the close before it started, so these are the returns of someone who held through it. The stretches
+        were chosen from well-known market history before any profile was measured on them. They show what the rule did then, including
+        where it did <b>not</b> help; the next crisis will not look the same.
+      </p>
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Stretch</th><th className="num">This mix</th><th className="num">Worst fall inside</th>
+              <th className="num">Nifty 50 ETF</th><th className="num">Worst fall inside</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.stress.map((e) => {
+              const mine = e.profiles.find((x) => x.id === p.id);
+              return (
+                <tr key={e.id}>
+                  <td>{e.name}<br /><span className="muted">{e.start} to {e.end}</span></td>
+                  {e.covered && mine && e.benchmark ? (
+                    <>
+                      <td className={`num ${signClass(mine.return_pct)}`}>{pct(mine.return_pct, 1)}</td><td className="num">{pct(mine.max_drawdown_pct, 1)}</td>
+                      <td className={`num ${signClass(e.benchmark.return_pct)}`}>{pct(e.benchmark.return_pct, 1)}</td><td className="num">{pct(e.benchmark.max_drawdown_pct, 1)}</td>
+                    </>
+                  ) : <td colSpan={4} className="muted">The simulation does not reach back to this stretch.</td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <details>
+        <summary>What each asset did in the same stretches</summary>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th>Asset</th>{d.stress.map((e) => <th key={e.id} className="num">{e.name}</th>)}</tr></thead>
+            <tbody>
+              {d.assets.filter((a) => a.id !== "cash").map((a) => (
+                <tr key={a.id}>
+                  <td>{name(a.id)}</td>
+                  {d.stress.map((e) => {
+                    const x = e.assets.find((y) => y.asset_id === a.id);
+                    return <td key={e.id} className={`num ${signClass(x?.return_pct)}`}>{x ? pct(x.return_pct, 1) : "—"}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </>
   );
 }
@@ -236,7 +359,11 @@ export function Advisory() {
                 <Basket p={p} />
               </Panel>
 
-              <Panel title="4. Risk and a historical simulation">
+              <Panel title="4. Already invested? What to change">
+                <Rebalance p={p} d={d} />
+              </Panel>
+
+              <Panel title="5. Risk and a historical simulation">
                 <p className="muted">
                   Simulated from {d.simulation_start} to {d.data_through} with the frozen rule (weights decided at one close, carried out the next day,
                   rebalanced every {d.rule.rebalance_every_days} trading days, {pct(d.rule.cost_pct_per_side, 2)} cost each way, cash at {pct(d.rule.cash_rate_pct, 0)}).
@@ -255,7 +382,7 @@ export function Advisory() {
                 <p className="muted">Blue is this mix; the other line is buying and holding the Nifty 50 ETF over the same days.</p>
               </Panel>
 
-              <Panel title="5. The assets it chooses from">
+              <Panel title="6. The assets it chooses from">
                 <div className="tablewrap">
                   <table>
                     <thead><tr><th>Asset</th><th>Class</th><th className="num">Return a year</th><th className="num">Volatility</th><th className="num">Worst fall</th></tr></thead>
@@ -288,8 +415,12 @@ export function Advisory() {
                 <p className="muted">Low or negative correlation is what makes diversification reduce risk. Shaded green means moves almost independently or opposite; amber means they tend to fall together.</p>
               </Panel>
 
-              <Panel title="6. Where each asset stands today (trend monitor)">
+              <Panel title="7. Where each asset stands today (trend monitor)">
                 <Trend d={d} />
+              </Panel>
+
+              <Panel title="8. How it behaved in past crises (stress test)">
+                <Stress d={d} p={p} />
               </Panel>
 
               <Panel title="How the rule works">

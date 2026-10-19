@@ -540,6 +540,15 @@ def test_a_running_book_withholds_sharpe_until_a_year_of_days(books):
     assert b["summary"]["return_pct"] == 0.8 and b["holdings"][0]["symbol"] == "AAA"
 
 
+def test_a_running_book_serves_its_simulated_orders_and_a_book_without_any_serves_an_empty_list(books):
+    book = _book_json(running=True)
+    book["orders"] = [{"date": "2026-10-20", "symbol": "AAA", "side": "BUY", "shares": 10, "price": 10.0, "costs": 1.5},
+                      {"date": "2026-10-21", "symbol": "BBB", "side": "SELL", "shares": 5, "price": 20.0, "costs": None}]
+    b = books(book).get("/api/forward-books").json()["books"][0]
+    assert [o["side"] for o in b["orders"]] == ["BUY", "SELL"] and b["orders"][1]["costs"] is None
+    assert books(_book_json(running=True)).get("/api/forward-books").json()["books"][0]["orders"] == []
+
+
 def test_once_shown_a_forward_sharpe_carries_status_and_the_hypothesis_count(books):
     d = books(_book_json(running=True, sharpe=1.2)).get("/api/forward-books").json()
     r = d["books"][0]["risk_adjusted"]
@@ -720,6 +729,94 @@ def test_basket_rejects_unknown_profiles_and_tiny_or_huge_amounts(client, tmp_pa
     assert client.get("/api/advisory/basket", params={"profile": "moderate", "amount": 5e10}).status_code == 422
 
 
+def test_rebalance_from_all_cash_buys_toward_the_target_and_never_spends_more_than_the_total(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    r = client.get("/api/advisory/rebalance", params={"profile": "moderate", "holdings": "cash:500000"}).json()
+    assert r["total"] == 500000
+    lines = {l["asset_id"]: l for l in r["lines"]}
+    assert lines["cash"]["current_pct"] == 100 and all(l["action"] in ("BUY", "HOLD") for l in r["lines"])
+    bought = sum(l["rupees_to_trade"] for l in r["lines"] if l["action"] == "BUY")
+    assert 0 < bought <= 500000 and r["estimated_cost"] == pytest.approx(bought * 0.1 / 100, abs=0.02)
+    assert all(l["units"] == int(l["units"]) for l in r["lines"] if l["units"] and l["asset_id"] != "crypto")
+
+
+def test_rebalance_sells_what_is_over_target_and_leaves_small_drifts_alone(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    mix = client.get("/api/advisory/basket", params={"profile": "moderate", "amount": 1000000}).json()
+    exact = ",".join(f"{l['asset_id']}:{l['rupees']}" for l in mix["lines"])               # already at the target: nothing to do
+    still = client.get("/api/advisory/rebalance", params={"profile": "moderate", "holdings": exact}).json()
+    assert all(l["action"] == "HOLD" for l in still["lines"]) and still["estimated_cost"] == 0
+    heavy = client.get("/api/advisory/rebalance", params={"profile": "moderate", "holdings": "equity_large:1000000"}).json()
+    lines = {l["asset_id"]: l for l in heavy["lines"]}
+    assert lines["equity_large"]["action"] == "SELL" and lines["debt"]["action"] == "BUY"
+
+
+def test_rebalance_rejects_bad_input_with_a_helpful_message(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    get = lambda profile, holdings: client.get("/api/advisory/rebalance", params={"profile": profile, "holdings": holdings})
+    assert get("nope", "cash:500000").status_code == 404
+    assert get("moderate", "bitcoinz:500000").status_code == 422
+    assert get("moderate", "cash:abc").status_code == 422
+    assert get("moderate", "cash:-5").status_code == 422
+    assert get("moderate", "cash:500").status_code == 422 and "10,000" in get("moderate", "cash:500").json()["detail"]
+
+
+def _multiasset_file(tmp_path, monkeypatch, ledger_total_now=204):
+    import multiasset_trend as mt
+    import numpy as np
+    import pandas as pd
+    import advisory as adv
+    rng = np.random.default_rng(6)
+    vols = {"equity_large": 0.010, "equity_mid": 0.013, "intl_equity": 0.012, "gold": 0.008, "debt": 0.004, "crypto": 0.035}
+    idx = pd.bdate_range("2019-01-01", periods=1700)
+    r = pd.DataFrame({k: rng.normal(0.0003, v, 1700) for k, v in vols.items()}, index=idx)
+    r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
+    prices = (1 + r[list(vols)]).cumprod() * 100.0
+    path = tmp_path / "multiasset.json"
+    path.write_text(json.dumps(mt.build(prices, r, register=False, ledger_total_now=ledger_total_now)))
+    monkeypatch.setenv("WEBAPP_MULTIASSET", str(path))
+
+
+def test_multiasset_serves_two_strategies_two_benchmarks_signals_and_stress(client, tmp_path, monkeypatch):
+    _multiasset_file(tmp_path, monkeypatch)
+    d = client.get("/api/multiasset").json()
+    assert [s["id"] for s in d["strategies"]] == ["trend_equal_weight", "trend_risk_managed"] and d["is_stale"] is False
+    assert d["static_benchmark"]["id"] == "static_equal_weight" and d["nifty_benchmark"]["id"] == "nifty50_etf"
+    s = d["strategies"][0]
+    assert s["growth"]["values"][0] == 100.0 and len(s["growth"]["dates"]) == len(s["exposure_pct"]["dates"]) == len(s["drawdown_pct"]["dates"])
+    assert abs(sum(h["weight_pct"] for h in s["held_now"]) - 100) < 0.2
+    assert len(d["signals_now"]) == 6 and {e["id"] for e in d["stress"]} >= {"covid", "bear_2021_22"} and "not investment advice" in d["disclaimer"]
+
+
+def test_every_multiasset_sharpe_carries_status_and_count_and_the_benchmarks_are_not_hypotheses(client, tmp_path, monkeypatch):
+    _multiasset_file(tmp_path, monkeypatch)
+    d = client.get("/api/multiasset").json()
+    assert _find_bare_ratios(d) == []
+    s = d["strategies"][1]
+    oos = s["metrics"]["out_of_sample"]["sharpe"]
+    assert oos["status"] == s["harness_status"] and oos["as_of_hypotheses"] == d["ledger_total_at_generation"] and oos["bonferroni_bar"] > 0
+    assert d["static_benchmark"]["metrics"]["in_sample"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS"
+
+
+def test_multiasset_results_are_flagged_stale_when_the_ledger_has_grown_and_missing_is_a_helpful_404(client, tmp_path, monkeypatch):
+    _multiasset_file(tmp_path, monkeypatch, ledger_total_now=200)
+    d = client.get("/api/multiasset").json()
+    assert d["is_stale"] is True and d["ledger_total_at_generation"] == 200
+    monkeypatch.setenv("WEBAPP_MULTIASSET", str(tmp_path / "nope.json"))
+    r = client.get("/api/multiasset")
+    assert r.status_code == 404 and "multiasset_trend.py" in r.json()["detail"]
+
+
+def test_advisory_serves_stress_episodes_and_marks_one_the_simulation_does_not_reach_as_not_covered(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)                       # made-up history starts 2020-01-01, so COVID precedes the simulation
+    d = client.get("/api/advisory").json()
+    rows = {e["id"]: e for e in d["stress"]}
+    assert rows["covid"]["covered"] is False and rows["covid"]["profiles"] == [] and rows["covid"]["benchmark"] is None
+    bear = rows["bear_2021_22"]
+    assert bear["covered"] and [p["id"] for p in bear["profiles"]] == ["conservative", "moderate", "aggressive"]
+    assert all(p["max_drawdown_pct"] <= 0 for p in bear["profiles"]) and len(bear["assets"]) == 6
+
+
 def test_advisory_forward_serves_the_three_profiles_with_a_clock_and_no_early_sharpe(client, tmp_path, monkeypatch):
     import numpy as np
     import pandas as pd
@@ -736,7 +833,7 @@ def test_advisory_forward_serves_the_three_profiles_with_a_clock_and_no_early_sh
     d = client.get("/api/advisory/forward").json()
     assert [p["id"] for p in d["profiles"]] == ["conservative", "moderate", "aggressive"] and d["days_needed_for_verdict"] == 252
     p = d["profiles"][1]
-    assert p["status"] == "RUNNING" and p["n_trading_days"] == 5 and p["growth_strategy"]["values"][0] == 100.0
+    assert p["status"] == "RUNNING" and p["n_trading_days"] == 4 and p["growth_strategy"]["values"][0] == 100.0
     assert "sharpe" not in p["summary"] and p["summary"]["withheld_reason"].startswith("withheld")
     assert abs(sum(m["weight_pct"] for m in p["current_mix"]) - 100) < 0.2
     assert _find_bare_ratios(d) == []

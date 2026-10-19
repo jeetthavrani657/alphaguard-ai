@@ -304,17 +304,21 @@ details summary { cursor: pointer; color: var(--muted); }
 .amount { width: 150px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; text-align: right; }
 .printbtn { margin-left: auto; }
 .printonly { display: none; }
+.holdgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 8px 16px; margin: 10px 0 14px; }
+.holdgrid label { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.holdgrid .amount { width: 130px; }
+.act { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.act.buy { background: rgba(63, 185, 80, .16); color: var(--pos); }
+.act.sell { background: rgba(248, 81, 73, .14); color: var(--neg); }
+.act.hold { background: var(--grid); color: var(--muted); }
 .sig { padding: 2px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
 .sig.up { background: rgba(63, 185, 80, .16); color: var(--pos); }
 .sig.down { background: rgba(248, 81, 73, .14); color: var(--neg); }
 @media print {
   body { background: #fff; color: #000; }
-  .topnav, .statusbar, .footer, .pagehead, .amountrow, .panel > header { display: none !important; }
+  .topnav, .statusbar, .footer, .pagehead, .amountrow, .panel > header, main > p, main > div > p { display: none !important; }
   .panel:not(:has(.printable)) { display: none !important; }   /* print only the shopping list */
-  main > div > .note { display: none !important; }
   .printonly { display: block; }
-  .panel { border: 0; background: #fff; box-shadow: none; }
+  .panel, .panel .body { border: 0; background: #fff; box-shadow: none; }
   table, th, td, .muted, li, p, h3 { color: #000 !important; }
 }
-
-.sectionhead { margin: 28px 0 10px; font-size: 18px; }

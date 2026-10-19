@@ -322,7 +322,7 @@ def forward_books():
             summary=None if sm is None else schemas.BookSummary(**{k: sm.get(k) for k in schemas.BookSummary.model_fields}),
             risk_adjusted=risk, growth_book=b.get("growth_book"), growth_benchmark=b.get("growth_benchmark"),
             drawdown_book=b.get("drawdown_book"), drawdown_benchmark=b.get("drawdown_benchmark"),
-            exposure=b.get("exposure"), holdings=b.get("holdings", []), pending=b.get("pending", []),
+            exposure=b.get("exposure"), holdings=b.get("holdings", []), pending=b.get("pending", []), orders=b.get("orders", []),
             notes=b.get("notes", [])))
     return schemas.ForwardBooksResponse(generated_at=raw["generated_at"], start=raw["start"],
                                         first_counted_day=raw["first_counted_day"], books=books)
@@ -364,7 +364,33 @@ def advisory():
         in_sample_end=raw["in_sample_end"], out_of_sample_start=raw["out_of_sample_start"], ledger_total_at_generation=total,
         ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], benchmark=raw["benchmark"],
         rule=raw["rule"], data_cleaning=raw["data_cleaning"], assets=raw["assets"], correlation=raw["correlation"],
-        trend=raw.get("trend", []), questions=raw["questionnaire"]["questions"], bands=raw["questionnaire"]["bands"], profiles=profiles)
+        trend=raw.get("trend", []), stress=raw.get("stress", []), questions=raw["questionnaire"]["questions"], bands=raw["questionnaire"]["bands"], profiles=profiles)
+
+
+@api.get("/multiasset", response_model=schemas.MultiassetResponse,
+         summary="Multi-asset trend trading rules (research/multiasset_trend.py): two registered hypotheses against a no-timing benchmark.")
+def multiasset():
+    raw = store.load_multiasset_raw()
+    total = int(raw["ledger_total"])
+    now = store.ledger_total_now()
+
+    def windows(m: dict, status: str, pv_is, pv_oos, bar):
+        return schemas.AdvisoryWindows(in_sample=_advisory_metrics(m["in_sample"], "in_sample", status, total, pv_is, bar),
+                                       out_of_sample=_advisory_metrics(m["out_of_sample"], "out_of_sample", status, total, pv_oos, bar))
+
+    strategies = [schemas.MultiassetStrategy(
+        id=s["id"], name=s["name"], blurb=s["blurb"], harness_status=s["harness_status"],
+        metrics=windows(s["metrics"], s["harness_status"], s["p_value_in_sample"], s["p_value_out_of_sample"], s["bonferroni_bar"]),
+        growth=s["growth"], drawdown_pct=s["drawdown_pct"], exposure_pct=s["exposure_pct"], n_rebalances=s["n_rebalances"],
+        cost_paid_pct_of_start=s["cost_paid_pct_of_start"], held_now=s["held_now"], held_decided_on=s["held_decided_on"]) for s in raw["strategies"]]
+    bench = {k: schemas.MultiassetBenchmark(id=b["id"], name=b["name"], metrics=windows(b["metrics"], "BENCHMARK_NOT_A_HYPOTHESIS", None, None, None),
+                                            growth=b["growth"], drawdown_pct=b["drawdown_pct"]) for k, b in raw["benchmarks"].items()}
+    return schemas.MultiassetResponse(
+        generated_at=raw["generated_at"], data_through=raw["data_through"], simulation_start=raw["simulation_start"],
+        in_sample_end=raw["in_sample_end"], out_of_sample_start=raw["out_of_sample_start"], ledger_total_at_generation=total,
+        ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], trend_days=raw["trend_days"],
+        design_document=raw["design_document"], rule=raw["rule"], strategies=strategies, static_benchmark=bench["static"],
+        nifty_benchmark=bench["nifty"], signals_now=raw["signals_now"], stress=raw["stress"], assets=raw["assets"])
 
 
 @api.get("/advisory/forward", response_model=schemas.AdvisoryForwardResponse,
@@ -375,6 +401,62 @@ def advisory_forward():
         generated_at=raw["generated_at"], start=raw["start"], first_counted_day=raw["first_counted_day"],
         days_needed_for_verdict=int(raw["min_days_for_sharpe"]), disclaimer=raw["disclaimer"], benchmark=raw["benchmark"],
         profiles=[schemas.AdvisoryForwardProfile(**p) for p in raw["profiles"]])
+
+
+REBALANCE_BAND_PCT = 1.0       # an asset within 1% of the whole portfolio from its target is left alone
+
+
+@api.get("/advisory/rebalance", response_model=schemas.RebalanceResponse,
+         summary="Current holdings in, buy/sell/hold list out: what to change to reach a profile's recommended mix. Not an order.")
+def advisory_rebalance(profile: str = Query(..., description="Profile id, e.g. moderate."),
+                       holdings: str = Query(..., description="Comma-separated asset_id:rupees, e.g. equity_large:200000,gold:50000,cash:10000.")):
+    # Same labelled exception as /advisory/basket: this is arithmetic on the user's own amounts and the stored weights
+    # and prices (a unit conversion), not a metric. Nothing is estimated, fitted or forecast.
+    raw = store.load_advisory_raw()
+    p = next((x for x in raw["profiles"] if x["id"] == profile), None)
+    if p is None:
+        raise HTTPException(status_code=404, detail=f"Unknown profile '{profile}'. Choose one of: {', '.join(x['id'] for x in raw['profiles'])}.")
+    by_id = {a["id"]: a for a in raw["assets"]}
+    current = {k: 0.0 for k in by_id}
+    for part in holdings.split(","):
+        key, _, value = part.strip().partition(":")
+        try:
+            amount = float(value)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"'{part}' is not asset_id:rupees.")
+        if key not in current:
+            raise HTTPException(status_code=422, detail=f"Unknown asset '{key}'. Use: {', '.join(current)}.")
+        if amount < 0 or amount > 1_000_000_000:
+            raise HTTPException(status_code=422, detail=f"The amount for {key} must be between 0 and 100 crore rupees.")
+        current[key] += amount
+    total = sum(current.values())
+    if total < 10_000:
+        raise HTTPException(status_code=422, detail="The holdings add up to less than 10,000 rupees; enter at least that much.")
+    target_pct = {w["asset_id"]: w["weight_pct"] for w in p["allocation"]}
+    lines, traded = [], 0.0
+    for aid, a in by_id.items():
+        target = total * target_pct.get(aid, 0.0) / 100.0
+        diff = target - current[aid]
+        price, units, action, move = a.get("last_price"), None, "HOLD", 0.0
+        if aid != "cash" and price and abs(diff) > total * REBALANCE_BAND_PCT / 100.0:
+            action = "BUY" if diff > 0 else "SELL"
+            units = int(abs(diff) / price * 1_000_000) / 1_000_000 if aid == "crypto" else float(int(abs(diff) // price))
+            move = units * price
+            if units == 0:
+                action, units, move = "HOLD", None, 0.0
+        traded += move
+        lines.append(schemas.RebalanceLine(
+            asset_id=aid, name=a["name"], ticker=a.get("ticker"), current_rupees=round(current[aid], 2),
+            current_pct=round(current[aid] / total * 100.0, 2), target_pct=round(target_pct.get(aid, 0.0), 2),
+            target_rupees=round(target, 2), action=action, rupees_to_trade=round(move, 2), units=units, price=price))
+    cost_pct = raw["rule"]["cost_pct_per_side"]
+    return schemas.RebalanceResponse(
+        profile_id=p["id"], profile_name=p["name"], recommended_on=p["recommended_on"], total=round(total, 2), band_pct=REBALANCE_BAND_PCT,
+        lines=lines, estimated_cost=round(traded * cost_pct / 100.0, 2),
+        notes=[f"An asset within {REBALANCE_BAND_PCT:g}% of the whole portfolio from its target is left alone, so small drifts cost nothing.",
+               "The rule itself rebalances every 21 trading days; trading more often than that only adds cost.",
+               "Prices are the last close, not live quotes, and units are rounded down; the cash line is whatever is left. Taxes, brokerage on your own plan and the spread are not included.",
+               "This is a list to think with. This project places no orders."])
 
 
 @api.get("/advisory/basket", response_model=schemas.BasketResponse,

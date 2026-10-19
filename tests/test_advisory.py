@@ -273,3 +273,25 @@ def test_a_refresh_never_deletes_a_cached_day_the_source_has_not_published_yet_a
     assert list(merged.index) == list(idx) and merged.iloc[2] == 3.5 and merged.iloc[-1] == 6.0
     final = pd.concat([fresh, pd.Series([6.25], index=idx[5:])])     # later the final close arrives and corrects the provisional one
     assert adv.merge_fresh(merged, final).iloc[-1] == 6.25
+
+
+def test_stress_windows_are_read_from_the_close_before_the_start_and_match_the_assets_own_returns():
+    r = _returns(n=1900, start="2019-01-01")
+    sims = {pid: adv.simulate(r, p) for pid, p in adv.PROFILES.items()}
+    rows = {e["id"]: e for e in adv.stress_tests(sims, r)}
+    covid = rows["covid"]
+    assert covid["covered"] and [p["id"] for p in covid["profiles"]] == list(adv.PROFILES)
+    base = r.index[r.index <= pd.Timestamp("2020-02-19")][-1]
+    span = r.loc[base:"2020-03-23"].iloc[1:]                                     # the base close itself is not part of the window
+    assert covid["benchmark"]["return_pct"] == pytest.approx(((1 + span["equity_large"]).prod() - 1) * 100, abs=0.01)
+    eq = sims["moderate"]["equity"]
+    expected = (eq.loc["2020-03-23"] / eq.loc[base] - 1) * 100
+    assert next(p for p in covid["profiles"] if p["id"] == "moderate")["return_pct"] == pytest.approx(expected, abs=0.01)
+    assert all(p["max_drawdown_pct"] <= 0 for p in covid["profiles"])
+
+
+def test_a_stress_window_that_starts_before_the_simulation_is_reported_as_not_covered_not_invented():
+    r = _returns(n=900, start="2021-01-01")                                      # nothing before 2021 (plus the warm-up)
+    sims = {pid: adv.simulate(r, p) for pid, p in adv.PROFILES.items()}
+    rows = {e["id"]: e for e in adv.stress_tests(sims, r)}
+    assert rows["covid"]["covered"] is False and rows["covid"]["profiles"] == [] and rows["covid"]["benchmark"] is None

@@ -83,6 +83,19 @@ REBALANCE_EVERY = 21
 COST_PCT = 0.001                    # 0.10% of the amount traded, each way
 TRADING_DAYS = 252
 IS_END, OOS_START = "2022-12-31", "2023-01-01"
+
+# Named bad stretches, chosen from well-known market history BEFORE any profile was measured on them, and never changed
+# afterwards. They describe how the frozen rule behaved; they are not tuned to it and are not a hypothesis test.
+STRESS_EPISODES = [
+    {"id": "covid", "name": "COVID-19 crash", "start": "2020-02-19", "end": "2020-03-23",
+     "blurb": "A fast global sell-off in equities, from the pre-crash high to the low."},
+    {"id": "bear_2021_22", "name": "2021-22 equity bear market", "start": "2021-10-19", "end": "2022-06-17",
+     "blurb": "A slower fall as interest rates started rising around the world."},
+    {"id": "rates_2022", "name": "The 2022 rate-hike year", "start": "2021-12-31", "end": "2022-12-30",
+     "blurb": "The calendar year in which bonds and equities were hurt together."},
+    {"id": "crypto_winter", "name": "Crypto winter", "start": "2021-11-08", "end": "2022-06-17",
+     "blurb": "Bitcoin's fall from its late-2021 high; shows what the small crypto cap does and does not protect against."},
+]
 VAR_LEVEL = 0.95
 
 PROFILES = {
@@ -243,11 +256,15 @@ def target_weights(window: pd.DataFrame, profile: dict, guard_on: bool) -> pd.Se
     return w
 
 
-def simulate(returns: pd.DataFrame, profile: dict, start_equity: float = 100.0) -> dict:
+def simulate(returns: pd.DataFrame, profile: dict, start_equity: float = 100.0, chooser=None, warmup: int = VOL_LOOKBACK) -> dict:
     """
     Run one profile through history. Returns the equity curve, the risky share of the portfolio each day, the
     weights chosen at each rebalance and the total cost paid. Decisions use data up to the close of day t and are
     carried out at the close of day t + 1 (one day later), so nothing sees the future.
+
+    The advisory rule is the default. research/multiasset_trend.py reuses this same loop (same costs, same one-day lag, same
+    drawdown-guard tracking) by passing `chooser(i, window, guard_on)`, which returns the weights to hold, and a longer
+    `warmup` (the days of history its rule needs before the first decision).
     """
     ids = RISKY_IDS + ["cash"]
     rets = returns[ids]
@@ -276,14 +293,47 @@ def simulate(returns: pd.DataFrame, profile: dict, start_equity: float = 100.0) 
             guard_on = False
         equity.append(total)
         exposure.append(float(holdings[RISKY_IDS].sum()) / total * 100.0)
-        if i + 1 >= VOL_LOOKBACK and (i + 1 - VOL_LOOKBACK) % REBALANCE_EVERY == 0 and i + 1 < n:
+        if i + 1 >= warmup and (i + 1 - warmup) % REBALANCE_EVERY == 0 and i + 1 < n:
             window = rets.iloc[i + 1 - VOL_LOOKBACK:i + 1]
-            pending = target_weights(window, profile, guard_on)
+            pending = chooser(i, window, guard_on) if chooser is not None else target_weights(window, profile, guard_on)
             log.append({"date": rets.index[i], "weights": pending.copy(), "guard_on": guard_on})
-    first = VOL_LOOKBACK                                                # earlier days are warm-up, not part of the simulation
+    first = warmup                                                      # earlier days are warm-up, not part of the simulation
     idx = rets.index[first:]
     return {"equity": pd.Series(equity[first:], index=idx), "exposure_pct": pd.Series(exposure[first:], index=idx),
             "rebalances": log, "cost_paid": cost_paid}
+
+
+def stress_tests(sims: dict, returns: pd.DataFrame) -> list:
+    """
+    How each frozen profile, the Nifty 50 ETF and every asset behaved inside each named bad stretch. Each stretch is read
+    from the day before it starts (that day's close is the base), so it is the return a person holding through it
+    would have seen. A stretch that begins before the simulation does is reported as not covered, never invented.
+    """
+    first = next(iter(sims.values()))["equity"].index[0]
+    out = []
+    for ep in STRESS_EPISODES:
+        s, e = pd.Timestamp(ep["start"]), pd.Timestamp(ep["end"])
+        row = {"id": ep["id"], "name": ep["name"], "start": ep["start"], "end": ep["end"], "blurb": ep["blurb"],
+               "covered": bool(s >= first and e <= returns.index[-1]), "profiles": [], "benchmark": None, "assets": []}
+        if row["covered"]:
+            base_day = returns.index[returns.index <= s][-1]
+            span = returns.loc[base_day:e].iloc[1:]                                  # the days after the base close, up to the end
+
+            def window(series_of_returns: pd.Series) -> dict:
+                curve = pd.concat([pd.Series([1.0]), (1.0 + series_of_returns.reset_index(drop=True)).cumprod()], ignore_index=True)
+                return {"return_pct": round(float(curve.iloc[-1] - 1.0) * 100.0, 2),
+                        "max_drawdown_pct": round(float((curve / curve.cummax() - 1.0).min()) * 100.0, 2)}
+
+            row["benchmark"] = window(span[BENCHMARK_ID])
+            row["assets"] = [{"asset_id": k, **window(span[k])} for k in RISKY_IDS]
+            for pid, sim in sims.items():
+                eq = sim["equity"]
+                seg = eq.loc[base_day:e]
+                curve = seg / float(eq.loc[base_day])
+                row["profiles"].append({"id": pid, "return_pct": round(float(curve.iloc[-1] - 1.0) * 100.0, 2),
+                                        "max_drawdown_pct": round(float((curve / curve.cummax() - 1.0).min()) * 100.0, 2)})
+        out.append(row)
+    return out
 
 
 def explain_allocation(window: pd.DataFrame, weights: pd.Series, profile: dict) -> tuple:
@@ -444,6 +494,7 @@ def build(returns: pd.DataFrame, prices: pd.DataFrame, register: bool = False, l
         "rule": {"vol_lookback_days": VOL_LOOKBACK, "rebalance_every_days": REBALANCE_EVERY, "cost_pct_per_side": COST_PCT * 100.0,
                  "cash_rate_pct": CASH_RATE * 100.0, "execution": "decided at the close of day t, carried out one day later"},
         "trend": trend_state(prices) if prices is not None else [],
+        "stress": stress_tests(sims, returns),
         "assets": asset_rows, "correlation": {"labels": list(corr.index), "matrix": [[round(float(x), 2) for x in row] for row in corr.values]},
         "questionnaire": {"questions": QUESTIONS, "bands": BANDS}, "profiles": profiles,
     }

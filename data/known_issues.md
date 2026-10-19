@@ -382,5 +382,20 @@ started". Fix: `advisory.merge_fresh` keeps a cached day the source does not hav
 it does, so a provisional close is corrected once the final one appears. Three cache rows lost that morning were
 restored from the previous output file (261.20, 311.42, 119.83: the provisional closes of 2026-10-19). Re-downloading
 also re-adjusts history slightly (the moderate profile's first forward day moved from -0.632% to -0.641%); that is the
-kind of vendor revision `advisory_forward.csv` keeps one row per run to expose. The paper books are not affected: their
-latest candle comes from Upstox's intraday endpoint.
+kind of vendor revision `advisory_forward.csv` keeps one row per run to expose.
+
+**The paper books were affected too (corrected the same morning; an earlier version of this note wrongly said they
+were not).** The stock price cache in `data/loader.py` follows the same replace-on-refresh rule, and a manual run at
+about 01:00 on 2026-10-20 deleted the 2026-10-19 row of ~440 cached stocks and sent all three books back to "not
+started" until it was repaired. The loader now keeps cached rows later than the newest priced row of a fresh download
+(tested). The 292 missing rows were restored from Upstox's read-only historical candles (all but HFCL, which Upstox
+does not list; it fills in at the next normal run). Upstox's fetch_today_daily exists but is not yet wired into the
+books, so they still depend on Yahoo having priced the day by the time the 19:00 task runs, which on 2026-10-19 it had.
+
+## The advisory forward clock started a day too early (found and corrected 2026-10-20)
+
+`research/advisory_forward.py` first copied the paper books' dates (base 2026-10-16, first counted day 2026-10-19). But the
+advisory rule was committed at 21:26 on 2026-10-19, after that day's close, so its results had already seen 2026-10-19 and that
+day is not out-of-time. The clock now starts from the 2026-10-19 close and counts from 2026-10-20 (the trend rules, frozen on 2026-10-20,
+use the same dates). The "day 1" figures shown earlier (about -0.6% for the profiles) were therefore not forward evidence and were
+removed from `advisory_forward.csv`. The paper books were frozen on 2026-10-16, before 2026-10-19, so their dates stand.

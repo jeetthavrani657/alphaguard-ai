@@ -134,6 +134,34 @@ function BookCard({ book }: { book: ForwardBook }) {
               {book.notes.map((n) => <p className="muted" key={n}>{n}</p>)}
             </div>
           </div>
+
+          <h3>Simulated orders (paper blotter)</h3>
+          {book.orders.length === 0 ? (
+            <p className="muted">
+              No simulated fills since {book.first_counted_day}. Positions the rule already prescribed on the freeze day were held from the start and are not listed here.
+            </p>
+          ) : (
+            <div className="tablewrap scroll" style={{ maxHeight: 300 }}>
+              <table>
+                <thead>
+                  <tr><th>Date</th><th>Stock</th><th>Side</th><th className="num">Shares</th><th className="num">Fill price</th><th className="num">Modelled costs</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {book.orders.map((o) => (
+                    <tr key={`${o.date}-${o.symbol}-${o.side}`}>
+                      <td>{o.date}</td>
+                      <td><Link to={`/stock/${encodeURIComponent(o.symbol)}`}>{o.symbol}</Link></td>
+                      <td><span className={`act ${o.side.toLowerCase()}`}>{o.side}</span></td>
+                      <td className="num">{int(o.shares)}</td><td className="num">{num(o.price)}</td>
+                      <td className="num">{o.costs === null || o.costs === undefined ? "in the round trip" : num(o.costs)}</td>
+                      <td className="muted">simulated fill at the open</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="muted">Every row is a fill the rule would have had at that day’s open, with the engine’s cost model. Nothing is sent to a broker; this project has no order code.</p>
         </>
       )}
     </Panel>
@@ -148,7 +176,7 @@ function BookCard({ book }: { book: ForwardBook }) {
 function AdvisoryProfileCard({ p, need, name }: { p: AdvisoryForwardProfile; need: number; name: (id: string) => string }) {
   const s = p.summary;
   return (
-    <Panel title={`${p.name} profile`} right={<span><StatusChip status={p.status} /> <span className="muted">data through {p.data_through}</span></span>}>
+    <Panel title={p.name} right={<span><StatusChip status={p.status} /> <span className="muted">data through {p.data_through}</span></span>}>
       <div className="clock">
         <div className="clock-head">
           <span className="stat-label">Forward clock</span>
@@ -203,12 +231,12 @@ function AdvisoryForward() {
   const name = (id: string) => names[id] ?? id;
   return (
     <>
-      <h2 className="sectionhead">Multi-asset advisory profiles, run forward</h2>
+      <h2 className="sectionhead">Multi-asset advisory profiles and trading rules, run forward</h2>
       <Async state={state}>
         {(d: AdvisoryForwardResponse) => (
           <>
             <p className="note info">
-              The three <Link to="/advisory">Advisory</Link> profiles, run on data that did not exist when the rule was frozen, from {d.start}{" "}
+              The three <Link to="/advisory">Advisory</Link> profiles and the two <Link to="/multiasset">multi-asset trading rules</Link>, run on data that did not exist when they were frozen, from the close of {d.start}{" "}
               (first countable session {d.first_counted_day}), against buying and holding the {d.benchmark.replace(" buy-and-hold", "")}. Paper only: nothing places an order.
               No verdict and no Sharpe before {d.days_needed_for_verdict} trading days.
             </p>

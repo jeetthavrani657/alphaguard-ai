@@ -502,6 +502,16 @@ class BookPending(BaseModel):
     action: str
 
 
+class BookOrder(BaseModel):
+    """One SIMULATED fill of a paper book: what the rule would have done at that day's open. Nothing is ever sent to a broker."""
+    date: str
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    shares: int
+    price: float
+    costs: Optional[float] = Field(None, description="The engine's modelled costs for this fill (taxes, charges, slippage); None where the engine reports costs per round trip.")
+
+
 class ForwardBook(BaseModel):
     id: str
     name: str
@@ -526,6 +536,7 @@ class ForwardBook(BaseModel):
     exposure: Optional[EquityCurve] = None
     holdings: list[BookHolding] = []
     pending: list[BookPending] = []
+    orders: list[BookOrder] = []
     notes: list[str] = []
 
 
@@ -585,6 +596,32 @@ class BasketLine(BaseModel):
     price_date: Optional[str] = None
     units: Optional[float] = Field(None, description="Whole units for exchange-traded funds; fractional for Bitcoin; None for cash.")
     rupees_used: float
+
+
+class RebalanceLine(BaseModel):
+    asset_id: str
+    name: str
+    ticker: Optional[str] = None
+    current_rupees: float
+    current_pct: float
+    target_pct: float
+    target_rupees: float
+    action: Literal["BUY", "SELL", "HOLD"]
+    rupees_to_trade: float = Field(description="Rupees to buy or sell at the last close (0 for HOLD and for cash, which is whatever is left).")
+    units: Optional[float] = Field(None, description="Whole units for exchange-traded funds; fractional for Bitcoin; None for cash and HOLD.")
+    price: Optional[float] = None
+
+
+class RebalanceResponse(BaseModel):
+    """What to change to move current holdings to the profile's recommended mix. A list to think with, never an order."""
+    profile_id: str
+    profile_name: str
+    recommended_on: str
+    total: float
+    band_pct: float = Field(description="Drift tolerated before an asset is traded, as % of the whole portfolio.")
+    lines: list[RebalanceLine]
+    estimated_cost: float = Field(description="Estimated cost of the listed trades at the rule's flat per-side cost.")
+    notes: list[str]
 
 
 class BasketResponse(BaseModel):
@@ -660,6 +697,98 @@ class AdvisoryCorrelation(BaseModel):
     matrix: list[list[float]]
 
 
+class StressWindow(BaseModel):
+    return_pct: float
+    max_drawdown_pct: float
+
+
+class StressProfile(StressWindow):
+    id: str
+
+
+class StressAsset(StressWindow):
+    asset_id: str
+
+
+class StressEpisode(BaseModel):
+    """
+    How the frozen profiles, the Nifty 50 ETF and each asset behaved inside a named bad stretch. The stretches were
+    fixed in advance and are not tuned; this describes history and is not a hypothesis test. If the simulation does not
+    reach back to the stretch, `covered` is false and nothing is shown.
+    """
+    id: str
+    name: str
+    start: str
+    end: str
+    blurb: str
+    covered: bool
+    benchmark: Optional[StressWindow] = None
+    profiles: list[StressProfile] = []
+    assets: list[StressAsset] = []
+
+
+class MultiassetRule(BaseModel):
+    rebalance_every_days: int
+    cost_pct_per_side: float
+    cash_rate_pct: float
+    execution: str
+
+
+class MultiassetStrategy(BaseModel):
+    """One registered multi-asset trend rule (MULTIASSET_TREND.md). Its Sharpe ratios carry the harness status and the hypothesis count."""
+    id: str
+    name: str
+    blurb: str
+    harness_status: Status
+    metrics: AdvisoryWindows
+    growth: EquityCurve
+    drawdown_pct: EquityCurve
+    exposure_pct: EquityCurve
+    n_rebalances: int
+    cost_paid_pct_of_start: float
+    held_now: list[AdvisoryWeight]
+    held_decided_on: str
+
+
+class MultiassetBenchmark(BaseModel):
+    """A comparison that is not a hypothesis: its Sharpe is labelled so and carries no significance claim."""
+    id: str
+    name: str
+    metrics: AdvisoryWindows
+    growth: EquityCurve
+    drawdown_pct: EquityCurve
+
+
+class MultiassetSignal(BaseModel):
+    asset_id: str
+    uptrend: bool
+
+
+class MultiassetResponse(BaseModel):
+    """
+    Multi-asset algorithmic trading rules (research/multiasset_trend.py): a trend filter over the advisory's six assets.
+    Simulated only, places no orders. Two hypotheses were registered; `is_stale` says the ledger has grown since.
+    """
+    generated_at: str
+    data_through: str
+    simulation_start: str
+    in_sample_end: str
+    out_of_sample_start: str
+    ledger_total_at_generation: int
+    ledger_total_now: Optional[int] = None
+    is_stale: bool
+    disclaimer: str
+    trend_days: int
+    design_document: str
+    rule: MultiassetRule
+    strategies: list[MultiassetStrategy]
+    static_benchmark: MultiassetBenchmark
+    nifty_benchmark: MultiassetBenchmark
+    signals_now: list[MultiassetSignal]
+    stress: list[StressEpisode]
+    assets: list[AdvisoryAsset]
+
+
 class AdvisoryRule(BaseModel):
     vol_lookback_days: int
     rebalance_every_days: int
@@ -701,6 +830,7 @@ class AdvisoryResponse(BaseModel):
     assets: list[AdvisoryAsset]
     correlation: AdvisoryCorrelation
     trend: list[AdvisoryTrend] = []
+    stress: list[StressEpisode] = []
     questions: list[AdvisoryQuestion]
     bands: list[AdvisoryBand]
     profiles: list[AdvisoryProfile]

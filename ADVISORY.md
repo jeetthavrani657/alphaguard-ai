@@ -78,10 +78,20 @@ stays at 208.
 - **Trend monitor.** Each risky asset against its own 210-day average: a description of today. It makes no claim
   that the signal predicts anything, so it is shown without performance numbers.
 
+- **Stress test.** Four named bad stretches (COVID crash 2020-02-19 to 2020-03-23; 2021-22 equity bear; the 2022
+  rate-hike year; crypto winter), fixed in `STRESS_EPISODES` before any profile was measured on them, read from the
+  close before each start. Descriptive, not a test, so the ledger stays at 208. What it found, unflattering parts
+  included: in the COVID crash the moderate mix fell 14.1% against 35.1% for the Nifty 50 ETF, but in the 2022
+  rate-hike year the ETF ended +5.5% while the moderate mix ended -1.8% (Nasdaq-100 -26% and Bitcoin -60% in rupees
+  dragged it; gold +13% helped). Risk management lowered the worst fall in every stretch; it did not always raise the return.
+
 ## Forward paper tracking (`research/advisory_forward.py`)
 
-The frozen rule is also run forward on data that did not exist when it was frozen, on the same dates as the paper
-books: base of 100 at the 2026-10-16 close, first countable session 2026-10-19. It adds **no** hypothesis (the three
+The frozen rule is also run forward on data that did not exist when it was frozen: base of 100 at the 2026-10-19
+close, first countable session 2026-10-20. (The advisory was committed on the evening of 2026-10-19, after that day's
+close, so that day had already been seen and is not out-of-time. An earlier version copied the paper books' dates
+and counted 2026-10-19 as day 1; that was corrected on 2026-10-20.) The two multi-asset trend rules
+(`MULTIASSET_TREND.md`) are tracked from the same date. It adds **no** hypothesis (the three
 profiles were counted when registered). Everything is recomputed from raw prices with the same `simulate()`, so a
 re-run on the same data gives the same answer; `reports/output/advisory_forward.csv` keeps one row per profile and data
 date, so a vendor re-adjustment of the free price data would show. Nothing is judged early: no Sharpe is computed or

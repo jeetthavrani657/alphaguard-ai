@@ -19,6 +19,7 @@ export function Overview() {
   const strategies = useApi(() => api.strategies(), []);
   const advisory = useApi(() => api.advisory(), []);
   const forward = useApi(() => api.advisoryForward(), []);
+  const multi = useApi(() => api.multiasset(), []);
 
   return (
     <div>
@@ -123,6 +124,34 @@ export function Overview() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Async>
+      </Panel>
+
+      <Panel title="Multi-asset trading rules at a glance" right={<Link to="/multiasset" className="muted">open the rules →</Link>} flush>
+        <Async state={multi}>
+          {(m) => (
+            <div className="tablewrap">
+              <table>
+                <thead>
+                  <tr><th>Rule</th><th>Out-of-sample Sharpe, with its status</th><th className="num">Worst fall, out-of-sample</th></tr>
+                </thead>
+                <tbody>
+                  {m.strategies.map((s) => (
+                    <tr key={s.id}>
+                      <td><Link to="/multiasset">{s.name}</Link></td>
+                      <td><Ratio ratio={s.metrics.out_of_sample.sharpe} /></td>
+                      <td className="num">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td>{m.static_benchmark.name} <span className="muted">(comparison)</span></td>
+                    <td><Ratio ratio={m.static_benchmark.metrics.out_of_sample.sharpe} /></td>
+                    <td className="num">{pct(m.static_benchmark.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>

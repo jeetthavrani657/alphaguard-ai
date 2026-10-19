@@ -79,7 +79,15 @@
       "n_hypotheses_this_run": 3,
       "cumulative_hypotheses_before_run": 205,
       "cumulative_hypotheses_after_run": 208
+    },
+    {
+      "run_id": "run_20261019T205906Z_10",
+      "timestamp": "2026-10-19T20:59:06.010881+00:00",
+      "context": "Multi-asset trend trading: 2 hypotheses (research/multiasset_trend.py), registered once",
+      "n_hypotheses_this_run": 2,
+      "cumulative_hypotheses_before_run": 208,
+      "cumulative_hypotheses_after_run": 210
     }
   ],
-  "cumulative_hypotheses": 208
+  "cumulative_hypotheses": 210
 }

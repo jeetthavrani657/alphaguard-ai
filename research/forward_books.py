@@ -133,6 +133,38 @@ def _pending_per_symbol(universe_data: dict, module, params: dict) -> list:
     return out
 
 
+def _order_row(date, symbol: str, side: str, shares, price, costs) -> dict:
+    return {"date": pd.Timestamp(date).strftime("%Y-%m-%d"), "symbol": symbol.replace(".NS", ""), "side": side.upper(),
+            "shares": int(shares), "price": round(float(price), 2), "costs": None if costs is None else round(float(costs), 2)}
+
+
+def _orders_per_symbol(run: dict) -> list:
+    """Every simulated fill of a per-stock book from the first countable day on: closed trades (a buy and a sell) and
+    the entries of positions still open. A fill happens at the open after the signal; nothing is sent anywhere."""
+    out = []
+    first = pd.Timestamp(FIRST_COUNTED_DAY)
+    log = run["pooled_trade_log"]
+    if len(log):
+        for t in log.itertuples():
+            if t.entry_date >= first:
+                out.append(_order_row(t.entry_date, t.symbol, "buy", t.quantity, t.entry_price, None))
+            if t.exit_date >= first:
+                out.append(_order_row(t.exit_date, t.symbol, "sell", t.quantity, t.exit_price, None))
+    for ticker, r in run["per_symbol"].items():
+        op = r["open_position_at_end"]
+        if op is not None and op["entry_date"] >= first:
+            out.append(_order_row(op["entry_date"], ticker, "buy", op["quantity"], op["entry_price"], op["buy_costs_total"]))
+    return out
+
+
+def _orders_portfolio(trade_log: pd.DataFrame) -> list:
+    """Every simulated rebalance leg of a one-account book from the first countable day on, at that day's open."""
+    first = pd.Timestamp(FIRST_COUNTED_DAY)
+    if trade_log is None or not len(trade_log):
+        return []
+    return [_order_row(t.date, t.symbol, t.side, t.shares, t.price, t.costs) for t in trade_log.itertuples() if t.date >= first]
+
+
 def _gate_fields(book: dict) -> dict:
     """Where this book's pass criteria live and when a verdict becomes allowed. Defaults are FORWARD_BOOKS.md's."""
     return {"verdict_gate_days": book.get("verdict_days", MIN_DAYS_FOR_SHARPE), "verdict_note": book.get("verdict_note"),
@@ -173,7 +205,7 @@ def _empty_report(book: dict, last: pd.Timestamp, pending: list, note: str, hold
         "status": "NOT_STARTED", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": 0, "sharpe_withheld_until_days": MIN_DAYS_FOR_SHARPE,
         "summary": None, "growth_book": None, "growth_benchmark": None, "drawdown_book": None,
-        "drawdown_benchmark": None, "exposure": None, "holdings": holdings or [], "pending": pending, "notes": [note],
+        "drawdown_benchmark": None, "exposure": None, "holdings": holdings or [], "pending": pending, "orders": [], "notes": [note],
     }
 
 
@@ -234,6 +266,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
                 holdings.append({"symbol": t.replace(".NS", ""), "since": op["entry_date"].strftime("%Y-%m-%d"),
                                  "entry_price": round(float(op["entry_price"]), 2), "last_close": round(last_close, 2)})
         n_open, n_closed = len(holdings), int(len(run["pooled_trade_log"]))
+        orders = _orders_per_symbol(run)
         if run["blocked"]:
             notes.append(f"{len(run['blocked'])} stock(s) could not run the rule (data gate or too little history).")
     else:
@@ -263,6 +296,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
             pending = [{"symbol": "(portfolio)", "action": f"rebalance to the {len(holdings)} targets formed "
                                                          f"{weights.index[-1].date()}, at the next open"}]
         n_open, n_closed = len(holdings), None
+        orders = _orders_portfolio(mom["result"]["trade_log"])
         notes.append("Holdings shown are the latest formation's targets, executed at the next session's open."
                      + (" Rebalanced once a year, on the last trading day of June." if book["kind"] == "fundamental" else ""))
 
@@ -283,7 +317,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
         "drawdown_book": _series(drawdown_series_pct(curve)),
         "drawdown_benchmark": _series(drawdown_series_pct(bench_curve)),
         "exposure": _series(exposure, 2),
-        "holdings": holdings, "pending": pending, "notes": notes,
+        "holdings": holdings, "pending": pending, "orders": sorted(orders, key=lambda o: (o["date"], o["symbol"]), reverse=True), "notes": notes,
     }
 
 

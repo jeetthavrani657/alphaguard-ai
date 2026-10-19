@@ -24,16 +24,16 @@ def _returns(end="2026-10-23", n=1500, seed=5):
 
 
 def test_the_clock_has_not_started_when_data_ends_before_the_first_counted_day():
-    rep = fwd.build_profile("moderate", _returns(end="2026-10-16"))
+    rep = fwd.build_profile("moderate", _returns(end="2026-10-19"))
     assert rep["status"] == "NOT_STARTED" and rep["n_trading_days"] == 0 and rep["summary"] is None
 
 
 def test_the_freeze_day_is_the_base_of_100_and_is_not_counted_as_a_forward_day():
-    r = _returns()                                              # data through Fri 2026-10-23: sessions 19, 20, 21, 22, 23 are forward days
+    r = _returns()                                              # data through Fri 2026-10-23: sessions 20, 21, 22, 23 are forward days
     rep = fwd.build_profile("moderate", r)
     g = rep["growth_strategy"]
-    assert g["dates"][0] == "2026-10-16" and g["values"][0] == 100.0
-    assert rep["n_trading_days"] == 5 and len(g["dates"]) == 6
+    assert g["dates"][0] == "2026-10-19" and g["values"][0] == 100.0
+    assert rep["n_trading_days"] == 4 and len(g["dates"]) == 5
     assert rep["growth_benchmark"]["values"][0] == 100.0
 
 
@@ -41,9 +41,9 @@ def test_the_forward_return_is_the_frozen_rules_own_equity_curve_rebased_at_the_
     r = _returns()
     rep = fwd.build_profile("aggressive", r)
     eq = adv.simulate(r, adv.PROFILES["aggressive"])["equity"]
-    expected = (eq.iloc[-1] / eq.loc["2026-10-16"] - 1) * 100
+    expected = (eq.iloc[-1] / eq.loc["2026-10-19"] - 1) * 100
     assert rep["summary"]["return_pct"] == pytest.approx(expected, abs=0.001)
-    bench = (1 + r["equity_large"].loc["2026-10-19":]).prod() - 1                 # buy-and-hold from the first counted day
+    bench = (1 + r["equity_large"].loc["2026-10-20":]).prod() - 1                 # buy-and-hold from the first counted day
     assert rep["summary"]["benchmark_return_pct"] == pytest.approx(bench * 100, abs=0.001)
 
 
@@ -61,7 +61,7 @@ def test_running_it_twice_on_the_same_data_gives_the_same_answer_and_one_history
 
 def test_no_sharpe_is_produced_before_a_year_of_forward_sessions():
     rep = fwd.build_profile("moderate", _returns())
-    assert "sharpe" not in rep["summary"] and rep["summary"]["withheld_reason"].startswith("withheld: 5 of 252")
+    assert "sharpe" not in rep["summary"] and rep["summary"]["withheld_reason"].startswith("withheld: 4 of 252")
 
 
 def test_the_latest_file_is_valid_json_and_refuses_nan(tmp_path):
@@ -72,3 +72,18 @@ def test_the_latest_file_is_valid_json_and_refuses_nan(tmp_path):
     bad = dict(rep, summary=dict(rep["summary"], return_pct=float("nan")))
     with pytest.raises(ValueError):
         fwd.write_latest([bad], str(tmp_path / "bad.json"))
+
+
+def test_a_trend_rule_is_tracked_from_the_same_freeze_and_a_not_started_one_runs_no_simulation():
+    import multiasset_trend as mt
+    idx = pd.bdate_range(end="2026-10-23", periods=1700)
+    rng = np.random.default_rng(9)
+    r = pd.DataFrame({k: rng.normal(0.0003, 0.01, 1700) for k in adv.RISKY_IDS}, index=idx)
+    r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
+    prices = (1 + r[adv.RISKY_IDS]).cumprod() * 100.0
+    sims = mt.run_all(prices, r)
+    rep = fwd.build_trend("trend_equal_weight", "Trend filter, equal weight", r, sims["trend_equal_weight"])
+    assert rep["status"] == "RUNNING" and rep["n_trading_days"] == 4 and rep["growth_strategy"]["values"][0] == 100.0
+    assert rep["growth_strategy"]["dates"][0] == "2026-10-19" and abs(sum(m["weight_pct"] for m in rep["current_mix"]) - 100) < 0.2
+    early = fwd.build_trend("trend_equal_weight", "x", r.loc[:"2026-10-19"], None)             # the clock has not started: no simulation is needed
+    assert early["status"] == "NOT_STARTED" and early["summary"] is None

@@ -4,11 +4,12 @@ research/advisory_forward.py
 Forward paper tracking for the three multi-asset advisory profiles (ADVISORY.md). The rule is frozen and the three
 profiles are already counted in the hypothesis ledger (208), so this adds NO hypothesis: it only collects out-of-time
 evidence, the same way research/forward_books.py does for the equity books. Research only: it logs what each profile
-WOULD have done, places no orders and connects to no broker.
+WOULD have done, places no orders and connects to no broker. It tracks the three advisory profiles and the two multi-asset
+trend rules (MULTIASSET_TREND.md).
 
   * Everything is recomputed from raw prices with the same simulate() as the advisory page, so running it twice on the
-    same data gives the same answer. The clock starts at the close of FORWARD_START (the freeze day); the first
-    countable session is FIRST_COUNTED_DAY, the same dates as the paper books.
+    same data gives the same answer. The clock starts at the close of FORWARD_START; the first countable session is
+    FIRST_COUNTED_DAY, the first session after the rules were frozen.
   * Nothing is judged early. No Sharpe is computed or shown before MIN_DAYS_FOR_SHARPE forward sessions exist; until
     then the numbers (return, drawdown, exposure) are monitoring only.
 
@@ -34,10 +35,15 @@ sys.path.insert(0, PROJECT_ROOT)
 import pandas as pd
 
 import advisory as adv
+import multiasset_trend as mt
 
-# ---- FROZEN with the paper books (FORWARD_BOOKS.md, 2026-10-16). Do not edit. ----------------
-FORWARD_START = "2026-10-16"          # base day: the freeze-day close is 100
-FIRST_COUNTED_DAY = "2026-10-19"      # first session that counts
+# ---- FROZEN. Do not edit. -----------------------------------------------------------------------
+# The advisory rule was committed on the evening of 2026-10-19, AFTER that day's close, so 2026-10-19 had already been seen
+# when the rule was frozen and is not out-of-time. (An earlier version of this file counted it as day 1, copying the paper
+# books' dates; that was wrong and is corrected here, see ADVISORY.md.) The trend rules were frozen on 2026-10-20 before
+# any result existed. Both therefore start from the 2026-10-19 close, and the first session that counts is 2026-10-20.
+FORWARD_START = "2026-10-19"          # base day: the 2026-10-19 close is 100
+FIRST_COUNTED_DAY = "2026-10-20"      # first session that counts
 MIN_DAYS_FOR_SHARPE = 252             # no Sharpe, and no verdict, before a year of forward data
 HISTORY_PATH = os.path.join(PROJECT_ROOT, "reports", "output", "advisory_forward.csv")
 LATEST_PATH = os.path.join(PROJECT_ROOT, "reports", "output", "advisory_forward_latest.json")
@@ -49,16 +55,24 @@ def _series(s: pd.Series, nd: int = 3) -> dict:
 
 
 def build_profile(pid: str, returns: pd.DataFrame) -> dict:
-    """One profile's forward picture: the frozen rule run on all data, then read from the freeze day onward."""
-    p = adv.PROFILES[pid]
+    """One advisory profile's forward picture: the frozen rule run on all data, then read from the freeze day onward."""
+    return _forward_picture(pid, adv.PROFILES[pid]["name"], returns, lambda: adv.simulate(returns, adv.PROFILES[pid]))
+
+
+def build_trend(sid: str, name: str, returns: pd.DataFrame, sim: dict | None) -> dict:
+    """The same forward picture for one multi-asset trend rule (MULTIASSET_TREND.md), from its already-run simulation."""
+    return _forward_picture(sid, name, returns, lambda: sim)
+
+
+def _forward_picture(pid: str, name: str, returns: pd.DataFrame, run) -> dict:
     last = returns.index[-1]
-    base = {"id": pid, "name": p["name"], "data_through": last.strftime("%Y-%m-%d")}
+    base = {"id": pid, "name": name, "data_through": last.strftime("%Y-%m-%d")}
     if last < pd.Timestamp(FIRST_COUNTED_DAY):
         return {**base, "status": "NOT_STARTED", "n_trading_days": 0, "summary": None, "growth_strategy": None, "growth_benchmark": None,
                 "current_mix": [], "mix_as_of": None, "guard_on": False, "n_rebalances_since_start": 0,
                 "note": f"The first countable session is {FIRST_COUNTED_DAY}; data currently ends {last.date()}. The clock has started."}
 
-    sim = adv.simulate(returns, p)
+    sim = run()
     equity = sim["equity"]
     base_day = equity.index[equity.index <= pd.Timestamp(FORWARD_START)][-1]       # the freeze-day close, the base of 100
     fwd = equity.loc[base_day:] / float(equity.loc[base_day]) * 100.0
@@ -122,11 +136,14 @@ def main(argv=None) -> int:
     returns = adv.daily_returns(prices)
     reports = []
     for pid in adv.PROFILES:
-        rep = build_profile(pid, returns)
-        reports.append(rep)
+        reports.append(build_profile(pid, returns))
+    trend_sims = mt.run_all(prices, returns) if returns.index[-1] >= pd.Timestamp(FIRST_COUNTED_DAY) else {}
+    for s in mt.STRATEGIES:
+        reports.append(build_trend(s["id"], s["name"], returns, trend_sims.get(s["id"])))
+    for rep in reports:
         append_history(rep)
         s = rep["summary"]
-        print(f"[advisory-forward] {pid}: {rep['status']}, data through {rep['data_through']}, {rep['n_trading_days']} forward days"
+        print(f"[advisory-forward] {rep['id']}: {rep['status']}, data through {rep['data_through']}, {rep['n_trading_days']} forward days"
               + (f", return {s['return_pct']:+.2f}% vs Nifty 50 ETF {s['benchmark_return_pct']:+.2f}%, drawdown {s['max_drawdown_pct']:.1f}%" if s else ""))
     write_latest(reports)
     print(f"[advisory-forward] wrote {LATEST_PATH}")

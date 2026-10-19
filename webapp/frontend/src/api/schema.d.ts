@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/multiasset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Multi-asset trend trading rules (research/multiasset_trend.py): two registered hypotheses against a no-timing benchmark. */
+        get: operations["multiasset_api_multiasset_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/advisory/forward": {
         parameters: {
             query?: never;
@@ -217,6 +234,23 @@ export interface paths {
         };
         /** The three advisory profiles run forward on paper (research/advisory_forward.py): return against the Nifty 50 ETF, no early verdict. */
         get: operations["advisory_forward_api_advisory_forward_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/advisory/rebalance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current holdings in, buy/sell/hold list out: what to change to reach a profile's recommended mix. Not an order. */
+        get: operations["advisory_rebalance_api_advisory_rebalance_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -524,6 +558,11 @@ export interface components {
              * @default []
              */
             trend: components["schemas"]["AdvisoryTrend"][];
+            /**
+             * Stress
+             * @default []
+             */
+            stress: components["schemas"]["StressEpisode"][];
             /** Questions */
             questions: components["schemas"]["AdvisoryQuestion"][];
             /** Bands */
@@ -686,6 +725,30 @@ export interface components {
             target_weight_pct?: number | null;
             /** As Of Formation Date */
             as_of_formation_date?: string | null;
+        };
+        /**
+         * BookOrder
+         * @description One SIMULATED fill of a paper book: what the rule would have done at that day's open. Nothing is ever sent to a broker.
+         */
+        BookOrder: {
+            /** Date */
+            date: string;
+            /** Symbol */
+            symbol: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "BUY" | "SELL";
+            /** Shares */
+            shares: number;
+            /** Price */
+            price: number;
+            /**
+             * Costs
+             * @description The engine's modelled costs for this fill (taxes, charges, slippage); None where the engine reports costs per round trip.
+             */
+            costs?: number | null;
         };
         /** BookPending */
         BookPending: {
@@ -892,6 +955,11 @@ export interface components {
              */
             pending: components["schemas"]["BookPending"][];
             /**
+             * Orders
+             * @default []
+             */
+            orders: components["schemas"]["BookOrder"][];
+            /**
              * Notes
              * @default []
              */
@@ -1092,6 +1160,106 @@ export interface components {
             quotes: components["schemas"]["LiveQuote"][];
         };
         /**
+         * MultiassetBenchmark
+         * @description A comparison that is not a hypothesis: its Sharpe is labelled so and carries no significance claim.
+         */
+        MultiassetBenchmark: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            metrics: components["schemas"]["AdvisoryWindows"];
+            growth: components["schemas"]["EquityCurve"];
+            drawdown_pct: components["schemas"]["EquityCurve"];
+        };
+        /**
+         * MultiassetResponse
+         * @description Multi-asset algorithmic trading rules (research/multiasset_trend.py): a trend filter over the advisory's six assets.
+         *     Simulated only, places no orders. Two hypotheses were registered; `is_stale` says the ledger has grown since.
+         */
+        MultiassetResponse: {
+            /** Generated At */
+            generated_at: string;
+            /** Data Through */
+            data_through: string;
+            /** Simulation Start */
+            simulation_start: string;
+            /** In Sample End */
+            in_sample_end: string;
+            /** Out Of Sample Start */
+            out_of_sample_start: string;
+            /** Ledger Total At Generation */
+            ledger_total_at_generation: number;
+            /** Ledger Total Now */
+            ledger_total_now?: number | null;
+            /** Is Stale */
+            is_stale: boolean;
+            /** Disclaimer */
+            disclaimer: string;
+            /** Trend Days */
+            trend_days: number;
+            /** Design Document */
+            design_document: string;
+            rule: components["schemas"]["MultiassetRule"];
+            /** Strategies */
+            strategies: components["schemas"]["MultiassetStrategy"][];
+            static_benchmark: components["schemas"]["MultiassetBenchmark"];
+            nifty_benchmark: components["schemas"]["MultiassetBenchmark"];
+            /** Signals Now */
+            signals_now: components["schemas"]["MultiassetSignal"][];
+            /** Stress */
+            stress: components["schemas"]["StressEpisode"][];
+            /** Assets */
+            assets: components["schemas"]["AdvisoryAsset"][];
+        };
+        /** MultiassetRule */
+        MultiassetRule: {
+            /** Rebalance Every Days */
+            rebalance_every_days: number;
+            /** Cost Pct Per Side */
+            cost_pct_per_side: number;
+            /** Cash Rate Pct */
+            cash_rate_pct: number;
+            /** Execution */
+            execution: string;
+        };
+        /** MultiassetSignal */
+        MultiassetSignal: {
+            /** Asset Id */
+            asset_id: string;
+            /** Uptrend */
+            uptrend: boolean;
+        };
+        /**
+         * MultiassetStrategy
+         * @description One registered multi-asset trend rule (MULTIASSET_TREND.md). Its Sharpe ratios carry the harness status and the hypothesis count.
+         */
+        MultiassetStrategy: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Blurb */
+            blurb: string;
+            /**
+             * Harness Status
+             * @enum {string}
+             */
+            harness_status: "UNVALIDATED" | "VALIDATED_FAILED" | "OOS_ONLY_SIGNIFICANT" | "VALIDATED_CONFIRMED" | "BENCHMARK_NOT_A_HYPOTHESIS" | "SLICE_OF_POOLED_HYPOTHESIS";
+            metrics: components["schemas"]["AdvisoryWindows"];
+            growth: components["schemas"]["EquityCurve"];
+            drawdown_pct: components["schemas"]["EquityCurve"];
+            exposure_pct: components["schemas"]["EquityCurve"];
+            /** N Rebalances */
+            n_rebalances: number;
+            /** Cost Paid Pct Of Start */
+            cost_paid_pct_of_start: number;
+            /** Held Now */
+            held_now: components["schemas"]["AdvisoryWeight"][];
+            /** Held Decided On */
+            held_decided_on: string;
+        };
+        /**
          * PriceSeries
          * @description Columnar OHLCV plus the indicator series read from the strategy modules.
          */
@@ -1180,6 +1348,68 @@ export interface components {
             portfolio_value_pre_rebalance: number;
             /** Turnover Pct */
             turnover_pct: number;
+        };
+        /** RebalanceLine */
+        RebalanceLine: {
+            /** Asset Id */
+            asset_id: string;
+            /** Name */
+            name: string;
+            /** Ticker */
+            ticker?: string | null;
+            /** Current Rupees */
+            current_rupees: number;
+            /** Current Pct */
+            current_pct: number;
+            /** Target Pct */
+            target_pct: number;
+            /** Target Rupees */
+            target_rupees: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "BUY" | "SELL" | "HOLD";
+            /**
+             * Rupees To Trade
+             * @description Rupees to buy or sell at the last close (0 for HOLD and for cash, which is whatever is left).
+             */
+            rupees_to_trade: number;
+            /**
+             * Units
+             * @description Whole units for exchange-traded funds; fractional for Bitcoin; None for cash and HOLD.
+             */
+            units?: number | null;
+            /** Price */
+            price?: number | null;
+        };
+        /**
+         * RebalanceResponse
+         * @description What to change to move current holdings to the profile's recommended mix. A list to think with, never an order.
+         */
+        RebalanceResponse: {
+            /** Profile Id */
+            profile_id: string;
+            /** Profile Name */
+            profile_name: string;
+            /** Recommended On */
+            recommended_on: string;
+            /** Total */
+            total: number;
+            /**
+             * Band Pct
+             * @description Drift tolerated before an asset is traded, as % of the whole portfolio.
+             */
+            band_pct: number;
+            /** Lines */
+            lines: components["schemas"]["RebalanceLine"][];
+            /**
+             * Estimated Cost
+             * @description Estimated cost of the listed trades at the rule's flat per-side cost.
+             */
+            estimated_cost: number;
+            /** Notes */
+            notes: string[];
         };
         /**
          * RiskAdjustedRatio
@@ -1390,6 +1620,62 @@ export interface components {
              * @description True if the ledger has grown since this status was computed.
              */
             stale: boolean;
+        };
+        /** StressAsset */
+        StressAsset: {
+            /** Return Pct */
+            return_pct: number;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number;
+            /** Asset Id */
+            asset_id: string;
+        };
+        /**
+         * StressEpisode
+         * @description How the frozen profiles, the Nifty 50 ETF and each asset behaved inside a named bad stretch. The stretches were
+         *     fixed in advance and are not tuned; this describes history and is not a hypothesis test. If the simulation does not
+         *     reach back to the stretch, `covered` is false and nothing is shown.
+         */
+        StressEpisode: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            /** Blurb */
+            blurb: string;
+            /** Covered */
+            covered: boolean;
+            benchmark?: components["schemas"]["StressWindow"] | null;
+            /**
+             * Profiles
+             * @default []
+             */
+            profiles: components["schemas"]["StressProfile"][];
+            /**
+             * Assets
+             * @default []
+             */
+            assets: components["schemas"]["StressAsset"][];
+        };
+        /** StressProfile */
+        StressProfile: {
+            /** Return Pct */
+            return_pct: number;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number;
+            /** Id */
+            id: string;
+        };
+        /** StressWindow */
+        StressWindow: {
+            /** Return Pct */
+            return_pct: number;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number;
         };
         /** SymbolDetail */
         SymbolDetail: {
@@ -1946,6 +2232,26 @@ export interface operations {
             };
         };
     };
+    multiasset_api_multiasset_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MultiassetResponse"];
+                };
+            };
+        };
+    };
     advisory_forward_api_advisory_forward_get: {
         parameters: {
             query?: never;
@@ -1962,6 +2268,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdvisoryForwardResponse"];
+                };
+            };
+        };
+    };
+    advisory_rebalance_api_advisory_rebalance_get: {
+        parameters: {
+            query: {
+                /** @description Profile id, e.g. moderate. */
+                profile: string;
+                /** @description Comma-separated asset_id:rupees, e.g. equity_large:200000,gold:50000,cash:10000. */
+                holdings: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

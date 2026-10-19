@@ -1,4 +1,6 @@
 run_date,profile_id,data_through,status,n_trading_days,return_pct,benchmark_return_pct,max_drawdown_pct,exposure_pct
-2026-10-20,conservative,2026-10-19,RUNNING,1,-0.632,-1.023,-0.632,100.0
-2026-10-20,moderate,2026-10-19,RUNNING,1,-0.641,-1.023,-0.641,100.0
-2026-10-20,aggressive,2026-10-19,RUNNING,1,-0.753,-1.023,-0.753,100.0
+2026-10-20,conservative,2026-10-19,NOT_STARTED,0,,,,
+2026-10-20,moderate,2026-10-19,NOT_STARTED,0,,,,
+2026-10-20,aggressive,2026-10-19,NOT_STARTED,0,,,,
+2026-10-20,trend_equal_weight,2026-10-19,NOT_STARTED,0,,,,
+2026-10-20,trend_risk_managed,2026-10-19,NOT_STARTED,0,,,,
