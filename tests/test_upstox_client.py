@@ -48,9 +48,22 @@ def test_anything_but_the_two_data_addresses_is_refused_before_any_network_call(
         uc._http_get(url, token="secret-token")
 
 
-def test_the_two_allowed_addresses_pass_the_gate():
+def test_the_allowed_addresses_pass_the_gate():
     uc._check_allowed(uc.INSTRUMENTS_URL)
     uc._check_allowed(uc.HISTORICAL_PREFIX + "NSE_EQ%7CINE002A01018/days/1/2026-10-16/2026-01-01")
+    uc._check_allowed(uc.LTP_URL + "?instrument_key=NSE_EQ%7CINE002A01018")
+
+
+@pytest.mark.parametrize("url", [
+    "https://api.upstox.com/v3/market-quote/ltp-evil?instrument_key=x",     # a look-alike path
+    "https://api.upstox.com/v3/market-quote/ltpx",
+    "https://api.upstox.com/v3/market-quote/quotes?instrument_key=x",       # the full quote endpoint is not needed, so not allowed
+    "https://api.upstox.com/v2/market-quote/ltp?instrument_key=x",
+])
+def test_look_alikes_of_the_ltp_address_are_refused(monkeypatch, url):
+    _no_network(monkeypatch)
+    with pytest.raises(ValueError, match="read-only"):
+        uc._http_get(url, token="t")
 
 
 def test_the_token_never_appears_in_an_error(monkeypatch):
@@ -217,3 +230,43 @@ def test_an_unknown_symbol_is_a_clear_error_and_dot_ns_is_accepted(monkeypatch):
     assert uc.fetch_symbol_daily("TCS.NS", "2026-01-01", "2026-01-31", m)["close"].iloc[0] == "NSE_EQ|INE467B01029"
     with pytest.raises(KeyError, match="NOPE"):
         uc.fetch_symbol_daily("NOPE", "2026-01-01", "2026-01-31", m)
+
+
+# --- last traded price -----------------------------------------------------------------------------------------------
+
+IMAP = {"RELIANCE": "NSE_EQ|INE002A01018", "TCS": "NSE_EQ|INE467B01029", "M&M": "NSE_EQ|INE101A01026"}
+
+
+def _ltp_payload():
+    return {"status": "success", "data": {
+        "NSE_EQ:RELIANCE": {"last_price": 1211.2, "instrument_token": "NSE_EQ|INE002A01018", "ltq": 5, "volume": 17225283, "cp": 1215.0},
+        "NSE_EQ:TCS": {"last_price": 0.0, "instrument_token": "NSE_EQ|INE467B01029", "ltq": 0, "volume": 0, "cp": 0.0},
+        "NSE_EQ:UNKNOWN": {"last_price": 5.0, "instrument_token": "NSE_EQ|INE999Z99999", "cp": 4.0}}}
+
+
+def test_ltp_is_matched_by_instrument_token_and_a_zero_price_means_no_quote():
+    q = uc.parse_ltp(_ltp_payload(), IMAP)
+    assert q["RELIANCE"] == {"last_price": 1211.2, "prev_close": 1215.0, "volume": 17225283}
+    assert q["TCS"] == {"last_price": None, "prev_close": None, "volume": 0}        # 0.0 is "no quote", never a price of zero
+    assert "UNKNOWN" not in q                                                        # an instrument we did not ask about
+    with pytest.raises(RuntimeError, match="did not return success"):
+        uc.parse_ltp({"status": "error"}, IMAP)
+
+
+def test_get_ltp_batches_encodes_keys_and_skips_unlisted_symbols(monkeypatch):
+    urls = []
+    big = {f"S{k}": f"NSE_EQ|INE{k:09d}" for k in range(1200)}
+    monkeypatch.setattr(uc, "_http_get", lambda url, token=None, retries=3: urls.append((url, token)) or json.dumps(
+        {"status": "success", "data": {}}).encode())
+    uc.get_ltp([f"S{k}" for k in range(1200)] + ["NOT-LISTED"], big, token="tok")
+    assert len(urls) == 3                                                            # 500 + 500 + 200
+    first, token = urls[0]
+    assert first.startswith(uc.LTP_URL + "?instrument_key=NSE_EQ%7CINE") and "," in first and "|" not in first
+    assert first.count(",") == 499 and token == "tok" and "NOT-LISTED" not in first
+
+
+def test_get_ltp_needs_a_token(monkeypatch):
+    _no_network(monkeypatch)
+    monkeypatch.setattr(uc, "get_credential", lambda name: None)
+    with pytest.raises(RuntimeError, match="UPSTOX_ACCESS_TOKEN is not set"):
+        uc.get_ltp(["TCS"], IMAP)

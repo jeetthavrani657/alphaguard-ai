@@ -1,12 +1,13 @@
 """
 data/upstox_client.py
 
-A READ-ONLY market-data client for Upstox: daily candles for NSE equities, nothing else.
+A READ-ONLY market-data client for Upstox: daily candles and last traded prices for NSE equities.
 Research only. Rule 5 in CLAUDE.md (amended by the owner 2026-10-16) allows broker code ONLY as a
 read-only price client, and this file enforces that in code, not just in a comment:
 
-  * `_check_allowed` is the single gate every request passes through. Only two addresses are
-    reachable: the public instrument list and the historical-candle endpoint. An order, GTT,
+  * `_check_allowed` is the single gate every request passes through. Only three addresses are
+    reachable: the public instrument list, the historical-candle endpoint and the LTP quote
+    endpoint. An order, GTT,
     position, holdings, funds or profile URL is rejected BEFORE any network call is made.
   * The API key, secret and access token live only in Windows environment variables. Nothing here
     prints, logs or stores them, and error messages never contain them.
@@ -31,6 +32,8 @@ import pandas as pd
 
 INSTRUMENTS_URL = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
 HISTORICAL_PREFIX = "https://api.upstox.com/v3/historical-candle/"
+LTP_URL = "https://api.upstox.com/v3/market-quote/ltp"      # last traded price: read-only, no account data
+LTP_BATCH = 500                                              # instruments per request (users report 500 as the safe cap)
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "upstox")      # git-ignored (see .gitignore)
 INSTRUMENT_CACHE = os.path.join(CACHE_DIR, "instruments_nse_eq.json")
 INSTRUMENT_MAX_AGE_DAYS = 7          # the instrument list changes with listings; refresh weekly
@@ -65,8 +68,9 @@ def get_credential(name: str):
 # --- the one gate every request passes through ----------------------------------------------------------
 
 def _check_allowed(url: str) -> None:
-    """Rule 5: only the instrument list and the historical-candle endpoint may ever be requested."""
-    if url == INSTRUMENTS_URL or url.startswith(HISTORICAL_PREFIX):
+    """Rule 5: only the instrument list, the historical-candle endpoint and the last-traded-price quote."""
+    if (url == INSTRUMENTS_URL or url.startswith(HISTORICAL_PREFIX)
+            or url == LTP_URL or url.startswith(LTP_URL + "?")):
         return
     raise ValueError("refused: this client is read-only market data and may not call that address")
 
@@ -187,6 +191,43 @@ def fetch_daily(instrument_key: str, start: str, end: str, token: str | None = N
         parts.append(parse_candles(json.loads(_http_get(url, token))))
     frame = pd.concat(parts) if parts else parse_candles({"status": "success", "data": {"candles": []}})
     return frame[~frame.index.duplicated(keep="last")].sort_index()
+
+
+def parse_ltp(payload: dict, instrument_map: dict) -> dict:
+    """
+    {symbol: {"last_price", "prev_close", "volume"}} from an LTP response. Each entry is matched to its
+    symbol by its instrument_token (the response is keyed 'NSE_EQ:RELIANCE', not the 'NSE_EQ|INE...' we sent).
+    A price of 0 or a missing field means "no quote", reported as None, never as a price of zero.
+    """
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Upstox did not return success (status={payload.get('status')!r})")
+    by_key = {key: symbol for symbol, key in instrument_map.items()}
+    out = {}
+    for entry in (payload.get("data") or {}).values():
+        symbol = by_key.get(entry.get("instrument_token"))
+        if symbol is None:
+            continue
+        last, prev = entry.get("last_price"), entry.get("cp")
+        out[symbol] = {"last_price": last if last else None, "prev_close": prev if prev else None,
+                       "volume": entry.get("volume")}
+    return out
+
+
+def get_ltp(symbols: list, instrument_map: dict | None = None, token: str | None = None) -> dict:
+    """
+    Latest traded price for NSE symbols, e.g. ['RELIANCE', 'TCS'], fetched in batches. Symbols Upstox does not
+    list are simply absent from the result (the caller decides how to report that).
+    """
+    token = token or get_credential("UPSTOX_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set (see CLAUDE.md rule 5: keys live in environment variables)")
+    instrument_map = instrument_map or load_instrument_map()
+    keys = [instrument_map[s.removesuffix(".NS")] for s in symbols if s.removesuffix(".NS") in instrument_map]
+    out = {}
+    for i in range(0, len(keys), LTP_BATCH):
+        query = urllib.parse.quote(",".join(keys[i:i + LTP_BATCH]), safe=",")     # '|' must be percent-encoded, ',' must not
+        out.update(parse_ltp(json.loads(_http_get(f"{LTP_URL}?instrument_key={query}", token)), instrument_map))
+    return out
 
 
 def fetch_symbol_daily(symbol: str, start: str, end: str, instrument_map: dict | None = None,
