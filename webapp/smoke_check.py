@@ -230,7 +230,9 @@ def run_checks(base: str) -> None:
             check(b["risk_adjusted"]["book"] is None, f"{b['id']}: Sharpe is withheld before a year of forward days")
         if b["status"] == "RUNNING":
             gb, dd = b["growth_book"], b["drawdown_book"]
-            check(len(gb["dates"]) == b["n_trading_days"] and max(dd["values"]) <= 0, f"{b['id']}: series aligned, drawdown <= 0")
+            counted = sum(1 for d in gb["dates"] if d >= b["first_counted_day"])          # the freeze day is the chart's base, not a counted day
+            check(counted == b["n_trading_days"] and len(gb["dates"]) == len(gb["values"]) and max(dd["values"]) <= 0,
+                  f"{b['id']}: series aligned with the counted days, drawdown <= 0")
             check(abs((gb["values"][-1] - 100) - b["summary"]["return_pct"]) < 1e-2, f"{b['id']}: final growth - 100 equals return")
 
     print("[smoke] refusals")

@@ -121,6 +121,13 @@ def test_before_the_book_is_old_enough_nothing_is_simulated_and_there_is_no_verd
     assert "forward trading days" in r["reason"]
 
 
+def test_the_controls_day_count_matches_the_books_and_excludes_the_freeze_day(window):
+    uni = _universe()
+    r = qvc.run_control(uni, *_archive(), rehearse=True, n_sims=3)
+    expected = sum(1 for d in uni["S00.NS"]["df"].index if d >= pd.Timestamp("2026-09-02"))
+    assert r["n_trading_days"] == expected                      # sessions from the first counted day, not the freeze day
+
+
 def test_a_rehearsal_runs_the_machinery_but_never_gives_a_verdict(window):
     r = qvc.run_control(_universe(), *_archive(), rehearse=True, n_sims=5)
     assert r["allowed"] is False and r["verdict"] is None

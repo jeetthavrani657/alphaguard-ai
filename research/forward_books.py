@@ -266,7 +266,9 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
         notes.append("Holdings shown are the latest formation's targets, executed at the next session's open."
                      + (" Rebalanced once a year, on the last trading day of June." if book["kind"] == "fundamental" else ""))
 
-    n_days = int(len(curve))
+    # Count only sessions from the first countable day on. The curve also holds the freeze day as its base
+    # (day 0, no trade yet), which is not a forward trading day and must not bring the verdict gate closer.
+    n_days = int((curve.index >= pd.Timestamp(FIRST_COUNTED_DAY)).sum())
     return {
         "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"], **_gate_fields(book),
         "rationale": book["rationale"], "why_forward_tested": book["why_forward_tested"],

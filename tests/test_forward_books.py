@@ -108,7 +108,8 @@ def test_before_the_first_counted_day_the_book_is_not_started_and_shows_no_numbe
 def _reconcile(rep):
     s = rep["summary"]
     gb, gm = rep["growth_book"], rep["growth_benchmark"]
-    assert len(gb["dates"]) == len(gb["values"]) == rep["n_trading_days"]
+    assert len(gb["dates"]) == len(gb["values"])
+    assert sum(1 for d in gb["dates"] if d >= rep["first_counted_day"]) == rep["n_trading_days"]   # the freeze day is the base, not a day
     assert abs((gb["values"][-1] - 100) - s["return_pct"]) < 5e-3
     assert abs((gm["values"][-1] - 100) - s["benchmark_return_pct"]) < 5e-3
     assert max(rep["drawdown_book"]["values"]) <= 0 and max(rep["drawdown_benchmark"]["values"]) <= 0
@@ -214,6 +215,22 @@ def test_formation_dates_are_the_freeze_day_then_the_last_trading_day_of_each_ju
     assert got == [pd.Timestamp("2026-10-16"), pd.Timestamp("2027-06-30"), pd.Timestamp("2028-06-30")]
     early = forward_books._fundamental_formation_dates(uni, pd.Timestamp("2028-06-20"))   # June 2028 not over yet
     assert early == [pd.Timestamp("2026-10-16"), pd.Timestamp("2027-06-30")]
+
+
+def test_the_freeze_day_is_the_curves_base_and_is_not_counted_as_a_forward_day(window):
+    """Regression: 'forward days' counted the freeze day too, so every verdict gate opened one day early."""
+    rep = forward_books.build_book_report(MA_BOOK, _toy_universe())
+    dates = rep["growth_book"]["dates"]
+    assert dates[0] == "2026-09-01" and rep["first_counted_day"] == "2026-09-02"          # day 0 is on the chart ...
+    assert rep["n_trading_days"] == len(dates) - 1                                        # ... but is not a counted day
+
+
+def test_the_sharpe_gate_opens_after_exactly_the_stated_number_of_counted_days(window, monkeypatch):
+    n = forward_books.build_book_report(MA_BOOK, _toy_universe())["n_trading_days"]
+    monkeypatch.setattr(forward_books, "MIN_DAYS_FOR_SHARPE", n)
+    assert forward_books.build_book_report(MA_BOOK, _toy_universe())["summary"]["sharpe"] is not None      # n of n: open
+    monkeypatch.setattr(forward_books, "MIN_DAYS_FOR_SHARPE", n + 1)
+    assert forward_books.build_book_report(MA_BOOK, _toy_universe())["summary"]["sharpe"] is None          # n of n+1: withheld
 
 
 def test_sharpe_is_withheld_until_a_year_of_forward_days_exists(window, monkeypatch):

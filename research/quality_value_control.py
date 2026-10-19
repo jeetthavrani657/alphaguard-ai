@@ -112,7 +112,8 @@ def run_control(universe_data: dict, facts: pd.DataFrame, currency: dict, rehear
     weights = quality_value.generate_target_weights(eligible, facts, currency, formations,
                                                     top_n=quality_value.TOP_N, strict=True)
     book = _run_window(eligible, weights, start, end, "quality_value", verbose=False)
-    n_days = int(book["n_obs"])
+    # forward trading days = sessions from the first countable day (the freeze day is the curve's base, not a day)
+    n_days = int((book["result"]["equity_curve"].index >= pd.Timestamp(forward_books.FIRST_COUNTED_DAY)).sum())
     allowed, reason = verdict_allowed(n_days, formations, last)
     out = {"n_trading_days": n_days, "allowed": allowed, "reason": reason, "verdict": None,
            "book_sharpe": book["metrics"]["sharpe_ratio"], "percentile": None, "random_sharpes": None}
