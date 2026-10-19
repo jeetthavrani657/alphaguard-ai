@@ -751,6 +751,26 @@ def test_rebalance_sells_what_is_over_target_and_leaves_small_drifts_alone(clien
     assert lines["equity_large"]["action"] == "SELL" and lines["debt"]["action"] == "BUY"
 
 
+def test_random_holdings_never_produce_a_plan_that_spends_money_you_do_not_have(client, tmp_path, monkeypatch):
+    import random
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    rnd = random.Random(7)
+    ids = ["equity_large", "equity_mid", "intl_equity", "gold", "debt", "crypto", "cash"]
+    for _ in range(40):                                                          # found by fuzzing: a plan could need more cash than the holdings gave
+        held = {k: rnd.choice([0, 0, rnd.randint(1000, 900000)]) for k in ids}
+        if sum(held.values()) < 10000:
+            held["cash"] = rnd.randint(10000, 500000)
+        profile = rnd.choice(["conservative", "moderate", "aggressive"])
+        r = client.get("/api/advisory/rebalance", params={"profile": profile, "holdings": ",".join(f"{k}:{v}" for k, v in held.items() if v)}).json()
+        buys = sum(l["rupees_to_trade"] for l in r["lines"] if l["action"] == "BUY")
+        sells = sum(l["rupees_to_trade"] for l in r["lines"] if l["action"] == "SELL")
+        assert r["cash_after"] >= -0.01
+        assert held["cash"] + sells - buys - r["estimated_cost"] == pytest.approx(r["cash_after"], abs=0.1)
+    for amount in (10000, 12345, 99999, 7777777, 900000000, 1000000000):         # the stored weights can add to 100.01, which overspent big amounts
+        b = client.get("/api/advisory/basket", params={"profile": rnd.choice(["conservative", "moderate", "aggressive"]), "amount": amount}).json()
+        assert b["cash_left"] >= -0.01
+
+
 def test_rebalance_rejects_bad_input_with_a_helpful_message(client, tmp_path, monkeypatch):
     _advisory_file(tmp_path, monkeypatch, with_prices=True)
     get = lambda profile, holdings: client.get("/api/advisory/rebalance", params={"profile": profile, "holdings": holdings})

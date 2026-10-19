@@ -1408,6 +1408,11 @@ export interface components {
              * @description Estimated cost of the listed trades at the rule's flat per-side cost.
              */
             estimated_cost: number;
+            /**
+             * Cash After
+             * @description Cash left after the listed trades and their cost. Never negative: purchases are cut back until the list can be paid for.
+             */
+            cash_after: number;
             /** Notes */
             notes: string[];
         };

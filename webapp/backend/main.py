@@ -432,8 +432,10 @@ def advisory_rebalance(profile: str = Query(..., description="Profile id, e.g. m
     total = sum(current.values())
     if total < 10_000:
         raise HTTPException(status_code=422, detail="The holdings add up to less than 10,000 rupees; enter at least that much.")
-    target_pct = {w["asset_id"]: w["weight_pct"] for w in p["allocation"]}
-    lines, traded = [], 0.0
+    weight_sum = sum(w["weight_pct"] for w in p["allocation"])           # the stored weights are rounded to 2 decimals and can add to 100.01
+    target_pct = {w["asset_id"]: w["weight_pct"] / weight_sum * 100.0 for w in p["allocation"]}
+    cost_pct = raw["rule"]["cost_pct_per_side"]
+    work = {}                                                          # asset id -> the plan for it, adjusted below until it can be paid for
     for aid, a in by_id.items():
         target = total * target_pct.get(aid, 0.0) / 100.0
         diff = target - current[aid]
@@ -444,19 +446,45 @@ def advisory_rebalance(profile: str = Query(..., description="Profile id, e.g. m
             move = units * price
             if units == 0:
                 action, units, move = "HOLD", None, 0.0
-        traded += move
-        lines.append(schemas.RebalanceLine(
-            asset_id=aid, name=a["name"], ticker=a.get("ticker"), current_rupees=round(current[aid], 2),
-            current_pct=round(current[aid] / total * 100.0, 2), target_pct=round(target_pct.get(aid, 0.0), 2),
-            target_rupees=round(target, 2), action=action, rupees_to_trade=round(move, 2), units=units, price=price))
-    cost_pct = raw["rule"]["cost_pct_per_side"]
+        work[aid] = {"target": target, "price": price, "units": units, "action": action, "move": move}
+
+    def cash_after_trades() -> float:
+        sells = sum(w["move"] for w in work.values() if w["action"] == "SELL")
+        buys = sum(w["move"] for w in work.values() if w["action"] == "BUY")
+        return current["cash"] + sells - buys - (sells + buys) * cost_pct / 100.0
+
+    # A plan has to be payable: the purchases come from your cash and the sales, after costs. Assets inside the drift band are
+    # not sold, and units are rounded down, so the first draft can ask for more than you would have. Cut the purchases back
+    # (rounded down again) until it is affordable, and say so.
+    scaled_back = False
+    for _ in range(50):
+        short = -cash_after_trades()
+        buys = [(aid, w) for aid, w in work.items() if w["action"] == "BUY"]
+        if short <= 0 or not buys:
+            break
+        scaled_back = True
+        total_buys = sum(w["move"] for _, w in buys)
+        scale = max(0.0, 1.0 - short * 1.02 / total_buys)              # a little extra, so the next pass lands on the right side
+        for aid, w in buys:
+            w["units"] = int(w["units"] * scale * 1_000_000) / 1_000_000 if aid == "crypto" else float(int(w["units"] * scale))
+            w["move"] = w["units"] * w["price"]
+            if w["units"] == 0:
+                w["action"], w["units"], w["move"] = "HOLD", None, 0.0
+    traded = sum(w["move"] for w in work.values())
+    lines = [schemas.RebalanceLine(
+        asset_id=aid, name=by_id[aid]["name"], ticker=by_id[aid].get("ticker"), current_rupees=round(current[aid], 2),
+        current_pct=round(current[aid] / total * 100.0, 2), target_pct=round(target_pct.get(aid, 0.0), 2),
+        target_rupees=round(w["target"], 2), action=w["action"], rupees_to_trade=round(w["move"], 2), units=w["units"], price=w["price"])
+        for aid, w in work.items()]
+    notes = [f"An asset within {REBALANCE_BAND_PCT:g}% of the whole portfolio from its target is left alone, so small drifts cost nothing.",
+             "The rule itself rebalances every 21 trading days; trading more often than that only adds cost.",
+             "Prices are the last close, not live quotes, and units are rounded down. Taxes, brokerage on your own plan and the spread are not included.",
+             "This is a list to think with. This project places no orders."]
+    if scaled_back:
+        notes.insert(0, "Purchases were cut back a little so the list can be paid for from your cash and the sales after costs; the mix lands slightly short of the target.")
     return schemas.RebalanceResponse(
         profile_id=p["id"], profile_name=p["name"], recommended_on=p["recommended_on"], total=round(total, 2), band_pct=REBALANCE_BAND_PCT,
-        lines=lines, estimated_cost=round(traded * cost_pct / 100.0, 2),
-        notes=[f"An asset within {REBALANCE_BAND_PCT:g}% of the whole portfolio from its target is left alone, so small drifts cost nothing.",
-               "The rule itself rebalances every 21 trading days; trading more often than that only adds cost.",
-               "Prices are the last close, not live quotes, and units are rounded down; the cash line is whatever is left. Taxes, brokerage on your own plan and the spread are not included.",
-               "This is a list to think with. This project places no orders."])
+        lines=lines, estimated_cost=round(traded * cost_pct / 100.0, 2), cash_after=round(cash_after_trades(), 2), notes=notes)
 
 
 @api.get("/advisory/basket", response_model=schemas.BasketResponse,
@@ -471,9 +499,10 @@ def advisory_basket(profile: str = Query(..., description="Profile id, e.g. mode
         raise HTTPException(status_code=404, detail=f"Unknown profile '{profile}'. Choose one of: {', '.join(x['id'] for x in raw['profiles'])}.")
     by_id = {a["id"]: a for a in raw["assets"]}
     lines, spent = [], 0.0
+    weight_sum = sum(w["weight_pct"] for w in p["allocation"])           # the stored weights are rounded to 2 decimals and can add to 100.01
     for w in p["allocation"]:
         a = by_id[w["asset_id"]]
-        rupees = amount * w["weight_pct"] / 100.0
+        rupees = amount * w["weight_pct"] / weight_sum
         price, units, used = a.get("last_price"), None, 0.0
         if w["asset_id"] == "cash" or not price:
             used = rupees if w["asset_id"] == "cash" else 0.0

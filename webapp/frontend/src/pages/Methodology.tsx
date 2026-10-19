@@ -110,7 +110,7 @@ export function Methodology() {
 
       <Panel title="9. What this does not do">
         <ul>
-          <li>It does not place orders, hold positions or connect to an account. The broker feed is read-only market data.</li>
+          <li>It does not place orders, hold positions or connect to an account. The broker feed is read-only market data. Order execution is intended as later work, gated on a validated rule and the owner’s written change to the project’s rules (see <code>EXECUTION_DESIGN.md</code>).</li>
           <li>It does not claim an edge: the research record is mainly a list of things that looked good and were not.</li>
           <li>It is not investment advice. Simulations are not forecasts, and history from a free data source covers a short, unusual period.</li>
           <li>Backtests use today’s index members; the survivorship bias is disclosed and only partly estimated.</li>

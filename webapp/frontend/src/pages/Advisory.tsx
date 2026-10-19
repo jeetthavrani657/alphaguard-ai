@@ -187,7 +187,7 @@ function Rebalance({ p, d }: { p: AdvisoryProfile; d: AdvisoryResponse }) {
                 </tbody>
               </table>
             </div>
-            <p>Estimated cost of these trades at the rule’s {pct(d.rule.cost_pct_per_side, 2)} each way: <b className="num">₹{int(r.estimated_cost)}</b></p>
+            <p>Estimated cost of these trades at the rule’s {pct(d.rule.cost_pct_per_side, 2)} each way: <b className="num">₹{int(r.estimated_cost)}</b>. Cash left after the trades and their cost: <b className="num">₹{int(r.cash_after)}</b>.</p>
             <ul className="muted">{r.notes.map((n) => <li key={n}>{n}</li>)}</ul>
           </div>
         )}

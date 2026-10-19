@@ -621,6 +621,7 @@ class RebalanceResponse(BaseModel):
     band_pct: float = Field(description="Drift tolerated before an asset is traded, as % of the whole portfolio.")
     lines: list[RebalanceLine]
     estimated_cost: float = Field(description="Estimated cost of the listed trades at the rule's flat per-side cost.")
+    cash_after: float = Field(description="Cash left after the listed trades and their cost. Never negative: purchases are cut back until the list can be paid for.")
     notes: list[str]
 
 

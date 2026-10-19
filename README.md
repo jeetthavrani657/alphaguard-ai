@@ -836,6 +836,8 @@ how each profile behaved in four named bad stretches (COVID 2020, the 2021-22 be
 winter), including where it did not help. The Paper trading page lists each book's simulated fills (a paper blotter), and
 the Methodology page explains how every result was produced. None of this adds a hypothesis or places an order.
 
+Order execution is not built and is deliberately gated: see [EXECUTION_DESIGN.md](EXECUTION_DESIGN.md) for the conditions and the safety design that would have to exist first.
+
 The **Multi-asset** page holds the trading side of the topic: two trend-filter rules over the same six assets (`MULTIASSET_TREND.md`,
 `research/multiasset_trend.py`), registered once as hypotheses (ledger 210), judged by the same harness against a no-timing benchmark
 and the Nifty 50 ETF. Both are `VALIDATED_FAILED`: the filter lowered drawdowns but did not beat holding the same assets without timing.
