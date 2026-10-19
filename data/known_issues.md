@@ -334,3 +334,29 @@ Full reasoning per date is in `data/discontinuity_registry.py`.
   refresh the cache. Cost of the new policy: a window whose last day has no bar
   (weekend/holiday), or a stock that listed after `start`, re-downloads that
   symbol on every load (one request per symbol, as before, larger payload).
+
+---
+
+## Upstox daily data vs the yfinance cache (checked 2026-10-19, 8 stocks, 2015-2025)
+
+Source: `research/compare_upstox_yfinance.py`, via the read-only client `data/upstox_client.py` (free
+Upstox API, daily candles back to 2000). Stocks with splits/bonuses in the window: RELIANCE, HDFCBANK,
+INFY, TATASTEEL, TCS, ITC, MARUTI, ASIANPAINT. **This is a sample of 8, not the universe.**
+
+- **Same trading calendar.** About 2,720 days each; the two sources differ by only 2 days one way
+  (Diwali muhurat sessions 2017-10-19 and 2018-11-07 are in yfinance) and 8-11 days the other way
+  (Saturday/Sunday special sessions, plus 2025-03-18). Volumes match to about 0.01%.
+- **Split and bonus adjusted, both.** No source shows a -50%-style day; daily-return correlation is
+  0.992-0.9996.
+- **Dividends differ, on purpose of each source.** Upstox prices are NOT dividend-adjusted, yfinance's are.
+  The price ratio Upstox/yfinance is 1.10-1.56 in 2015 and about 1.0-1.05 in 2025. So the same backtest on
+  Upstox prices would show LOWER returns for dividend payers (roughly 1-4% a year for the ones tested):
+  **Upstox is not a drop-in replacement for the cache.** A dividend history would have to be added back.
+- **Two days differ by more than 5% in return:** ITC 2025-01-06 (the hotels demerger: Upstox -8.09%,
+  yfinance -4.55%, i.e. the two treat the demerger differently) and TATASTEEL 2018-01-31 (Upstox -9.15%,
+  yfinance -4.62%; cause not established).
+- **2025-03-18 was a real trading day.** Upstox has normal prices and volume for it; yfinance's row for that
+  date is the flat zero-volume artifact documented above, which the loader rightly strips. Upstox could fill
+  the gap if it ever matters.
+- **Not tested:** delisted/removed stocks (the instrument list covers listed ones), minute data, the live
+  feed, and the other ~440 stocks.
