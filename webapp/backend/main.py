@@ -26,6 +26,7 @@ Ground rules this file keeps (and tests/test_webapp_api.py enforces):
     and prices. It is a unit conversion, not a metric.)
 """
 
+import math
 import os
 from datetime import datetime, timezone
 from bisect import bisect_left, bisect_right
@@ -426,7 +427,7 @@ def advisory_rebalance(profile: str = Query(..., description="Profile id, e.g. m
             raise HTTPException(status_code=422, detail=f"'{part}' is not asset_id:rupees.")
         if key not in current:
             raise HTTPException(status_code=422, detail=f"Unknown asset '{key}'. Use: {', '.join(current)}.")
-        if amount < 0 or amount > 1_000_000_000:
+        if not math.isfinite(amount) or amount < 0 or amount > 1_000_000_000:      # 'nan' parses as a float and slips past every comparison
             raise HTTPException(status_code=422, detail=f"The amount for {key} must be between 0 and 100 crore rupees.")
         current[key] += amount
     total = sum(current.values())

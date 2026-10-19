@@ -778,6 +778,8 @@ def test_rebalance_rejects_bad_input_with_a_helpful_message(client, tmp_path, mo
     assert get("moderate", "bitcoinz:500000").status_code == 422
     assert get("moderate", "cash:abc").status_code == 422
     assert get("moderate", "cash:-5").status_code == 422
+    assert get("moderate", "cash:nan").status_code == 422 and get("moderate", "cash:500000,gold:NaN").status_code == 422     # NaN used to slip through as a 200 with invalid JSON
+    assert get("moderate", "cash:inf").status_code == 422
     assert get("moderate", "cash:500").status_code == 422 and "10,000" in get("moderate", "cash:500").json()["detail"]
 
 
