@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
@@ -240,7 +241,7 @@ export function Advisory() {
                   Simulated from {d.simulation_start} to {d.data_through} with the frozen rule (weights decided at one close, carried out the next day,
                   rebalanced every {d.rule.rebalance_every_days} trading days, {pct(d.rule.cost_pct_per_side, 2)} cost each way, cash at {pct(d.rule.cash_rate_pct, 0)}).
                   In-sample ends {d.in_sample_end}; nothing was fitted on either window. This profile counted as one of {d.ledger_total_at_generation} tested
-                  hypotheses and its status is <b>{p.harness_status}</b>: a simulation is not evidence of future results.
+                  hypotheses and its status is <b>{p.harness_status}</b>: a simulation is not evidence of future results. The same rule is now running forward on paper; see <Link to="/paper">Paper trading</Link>.
                 </p>
                 <Metrics p={p} />
                 <StrategyChart

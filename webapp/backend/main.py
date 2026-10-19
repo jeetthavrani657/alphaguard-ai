@@ -367,6 +367,16 @@ def advisory():
         trend=raw.get("trend", []), questions=raw["questionnaire"]["questions"], bands=raw["questionnaire"]["bands"], profiles=profiles)
 
 
+@api.get("/advisory/forward", response_model=schemas.AdvisoryForwardResponse,
+         summary="The three advisory profiles run forward on paper (research/advisory_forward.py): return against the Nifty 50 ETF, no early verdict.")
+def advisory_forward():
+    raw = store.load_advisory_forward_raw()
+    return schemas.AdvisoryForwardResponse(
+        generated_at=raw["generated_at"], start=raw["start"], first_counted_day=raw["first_counted_day"],
+        days_needed_for_verdict=int(raw["min_days_for_sharpe"]), disclaimer=raw["disclaimer"], benchmark=raw["benchmark"],
+        profiles=[schemas.AdvisoryForwardProfile(**p) for p in raw["profiles"]])
+
+
 @api.get("/advisory/basket", response_model=schemas.BasketResponse,
          summary="An indicative shopping list: the recommended weights of a profile turned into rupees and whole units for a given amount. Not an order.")
 def advisory_basket(profile: str = Query(..., description="Profile id, e.g. moderate."),

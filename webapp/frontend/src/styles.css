@@ -316,3 +316,5 @@ details summary { cursor: pointer; color: var(--muted); }
   .panel { border: 0; background: #fff; box-shadow: none; }
   table, th, td, .muted, li, p, h3 { color: #000 !important; }
 }
+
+.sectionhead { margin: 28px 0 10px; font-size: 18px; }

@@ -42,3 +42,5 @@ reports/output/health_last_run.log
 # Multi-asset advisory (research/advisory.py): cached ETF prices and the generated file.
 data/advisory/
 reports/output/advisory_latest.json
+reports/output/advisory_forward_latest.json
+reports/output/advisory_forward_last_run.log

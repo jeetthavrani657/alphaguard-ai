@@ -78,6 +78,16 @@ stays at 208.
 - **Trend monitor.** Each risky asset against its own 210-day average: a description of today. It makes no claim
   that the signal predicts anything, so it is shown without performance numbers.
 
+## Forward paper tracking (`research/advisory_forward.py`)
+
+The frozen rule is also run forward on data that did not exist when it was frozen, on the same dates as the paper
+books: base of 100 at the 2026-10-16 close, first countable session 2026-10-19. It adds **no** hypothesis (the three
+profiles were counted when registered). Everything is recomputed from raw prices with the same `simulate()`, so a
+re-run on the same data gives the same answer; `reports/output/advisory_forward.csv` keeps one row per profile and data
+date, so a vendor re-adjustment of the free price data would show. Nothing is judged early: no Sharpe is computed or
+served before 252 forward sessions. It runs daily from `run_forward_log.bat` (`--refresh` downloads fresh prices) and is
+shown on the web app's Paper trading page. Paper only: no orders.
+
 ## Limits
 
 Seven years of history including one crash; ETF and coin prices from a free source; no taxes, no real

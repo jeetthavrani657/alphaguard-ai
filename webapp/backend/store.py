@@ -79,6 +79,18 @@ def load_advisory_raw() -> dict:
     return _read_json(path)
 
 
+def advisory_forward_path() -> str:
+    return os.environ.get("WEBAPP_ADVISORY_FORWARD", os.path.join(ROOT, "reports", "output", "advisory_forward_latest.json"))
+
+
+def load_advisory_forward_raw() -> dict:
+    """research/advisory_forward.py's latest file, untouched."""
+    path = advisory_forward_path()
+    if not os.path.exists(path):
+        raise NotFound("No advisory forward results yet. Generate them from the project root with: python research/advisory_forward.py")
+    return _read_json(path)
+
+
 def health_latest_path() -> str:
     return os.environ.get("WEBAPP_HEALTH_LATEST", os.path.join(ROOT, "reports", "output", "health_latest.json"))
 

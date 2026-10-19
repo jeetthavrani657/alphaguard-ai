@@ -157,6 +157,8 @@ def run_checks(today: date, root: str = PROJECT_ROOT, task_info=read_task_info) 
                          _newest_csv_date(os.path.join(out, "forward_snapshots.csv"), "run_date"), today),
         check_dated_file("books_log", "Paper books history (forward_books.csv)",
                          _newest_csv_date(os.path.join(out, "forward_books.csv"), "run_date"), today),
+        check_dated_file("advisory_log", "Advisory forward history (advisory_forward.csv)",
+                         _newest_csv_date(os.path.join(out, "advisory_forward.csv"), "run_date"), today),
         check_dated_file("price_data", "Price data behind the books (oldest book's data date)", books_data, today),
         check_dated_file("news", "News archive (news_log.csv)",
                          _newest_csv_date(os.path.join(root, "data", "news", "news_log.csv"), "first_seen_utc"), today,
@@ -164,6 +166,7 @@ def run_checks(today: date, root: str = PROJECT_ROOT, task_info=read_task_info) 
         check_weekly("fundamentals", "Fundamentals archive (weekly)", fund_date, today),
     ]
     for cid, label, log in (("log_books", "Paper books run", "forward_books_last_run.log"),
+                            ("log_advisory", "Advisory forward run", "advisory_forward_last_run.log"),
                             ("log_news", "News logger run", "news_last_run.log"),
                             ("log_fundamentals", "Fundamentals run", "fundamentals_last_run.log"),
                             ("log_dip", "Dip-rule run", "forward_last_run.log")):

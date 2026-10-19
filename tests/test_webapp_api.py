@@ -720,6 +720,34 @@ def test_basket_rejects_unknown_profiles_and_tiny_or_huge_amounts(client, tmp_pa
     assert client.get("/api/advisory/basket", params={"profile": "moderate", "amount": 5e10}).status_code == 422
 
 
+def test_advisory_forward_serves_the_three_profiles_with_a_clock_and_no_early_sharpe(client, tmp_path, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    import advisory as adv
+    import advisory_forward as fwd
+    rng = np.random.default_rng(8)
+    vols = {"equity_large": 0.010, "equity_mid": 0.013, "intl_equity": 0.012, "gold": 0.008, "debt": 0.004, "crypto": 0.035}
+    idx = pd.bdate_range(end="2026-10-23", periods=1500)
+    r = pd.DataFrame({k: rng.normal(0.0003, v, 1500) for k, v in vols.items()}, index=idx)
+    r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
+    path = tmp_path / "fwd.json"
+    fwd.write_latest([fwd.build_profile(pid, r) for pid in adv.PROFILES], str(path))
+    monkeypatch.setenv("WEBAPP_ADVISORY_FORWARD", str(path))
+    d = client.get("/api/advisory/forward").json()
+    assert [p["id"] for p in d["profiles"]] == ["conservative", "moderate", "aggressive"] and d["days_needed_for_verdict"] == 252
+    p = d["profiles"][1]
+    assert p["status"] == "RUNNING" and p["n_trading_days"] == 5 and p["growth_strategy"]["values"][0] == 100.0
+    assert "sharpe" not in p["summary"] and p["summary"]["withheld_reason"].startswith("withheld")
+    assert abs(sum(m["weight_pct"] for m in p["current_mix"]) - 100) < 0.2
+    assert _find_bare_ratios(d) == []
+
+
+def test_advisory_forward_missing_is_a_helpful_404(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_ADVISORY_FORWARD", str(tmp_path / "nope.json"))
+    r = client.get("/api/advisory/forward")
+    assert r.status_code == 404 and "advisory_forward.py" in r.json()["detail"]
+
+
 def test_advisory_missing_is_a_helpful_404(client, tmp_path, monkeypatch):
     monkeypatch.setenv("WEBAPP_ADVISORY", str(tmp_path / "nope.json"))
     r = client.get("/api/advisory")

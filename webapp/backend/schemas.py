@@ -706,6 +706,46 @@ class AdvisoryResponse(BaseModel):
     profiles: list[AdvisoryProfile]
 
 
+class AdvisoryForwardSummary(BaseModel):
+    return_pct: float
+    benchmark_return_pct: float
+    max_drawdown_pct: float
+    benchmark_max_drawdown_pct: float
+    exposure_pct: float
+    withheld_reason: str = Field("", description="Why no Sharpe is shown yet. A forward Sharpe is never served before the pre-registered number of days.")
+
+
+class AdvisoryForwardProfile(BaseModel):
+    id: str
+    name: str
+    status: Literal["NOT_STARTED", "RUNNING"]
+    data_through: str
+    n_trading_days: int
+    summary: Optional[AdvisoryForwardSummary] = None
+    growth_strategy: Optional[EquityCurve] = None
+    growth_benchmark: Optional[EquityCurve] = None
+    current_mix: list[AdvisoryWeight] = []
+    mix_as_of: Optional[str] = None
+    guard_on: bool = False
+    n_rebalances_since_start: int = 0
+    note: str = ""
+
+
+class AdvisoryForwardResponse(BaseModel):
+    """
+    The three advisory profiles run forward on data that did not exist when the rule was frozen
+    (research/advisory_forward.py). Paper only. The profiles were counted in the ledger when registered; this
+    adds no hypothesis. No Sharpe is served before `days_needed_for_verdict` forward sessions.
+    """
+    generated_at: str
+    start: str
+    first_counted_day: str
+    days_needed_for_verdict: int
+    disclaimer: str
+    benchmark: str
+    profiles: list[AdvisoryForwardProfile]
+
+
 # --- live prices ------------------------------------------------------------------
 
 class LiveQuote(BaseModel):

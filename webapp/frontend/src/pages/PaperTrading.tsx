@@ -8,7 +8,7 @@ import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { int, num, pct, signClass } from "../fmt";
-import type { ForwardBook, LiveQuote } from "../api/types";
+import type { AdvisoryForwardProfile, AdvisoryForwardResponse, ForwardBook, LiveQuote } from "../api/types";
 
 /**
  * Paper trading: the frozen candidate strategies, run forward on data that did not exist when they
@@ -141,6 +141,86 @@ function BookCard({ book }: { book: ForwardBook }) {
 }
 
 /**
+ * The three multi-asset advisory profiles, run forward on paper (research/advisory_forward.py). Same discipline as the
+ * books above: no verdict and no Sharpe before the pre-registered number of days. Compared with buying and holding the
+ * Nifty 50 ETF. The advisory rule was frozen and counted in the ledger when it was registered, so this adds no hypothesis.
+ */
+function AdvisoryProfileCard({ p, need, name }: { p: AdvisoryForwardProfile; need: number; name: (id: string) => string }) {
+  const s = p.summary;
+  return (
+    <Panel title={`${p.name} profile`} right={<span><StatusChip status={p.status} /> <span className="muted">data through {p.data_through}</span></span>}>
+      <div className="clock">
+        <div className="clock-head">
+          <span className="stat-label">Forward clock</span>
+          <span className="mono">{p.n_trading_days} of {need} trading days</span>
+        </div>
+        <progress value={p.n_trading_days} max={need} aria-label="forward days toward a verdict" />
+      </div>
+      {!s ? <p className="note info">{p.note}</p> : (
+        <>
+          <div className="stats" style={{ marginTop: 14 }}>
+            <div className="stat">
+              <span className="stat-label">Return since start</span>
+              <span className={`stat-value ${signClass(s.return_pct)}`}>{pct(s.return_pct, 2)}</span>
+              <span className="stat-note">Nifty 50 ETF: <b className={signClass(s.benchmark_return_pct)}>{pct(s.benchmark_return_pct, 2)}</b></span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Worst drawdown</span>
+              <span className="stat-value">{pct(s.max_drawdown_pct, 2)}</span>
+              <span className="stat-note">Nifty 50 ETF: {pct(s.benchmark_max_drawdown_pct, 2)}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Invested (not in cash)</span>
+              <span className="stat-value">{pct(s.exposure_pct, 0)}</span>
+              <span className="stat-note">{p.guard_on ? "drawdown guard ON" : "drawdown guard off"} · {p.n_rebalances_since_start} rebalances since start</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">Sharpe</span>
+              <span className="stat-note">{s.withheld_reason || "Not computed here."}</span>
+            </div>
+          </div>
+          <h3>Mix the rule currently recommends (formed {p.mix_as_of})</h3>
+          <div className="alloc">
+            {p.current_mix.map((w) => (
+              <div className="alloc-row" key={w.asset_id}>
+                <span>{name(w.asset_id)}</span>
+                <div className="alloc-bar"><div className="alloc-fill" style={{ width: `${w.weight_pct}%` }} /></div>
+                <b className="num">{pct(w.weight_pct, 1)}</b>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Panel>
+  );
+}
+
+function AdvisoryForward() {
+  const state = useApi(() => api.advisoryForward(), []);
+  const assets = useApi(() => api.advisory(), []);
+  const names: Record<string, string> = {};
+  if (assets.status === "ready") for (const a of assets.data.assets) names[a.id] = a.name;
+  const name = (id: string) => names[id] ?? id;
+  return (
+    <>
+      <h2 className="sectionhead">Multi-asset advisory profiles, run forward</h2>
+      <Async state={state}>
+        {(d: AdvisoryForwardResponse) => (
+          <>
+            <p className="note info">
+              The three <Link to="/advisory">Advisory</Link> profiles, run on data that did not exist when the rule was frozen, from {d.start}{" "}
+              (first countable session {d.first_counted_day}), against buying and holding the {d.benchmark.replace(" buy-and-hold", "")}. Paper only: nothing places an order.
+              No verdict and no Sharpe before {d.days_needed_for_verdict} trading days.
+            </p>
+            {d.profiles.map((p) => <AdvisoryProfileCard key={p.id} p={p} need={d.days_needed_for_verdict} name={name} />)}
+          </>
+        )}
+      </Async>
+    </>
+  );
+}
+
+/**
  * Near-live prices of the stocks the books hold. A display only: the books run on daily bars and never use
  * these prices. research/live_quotes.py writes them (and works out the change %); this page shows them,
  * refreshing every 10 seconds, and says so plainly when the feed is off, stale or the token has expired.
@@ -220,6 +300,7 @@ export function PaperTrading() {
             </p>
             <LivePrices books={d.books} />
             {d.books.map((b) => <BookCard key={b.id} book={b} />)}
+            <AdvisoryForward />
             <p className="muted">Generated {d.generated_at.slice(0, 16).replace("T", " ")} UTC.</p>
           </>
         )}

@@ -259,6 +259,14 @@ def run_checks(base: str) -> None:
     check(fetch(base, "/api/advisory/basket?profile=moderate&amount=5")[0] == 422, "a basket amount below the minimum is refused")
     check(len(ad["trend"]) == 6 and all(t["signal"] in ("UPTREND", "DOWNTREND") for t in ad["trend"]), "trend monitor covers the six risky assets")
 
+    print("[smoke] advisory forward paper tracking")
+    st, af = fetch(base, "/api/advisory/forward")
+    check(st == 200 and len(af["profiles"]) == 3, "advisory forward responds with three profiles")
+    check(bare_ratios(af) == [] and all("sharpe" not in (p["summary"] or {}) for p in af["profiles"]), "no Sharpe is served before the forward gate")
+    for p in af["profiles"]:
+        check(p["growth_strategy"]["values"][0] == 100.0 and p["n_trading_days"] == len(p["growth_strategy"]["dates"]) - 1,
+              f"{p['id']}: forward base is 100 and the freeze day is not counted as a forward day")
+
     print("[smoke] refusals")
     check(fetch(base, "/api/strategies/definitely_not_one")[0] == 404, "unknown strategy id is 404")
     check(fetch(base, "/api/strategies/manifest")[0] == 404, "a snapshot filename is not a strategy id")

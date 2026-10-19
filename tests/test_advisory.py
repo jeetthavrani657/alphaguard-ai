@@ -263,3 +263,13 @@ def test_trend_state_compares_the_last_price_with_its_own_210_day_average_and_de
     assert rows[0]["signal"] == "UPTREND" and rows[0]["distance_pct"] > 0
     assert rows[1]["signal"] == "DOWNTREND" and rows[1]["distance_pct"] < 0
     assert rows[0]["average_210d"] == round(float(up.iloc[-210:].mean()), 2)
+
+
+def test_a_refresh_never_deletes_a_cached_day_the_source_has_not_published_yet_and_fresh_values_win():
+    idx = pd.bdate_range("2026-10-12", periods=6)                    # Mon 12 .. Mon 19
+    cached = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], index=idx)    # the 19th was a provisional close
+    fresh = pd.Series([1.0, 2.0, 3.5, 4.0, 5.0], index=idx[:5])      # the source has no close for the 19th yet; it revised the 14th
+    merged = adv.merge_fresh(cached, fresh)
+    assert list(merged.index) == list(idx) and merged.iloc[2] == 3.5 and merged.iloc[-1] == 6.0
+    final = pd.concat([fresh, pd.Series([6.25], index=idx[5:])])     # later the final close arrives and corrects the provisional one
+    assert adv.merge_fresh(merged, final).iloc[-1] == 6.25

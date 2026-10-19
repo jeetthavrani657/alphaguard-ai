@@ -158,6 +158,16 @@ def clean_prices(prices: pd.DataFrame) -> tuple:
     return clean.ffill(), removed
 
 
+def merge_fresh(cached: pd.Series, fresh: pd.Series) -> pd.Series:
+    """
+    Combine a re-download with the cache. The free source publishes the latest day late (its row can exist with no
+    close yet), so a plain overwrite would DELETE a day the cache already holds and set the forward test back a
+    session. Fresh values win wherever the source has them (so a provisional close is corrected once the final one
+    appears); a cached day the source does not have yet is kept.
+    """
+    return fresh.combine_first(cached).sort_index()
+
+
 def load_prices(refresh: bool = False) -> pd.DataFrame:
     """Daily closes of every priced asset on the NSE trading calendar, from the day ALL of them exist."""
     import yfinance as yf                              # imported here: the tests never touch the network
@@ -169,7 +179,10 @@ def load_prices(refresh: bool = False) -> pd.DataFrame:
         path = os.path.join(CACHE_DIR, a["ticker"].replace("^", "").replace("/", "_") + ".csv")
         if refresh or not os.path.exists(path):
             d = yf.download(a["ticker"], start="2010-01-01", progress=False, auto_adjust=True, multi_level_index=False)
-            d["Close"].dropna().rename("close").to_csv(path, header=True)
+            fresh = d["Close"].dropna().rename("close")
+            if os.path.exists(path):
+                fresh = merge_fresh(pd.read_csv(path, index_col=0, parse_dates=True)["close"], fresh)
+            fresh.to_csv(path, header=True)
         series[a["id"]] = pd.read_csv(path, index_col=0, parse_dates=True)["close"]
     calendar = series[BENCHMARK_ID].index                # the NSE calendar; Bitcoin trades every day, so it is carried onto these dates
     prices = pd.DataFrame({k: v.reindex(v.index.union(calendar)).ffill().reindex(calendar) for k, v in series.items()})

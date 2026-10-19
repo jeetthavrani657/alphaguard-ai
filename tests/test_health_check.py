@@ -85,10 +85,11 @@ def _project(tmp_path, books_through="2026-10-19", run_date="2026-10-19", news="
     (tmp_path / "data" / "fundamentals").mkdir(parents=True)
     (out / "forward_snapshots.csv").write_text(f"run_date,data_through\n2026-10-15,2026-10-14\n{run_date},{run_date}\n")
     (out / "forward_books.csv").write_text(f"run_date,book_id,data_through\n{run_date},a,{books_through}\n")
+    (out / "advisory_forward.csv").write_text(f"run_date,profile_id,data_through\n{run_date},moderate,{run_date}\n")
     (out / "forward_books_latest.json").write_text(json.dumps({"books": [{"data_through": books_through}]}))
     (tmp_path / "data" / "news" / "news_log.csv").write_text(f"symbol,first_seen_utc\nTCS,{news}\n")
     (tmp_path / "data" / "fundamentals" / "yf_last_run.txt").write_text("2026-10-16T10:28:29Z")
-    for log in ("forward_books_last_run.log", "news_last_run.log", "fundamentals_last_run.log", "forward_last_run.log"):
+    for log in ("forward_books_last_run.log", "advisory_forward_last_run.log", "news_last_run.log", "fundamentals_last_run.log", "forward_last_run.log"):
         (out / log).write_text("all good\n")
     return tmp_path
 
@@ -99,7 +100,7 @@ def _task_ok():
 
 def test_a_healthy_project_passes_every_check(tmp_path):
     checks = hc.run_checks(MON, str(_project(tmp_path)), lambda: _task_ok())
-    assert [c["status"] for c in checks] == ["OK"] * 10 and hc.overall(checks) == "OK"
+    assert [c["status"] for c in checks] == ["OK"] * 12 and hc.overall(checks) == "OK"
 
 
 def test_each_kind_of_silent_failure_is_caught(tmp_path):
@@ -111,6 +112,7 @@ def test_each_kind_of_silent_failure_is_caught(tmp_path):
     assert by["task"]["status"] == "FAIL" and by["dip_log"]["status"] == "FAIL"
     assert by["price_data"]["status"] == "FAIL" and by["news"]["status"] == "FAIL"
     assert by["log_news"]["status"] == "FAIL" and "feed down" in by["log_news"]["detail"]
+    assert by["advisory_log"]["status"] == "OK" and by["log_advisory"]["status"] == "OK"
     assert by["fundamentals"]["status"] == "OK" and by["log_books"]["status"] == "OK"             # and healthy parts stay green
     assert hc.overall(list(by.values())) == "FAIL"
 

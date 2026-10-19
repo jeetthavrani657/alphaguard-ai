@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/advisory/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The three advisory profiles run forward on paper (research/advisory_forward.py): return against the Nifty 50 ETF, no early verdict. */
+        get: operations["advisory_forward_api_advisory_forward_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/advisory/basket": {
         parameters: {
             query?: never;
@@ -315,6 +332,88 @@ export interface components {
             labels: string[];
             /** Matrix */
             matrix: number[][];
+        };
+        /** AdvisoryForwardProfile */
+        AdvisoryForwardProfile: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "NOT_STARTED" | "RUNNING";
+            /** Data Through */
+            data_through: string;
+            /** N Trading Days */
+            n_trading_days: number;
+            summary?: components["schemas"]["AdvisoryForwardSummary"] | null;
+            growth_strategy?: components["schemas"]["EquityCurve"] | null;
+            growth_benchmark?: components["schemas"]["EquityCurve"] | null;
+            /**
+             * Current Mix
+             * @default []
+             */
+            current_mix: components["schemas"]["AdvisoryWeight"][];
+            /** Mix As Of */
+            mix_as_of?: string | null;
+            /**
+             * Guard On
+             * @default false
+             */
+            guard_on: boolean;
+            /**
+             * N Rebalances Since Start
+             * @default 0
+             */
+            n_rebalances_since_start: number;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * AdvisoryForwardResponse
+         * @description The three advisory profiles run forward on data that did not exist when the rule was frozen
+         *     (research/advisory_forward.py). Paper only. The profiles were counted in the ledger when registered; this
+         *     adds no hypothesis. No Sharpe is served before `days_needed_for_verdict` forward sessions.
+         */
+        AdvisoryForwardResponse: {
+            /** Generated At */
+            generated_at: string;
+            /** Start */
+            start: string;
+            /** First Counted Day */
+            first_counted_day: string;
+            /** Days Needed For Verdict */
+            days_needed_for_verdict: number;
+            /** Disclaimer */
+            disclaimer: string;
+            /** Benchmark */
+            benchmark: string;
+            /** Profiles */
+            profiles: components["schemas"]["AdvisoryForwardProfile"][];
+        };
+        /** AdvisoryForwardSummary */
+        AdvisoryForwardSummary: {
+            /** Return Pct */
+            return_pct: number;
+            /** Benchmark Return Pct */
+            benchmark_return_pct: number;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number;
+            /** Benchmark Max Drawdown Pct */
+            benchmark_max_drawdown_pct: number;
+            /** Exposure Pct */
+            exposure_pct: number;
+            /**
+             * Withheld Reason
+             * @description Why no Sharpe is shown yet. A forward Sharpe is never served before the pre-registered number of days.
+             * @default
+             */
+            withheld_reason: string;
         };
         /** AdvisoryOption */
         AdvisoryOption: {
@@ -1843,6 +1942,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdvisoryResponse"];
+                };
+            };
+        };
+    };
+    advisory_forward_api_advisory_forward_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisoryForwardResponse"];
                 };
             };
         };

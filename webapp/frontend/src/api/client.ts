@@ -5,7 +5,7 @@
 // whatever the API sends is what the screen shows.
 
 import type {
-  AdvisoryResponse, BasketResponse, DataQualityResponse, EquityResponse, ForwardBooksResponse, ForwardResponse, Health, LedgerResponse, LiveQuotesResponse, PriceSeries,
+  AdvisoryForwardResponse, AdvisoryResponse, BasketResponse, DataQualityResponse, EquityResponse, ForwardBooksResponse, ForwardResponse, Health, LedgerResponse, LiveQuotesResponse, PriceSeries,
   ScreenerResponse, StrategyDetail, StrategyList, SymbolDetail, TradePage, Window,
 } from "./types";
 
@@ -57,5 +57,6 @@ export const api = {
   forwardBooks: () => get<ForwardBooksResponse>("/forward-books"),
   liveQuotes: () => get<LiveQuotesResponse>("/live-quotes"),
   advisory: () => get<AdvisoryResponse>("/advisory"),
+  advisoryForward: () => get<AdvisoryForwardResponse>("/advisory/forward"),
   basket: (profile: string, amount: number) => get<BasketResponse>("/advisory/basket", { profile, amount }),
 };

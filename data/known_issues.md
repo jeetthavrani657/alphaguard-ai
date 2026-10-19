@@ -372,3 +372,15 @@ ten frozen picks' opens and closes from **Upstox** and from the **yfinance cache
 weight gross return -0.319% from both); with whole-share rounding (99.0% of capital invested) and the engine's
 buy-side costs (STT 0.1%, stamp 0.015%, exchange and SEBI charges, GST, 0.05% slippage) the net is -0.480%. The
 forward machinery, the data and the cost model reproduce a real day to three decimals.
+
+## yfinance publishes the latest day late, and a plain refresh deleted it (found 2026-10-20)
+
+For the advisory's ETF prices, yfinance returned a row for 2026-10-19 with a volume but an empty close in the hours
+after the session (on the evening of the 19th it had returned a provisional close). The advisory loader overwrote its
+cache with each re-download and dropped empty closes, so the forward tracker slid back from "1 forward day" to "not
+started". Fix: `advisory.merge_fresh` keeps a cached day the source does not have yet, and lets fresh values win where
+it does, so a provisional close is corrected once the final one appears. Three cache rows lost that morning were
+restored from the previous output file (261.20, 311.42, 119.83: the provisional closes of 2026-10-19). Re-downloading
+also re-adjusts history slightly (the moderate profile's first forward day moved from -0.632% to -0.641%); that is the
+kind of vendor revision `advisory_forward.csv` keeps one row per run to expose. The paper books are not affected: their
+latest candle comes from Upstox's intraday endpoint.
