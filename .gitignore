@@ -32,3 +32,6 @@ reports/output/forward_books_latest.json
 # Verified fundamentals extracted from public filings (fundamentals/): personal research data.
 data/fundamentals/
 reports/output/fundamentals_last_run.log
+
+# Upstox read-only data cache (data/upstox_client.py): the public instrument list, re-downloaded weekly.
+data/upstox/
