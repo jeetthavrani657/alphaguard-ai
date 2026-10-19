@@ -67,6 +67,18 @@ def load_live_quotes_raw() -> Optional[dict]:
     return _read_json(path) if os.path.exists(path) else None
 
 
+def advisory_path() -> str:
+    return os.environ.get("WEBAPP_ADVISORY", os.path.join(ROOT, "reports", "output", "advisory_latest.json"))
+
+
+def load_advisory_raw() -> dict:
+    """research/advisory.py's latest file, untouched (the API only labels and validates it)."""
+    path = advisory_path()
+    if not os.path.exists(path):
+        raise NotFound("No advisory results yet. Generate them from the project root with: python research/advisory.py")
+    return _read_json(path)
+
+
 def health_latest_path() -> str:
     return os.environ.get("WEBAPP_HEALTH_LATEST", os.path.join(ROOT, "reports", "output", "health_latest.json"))
 

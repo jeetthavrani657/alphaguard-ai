@@ -326,6 +326,45 @@ def forward_books():
                                         first_counted_day=raw["first_counted_day"], books=books)
 
 
+def _advisory_metrics(m: dict, window: str, status: str, total: int, p_value, bar) -> schemas.AdvisoryRiskMetrics:
+    clears = None if p_value is None or bar is None else bool(p_value < bar)
+    ratio = schemas.RiskAdjustedRatio(kind="sharpe", value=m.get("sharpe"), window=window, status=status, as_of_hypotheses=total,
+                                      p_value=p_value, bonferroni_bar=bar, clears_bar=clears)
+    return schemas.AdvisoryRiskMetrics(
+        sharpe=ratio, cagr_pct=m.get("cagr_pct"), volatility_pct=m.get("volatility_pct"), max_drawdown_pct=m.get("max_drawdown_pct"),
+        var95_pct=m.get("var95_pct"), cvar95_pct=m.get("cvar95_pct"), worst_month_pct=m.get("worst_month_pct"), calmar=m.get("calmar"),
+        n_days=int(m["n_days"]))
+
+
+@api.get("/advisory", response_model=schemas.AdvisoryResponse,
+         summary="The multi-asset, risk-managed allocation tool: recommended mixes, risk metrics and a historical simulation per profile.")
+def advisory():
+    raw = store.load_advisory_raw()
+    total = int(raw["ledger_total"])
+    now = store.ledger_total_now()
+    profiles = []
+    for p in raw["profiles"]:
+        def windows(key, status, pv_is, pv_oos, bar):
+            m = p[key]
+            return schemas.AdvisoryWindows(in_sample=_advisory_metrics(m["in_sample"], "in_sample", status, total, pv_is, bar),
+                                           out_of_sample=_advisory_metrics(m["out_of_sample"], "out_of_sample", status, total, pv_oos, bar))
+        profiles.append(schemas.AdvisoryProfile(
+            id=p["id"], name=p["name"], blurb=p["blurb"], target_volatility_pct=p["target_volatility_pct"],
+            drawdown_limit_pct=p["drawdown_limit_pct"], caps_pct=p["caps_pct"], recommended_on=p["recommended_on"], guard_on=p["guard_on"],
+            allocation=[schemas.AdvisoryWeight(**a) for a in p["allocation"]], harness_status=p["harness_status"],
+            strategy=windows("metrics", p["harness_status"], p["p_value_in_sample"], p["p_value_out_of_sample"], p["bonferroni_bar"]),
+            benchmark=windows("benchmark_metrics", "BENCHMARK_NOT_A_HYPOTHESIS", None, None, None),
+            growth_strategy=p["growth_strategy"], growth_benchmark=p["growth_benchmark"],
+            drawdown_strategy_pct=p["drawdown_strategy_pct"], drawdown_benchmark_pct=p["drawdown_benchmark_pct"],
+            exposure_pct=p["exposure_pct"], n_rebalances=p["n_rebalances"], cost_paid_pct_of_start=p["cost_paid_pct_of_start"]))
+    return schemas.AdvisoryResponse(
+        generated_at=raw["generated_at"], data_through=raw["data_through"], simulation_start=raw["simulation_start"],
+        in_sample_end=raw["in_sample_end"], out_of_sample_start=raw["out_of_sample_start"], ledger_total_at_generation=total,
+        ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], benchmark=raw["benchmark"],
+        rule=raw["rule"], data_cleaning=raw["data_cleaning"], assets=raw["assets"], correlation=raw["correlation"],
+        questions=raw["questionnaire"]["questions"], bands=raw["questionnaire"]["bands"], profiles=profiles)
+
+
 # A price file older than this is "stale": the writer polls every 10 s while the market is open and every
 # 5 minutes otherwise, so these leave generous room before the page warns that the feed has stopped.
 LIVE_STALE_OPEN_SECONDS = 60

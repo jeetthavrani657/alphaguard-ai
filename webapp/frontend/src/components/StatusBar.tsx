@@ -37,7 +37,7 @@ export function StatusBar() {
         CODE <b>{h.git_commit ?? "?"}</b>
         {h.git_dirty ? <span className="warn"> +uncommitted changes</span> : null}
       </span>
-      <span>PRICES ARE SPLIT/DIVIDEND-ADJUSTED · LAST CLOSE OF THE RESEARCH WINDOW, NOT LIVE</span>
+      <span>RESEARCH PRICES: SPLIT/DIVIDEND-ADJUSTED, THROUGH THE DATE ABOVE</span>
     </div>
   );
 }

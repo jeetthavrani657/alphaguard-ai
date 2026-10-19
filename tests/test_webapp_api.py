@@ -634,3 +634,54 @@ def test_no_health_file_yet_leaves_the_fields_empty_without_breaking_health(clie
     monkeypatch.setenv("WEBAPP_HEALTH_LATEST", str(tmp_path / "nope.json"))
     h = client.get("/api/health").json()
     assert h["ok"] is True and h["forward_health"] is None and h["forward_health_problems"] == []
+
+
+# --- multi-asset advisory ---------------------------------------------------------------------------------------
+
+def _advisory_file(tmp_path, monkeypatch, ledger_total_now=204):
+    import advisory as adv
+    import numpy as np
+    import pandas as pd
+    rng = np.random.default_rng(4)
+    vols = {"equity_large": 0.010, "equity_mid": 0.013, "intl_equity": 0.012, "gold": 0.008, "debt": 0.004, "crypto": 0.035}
+    idx = pd.bdate_range("2020-01-01", periods=1500)
+    r = pd.DataFrame({k: rng.normal(0.0003, v, 1500) for k, v in vols.items()}, index=idx)
+    r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
+    payload = adv.build(r, None, register=False, ledger_total_now=ledger_total_now)
+    path = tmp_path / "advisory.json"
+    path.write_text(json.dumps(payload))
+    monkeypatch.setenv("WEBAPP_ADVISORY", str(path))
+
+
+def test_advisory_serves_three_profiles_with_allocation_risk_metrics_and_series(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch)
+    d = client.get("/api/advisory").json()
+    assert [p["id"] for p in d["profiles"]] == ["conservative", "moderate", "aggressive"] and d["is_stale"] is False
+    p = d["profiles"][1]
+    assert abs(sum(a["weight_pct"] for a in p["allocation"]) - 100) < 0.2
+    oos = p["strategy"]["out_of_sample"]
+    assert oos["var95_pct"] > 0 and oos["cvar95_pct"] >= oos["var95_pct"] and oos["max_drawdown_pct"] < 0
+    assert len(p["growth_strategy"]["dates"]) == len(p["exposure_pct"]["dates"]) == len(p["drawdown_strategy_pct"]["dates"])
+    assert "not investment advice" in d["disclaimer"] and len(d["questions"]) == 5
+
+
+def test_every_advisory_sharpe_carries_its_status_and_hypothesis_count_and_the_benchmark_is_not_a_hypothesis(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch)
+    d = client.get("/api/advisory").json()
+    assert _find_bare_ratios(d) == []
+    p = d["profiles"][0]
+    s = p["strategy"]["out_of_sample"]["sharpe"]
+    assert s["status"] == p["harness_status"] and s["as_of_hypotheses"] == d["ledger_total_at_generation"] and s["bonferroni_bar"] > 0
+    assert p["benchmark"]["in_sample"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS"
+
+
+def test_advisory_results_are_flagged_stale_when_the_ledger_has_grown_since(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, ledger_total_now=200)         # generated when the ledger said 200; the fixture ledger says 204
+    d = client.get("/api/advisory").json()
+    assert d["is_stale"] is True and d["ledger_total_at_generation"] == 200 and d["ledger_total_now"] == 204
+
+
+def test_advisory_missing_is_a_helpful_404(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_ADVISORY", str(tmp_path / "nope.json"))
+    r = client.get("/api/advisory")
+    assert r.status_code == 404 and "advisory.py" in r.json()["detail"]

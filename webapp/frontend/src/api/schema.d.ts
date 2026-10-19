@@ -191,6 +191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/advisory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The multi-asset, risk-managed allocation tool: recommended mixes, risk metrics and a historical simulation per profile. */
+        get: operations["advisory_api_advisory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live-quotes": {
         parameters: {
             query?: never;
@@ -229,6 +246,206 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdvisoryAsset */
+        AdvisoryAsset: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Ticker */
+            ticker?: string | null;
+            /** Asset Class */
+            asset_class: string;
+            /** Cagr Pct */
+            cagr_pct?: number | null;
+            /** Volatility Pct */
+            volatility_pct?: number | null;
+            /** Max Drawdown Pct */
+            max_drawdown_pct?: number | null;
+        };
+        /** AdvisoryBand */
+        AdvisoryBand: {
+            /** Max Points */
+            max_points: number;
+            /** Profile */
+            profile: string;
+        };
+        /** AdvisoryCleaning */
+        AdvisoryCleaning: {
+            /** Rule */
+            rule: string;
+            /**
+             * Removed
+             * @default []
+             */
+            removed: components["schemas"]["AdvisoryRemovedPrice"][];
+        };
+        /** AdvisoryCorrelation */
+        AdvisoryCorrelation: {
+            /** Labels */
+            labels: string[];
+            /** Matrix */
+            matrix: number[][];
+        };
+        /** AdvisoryOption */
+        AdvisoryOption: {
+            /** Label */
+            label: string;
+            /** Points */
+            points: number;
+        };
+        /** AdvisoryProfile */
+        AdvisoryProfile: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Blurb */
+            blurb: string;
+            /** Target Volatility Pct */
+            target_volatility_pct: number;
+            /** Drawdown Limit Pct */
+            drawdown_limit_pct: number;
+            /** Caps Pct */
+            caps_pct: {
+                [key: string]: number;
+            };
+            /** Recommended On */
+            recommended_on: string;
+            /** Guard On */
+            guard_on: boolean;
+            /** Allocation */
+            allocation: components["schemas"]["AdvisoryWeight"][];
+            /**
+             * Harness Status
+             * @enum {string}
+             */
+            harness_status: "UNVALIDATED" | "VALIDATED_FAILED" | "OOS_ONLY_SIGNIFICANT" | "VALIDATED_CONFIRMED" | "BENCHMARK_NOT_A_HYPOTHESIS" | "SLICE_OF_POOLED_HYPOTHESIS";
+            strategy: components["schemas"]["AdvisoryWindows"];
+            benchmark: components["schemas"]["AdvisoryWindows"];
+            growth_strategy: components["schemas"]["EquityCurve"];
+            growth_benchmark: components["schemas"]["EquityCurve"];
+            drawdown_strategy_pct: components["schemas"]["EquityCurve"];
+            drawdown_benchmark_pct: components["schemas"]["EquityCurve"];
+            exposure_pct: components["schemas"]["EquityCurve"];
+            /** N Rebalances */
+            n_rebalances: number;
+            /** Cost Paid Pct Of Start */
+            cost_paid_pct_of_start: number;
+        };
+        /** AdvisoryQuestion */
+        AdvisoryQuestion: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+            /** Options */
+            options: components["schemas"]["AdvisoryOption"][];
+        };
+        /** AdvisoryRemovedPrice */
+        AdvisoryRemovedPrice: {
+            /** Asset Id */
+            asset_id: string;
+            /** Date */
+            date: string;
+            /** Price */
+            price: number;
+            /** Neighbour Price */
+            neighbour_price: number;
+        };
+        /**
+         * AdvisoryResponse
+         * @description The multi-asset, risk-managed allocation tool (research/advisory.py). Educational only: not investment advice,
+         *     places no orders. Each profile was a registered hypothesis and carries its harness status as of the ledger total
+         *     at generation; `is_stale` says the ledger has grown since.
+         */
+        AdvisoryResponse: {
+            /** Generated At */
+            generated_at: string;
+            /** Data Through */
+            data_through: string;
+            /** Simulation Start */
+            simulation_start: string;
+            /** In Sample End */
+            in_sample_end: string;
+            /** Out Of Sample Start */
+            out_of_sample_start: string;
+            /** Ledger Total At Generation */
+            ledger_total_at_generation: number;
+            /** Ledger Total Now */
+            ledger_total_now?: number | null;
+            /** Is Stale */
+            is_stale: boolean;
+            /** Disclaimer */
+            disclaimer: string;
+            /** Benchmark */
+            benchmark: string;
+            rule: components["schemas"]["AdvisoryRule"];
+            data_cleaning: components["schemas"]["AdvisoryCleaning"];
+            /** Assets */
+            assets: components["schemas"]["AdvisoryAsset"][];
+            correlation: components["schemas"]["AdvisoryCorrelation"];
+            /** Questions */
+            questions: components["schemas"]["AdvisoryQuestion"][];
+            /** Bands */
+            bands: components["schemas"]["AdvisoryBand"][];
+            /** Profiles */
+            profiles: components["schemas"]["AdvisoryProfile"][];
+        };
+        /**
+         * AdvisoryRiskMetrics
+         * @description One window of a simulated allocation. The Sharpe ratio is a RiskAdjustedRatio, so it cannot appear without its status.
+         */
+        AdvisoryRiskMetrics: {
+            sharpe: components["schemas"]["RiskAdjustedRatio"];
+            /** Cagr Pct */
+            cagr_pct?: number | null;
+            /** Volatility Pct */
+            volatility_pct?: number | null;
+            /** Max Drawdown Pct */
+            max_drawdown_pct?: number | null;
+            /**
+             * Var95 Pct
+             * @description Historical 1-day Value at Risk at 95%, as a % of the portfolio.
+             */
+            var95_pct?: number | null;
+            /**
+             * Cvar95 Pct
+             * @description Average loss on the worst 5% of days (expected shortfall).
+             */
+            cvar95_pct?: number | null;
+            /** Worst Month Pct */
+            worst_month_pct?: number | null;
+            /** Calmar */
+            calmar?: number | null;
+            /** N Days */
+            n_days: number;
+        };
+        /** AdvisoryRule */
+        AdvisoryRule: {
+            /** Vol Lookback Days */
+            vol_lookback_days: number;
+            /** Rebalance Every Days */
+            rebalance_every_days: number;
+            /** Cost Pct Per Side */
+            cost_pct_per_side: number;
+            /** Cash Rate Pct */
+            cash_rate_pct: number;
+            /** Execution */
+            execution: string;
+        };
+        /** AdvisoryWeight */
+        AdvisoryWeight: {
+            /** Asset Id */
+            asset_id: string;
+            /** Weight Pct */
+            weight_pct: number;
+        };
+        /** AdvisoryWindows */
+        AdvisoryWindows: {
+            in_sample: components["schemas"]["AdvisoryRiskMetrics"];
+            out_of_sample: components["schemas"]["AdvisoryRiskMetrics"];
+        };
         /** BookHolding */
         BookHolding: {
             /** Symbol */
@@ -1479,6 +1696,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForwardBooksResponse"];
+                };
+            };
+        };
+    };
+    advisory_api_advisory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvisoryResponse"];
                 };
             };
         };

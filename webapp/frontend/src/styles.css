@@ -272,3 +272,26 @@ progress { width: 100%; height: 10px; border: 0; border-radius: 999px; overflow:
 progress::-webkit-progress-bar { background: #1b2634; border-radius: 999px; }
 progress::-webkit-progress-value { background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); border-radius: 999px; }
 progress::-moz-progress-bar { background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); border-radius: 999px; }
+
+
+/* ---- multi-asset advisory page ---- */
+.qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 12px; margin: 10px 0 12px; }
+.qbox { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 10px; margin: 0; }
+.qbox legend { font-weight: 600; padding: 0 6px; }
+.qopt { display: block; padding: 3px 0; cursor: pointer; }
+.qopt input { margin-right: 8px; }
+.alloc { margin: 10px 0 8px; }
+.alloc-row { display: grid; grid-template-columns: minmax(150px, 280px) 1fr 64px; align-items: center; gap: 12px; margin: 7px 0; }
+.alloc-bar { background: var(--grid); height: 12px; border-radius: 6px; overflow: hidden; }
+.alloc-fill { height: 100%; background: var(--accent); border-radius: 6px; }
+.corr td.hi { background: rgba(210, 153, 34, .22); }
+.corr td.lo { background: rgba(63, 185, 80, .18); }
+details { margin-top: 12px; }
+details summary { cursor: pointer; color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+@media (max-width: 760px) { .alloc-row { grid-template-columns: 1fr 64px; } .alloc-bar { grid-column: 1 / -1; order: 3; } }
+
+/* Grid and flex children default to min-width:auto, so a wide table inside a panel stretched the panel (and the whole
+   page) past a small screen. Letting them shrink makes the .tablewrap scroll sideways instead. */
+.grid2 > *, .panel, .panel .body, main { min-width: 0; }
+.tablewrap { max-width: 100%; overflow-x: auto; }

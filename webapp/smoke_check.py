@@ -115,7 +115,7 @@ def run_checks(base: str) -> None:
     check(bool(h.get("data_through")) and bool(h.get("git_commit")), "health carries data_through and git_commit")
 
     print("[smoke] pages (the app shell serves every client-side route)")
-    for p in ("/", "/screener", "/strategies", "/paper", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
+    for p in ("/", "/screener", "/strategies", "/advisory", "/paper", "/research", "/stock/RELIANCE", "/strategies/ma_crossover_nifty50", "/stock/M%26M"):
         st, body = fetch(base, p)
         check(st == 200 and "<div id=\"root\">" in body, f"page {p} returns the app shell (got {st})")
     st, body = fetch(base, "/")
@@ -234,6 +234,21 @@ def run_checks(base: str) -> None:
             check(counted == b["n_trading_days"] and len(gb["dates"]) == len(gb["values"]) and max(dd["values"]) <= 0,
                   f"{b['id']}: series aligned with the counted days, drawdown <= 0")
             check(abs((gb["values"][-1] - 100) - b["summary"]["return_pct"]) < 1e-2, f"{b['id']}: final growth - 100 equals return")
+
+    print("[smoke] multi-asset advisory")
+    st, ad = fetch(base, "/api/advisory")
+    check(st == 200 and len(ad["profiles"]) == 3, "advisory responds with three risk profiles")
+    check(bare_ratios(ad) == [], "no bare ratio in the advisory")
+    check(ad["is_stale"] is False, "advisory results are not stale against the ledger")
+    for p in ad["profiles"]:
+        check(abs(sum(a["weight_pct"] for a in p["allocation"]) - 100) < 0.2, f"{p['id']}: the recommended weights add up to 100%")
+        gs, ge = p["growth_strategy"], p["exposure_pct"]
+        check(len(gs["dates"]) == len(gs["values"]) == len(ge["dates"]) and max(p["drawdown_strategy_pct"]["values"]) <= 0, f"{p['id']}: series aligned, drawdown <= 0")
+        for w in ("in_sample", "out_of_sample"):
+            m = p["strategy"][w]
+            check(m["var95_pct"] > 0 and m["cvar95_pct"] >= m["var95_pct"] and m["max_drawdown_pct"] < 0, f"{p['id']} {w}: risk measures are sane")
+            check(m["sharpe"]["status"] == p["harness_status"] and m["sharpe"]["as_of_hypotheses"] == ad["ledger_total_at_generation"], f"{p['id']} {w}: Sharpe carries its status and count")
+    check(all(c <= 100.0001 for c in ad["profiles"][0]["exposure_pct"]["values"]), "exposure never exceeds 100% (no leverage)")
 
     print("[smoke] refusals")
     check(fetch(base, "/api/strategies/definitely_not_one")[0] == 404, "unknown strategy id is 404")

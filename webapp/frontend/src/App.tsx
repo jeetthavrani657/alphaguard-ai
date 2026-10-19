@@ -6,6 +6,7 @@ import { Stock } from "./pages/Stock";
 import { Strategies } from "./pages/Strategies";
 import { StrategyPage } from "./pages/StrategyPage";
 import { PaperTrading } from "./pages/PaperTrading";
+import { Advisory } from "./pages/Advisory";
 import { Research } from "./pages/Research";
 
 // One URL per page. A page is just a React component: a function that returns what to
@@ -31,6 +32,7 @@ export default function App() {
         <NavLink to="/" end className={tab}>Overview</NavLink>
         <NavLink to="/screener" className={tab}>Screener</NavLink>
         <NavLink to="/strategies" className={tab}>Strategies</NavLink>
+        <NavLink to="/advisory" className={tab}>Advisory</NavLink>
         <NavLink to="/paper" className={tab}>Paper trading</NavLink>
         <NavLink to="/research" className={tab}>Research record</NavLink>
         <span className="spacer" />
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="/stock/:symbol" element={<Stock />} />
           <Route path="/strategies" element={<Strategies />} />
           <Route path="/strategies/:id" element={<StrategyPage />} />
+          <Route path="/advisory" element={<Advisory />} />
           <Route path="/paper" element={<PaperTrading />} />
           <Route path="/research" element={<Research />} />
           <Route path="*" element={<p>No such page.</p>} />

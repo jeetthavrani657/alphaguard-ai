@@ -24,8 +24,9 @@ export function Overview() {
           <h1 className="hero-title">Alpha<span>Guard</span> <em>AI</em></h1>
           <p className="hero-tag">Every edge, tested against the number of things you tried.</p>
           <p className="hero-sub">
-            A read-only research terminal for NSE equities. It shows what each strategy did, and, before
-            anything else, whether the result survives the fact that you looked at many.
+            A multi-asset research and risk-advisory terminal for Indian markets. It tests trading strategies and builds
+            risk-managed portfolios across equity, gold, bonds, international equity and crypto, and shows, before anything
+            else, whether each result survives the fact that you looked at many.
           </p>
           <div className="hero-chips">
             <span className="chip">read-only</span>
@@ -33,7 +34,8 @@ export function Overview() {
             <span className="chip">research only · no orders, ever</span>
           </div>
           <div className="hero-cta">
-            <Link className="btn primary" to="/strategies">See the strategies</Link>
+            <Link className="btn primary" to="/advisory">Try the advisory</Link>
+            <Link className="btn" to="/strategies">See the strategies</Link>
             <Link className="btn" to="/screener">Open the screener</Link>
           </div>
         </div>

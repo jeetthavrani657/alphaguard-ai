@@ -540,6 +540,129 @@ class ForwardBooksResponse(BaseModel):
     books: list[ForwardBook]
 
 
+# --- multi-asset advisory -------------------------------------------------------------
+
+class AdvisoryAsset(BaseModel):
+    id: str
+    name: str
+    ticker: Optional[str] = None
+    asset_class: str
+    cagr_pct: Optional[float] = None
+    volatility_pct: Optional[float] = None
+    max_drawdown_pct: Optional[float] = None
+
+
+class AdvisoryWeight(BaseModel):
+    asset_id: str
+    weight_pct: float
+
+
+class AdvisoryRiskMetrics(BaseModel):
+    """One window of a simulated allocation. The Sharpe ratio is a RiskAdjustedRatio, so it cannot appear without its status."""
+    sharpe: RiskAdjustedRatio
+    cagr_pct: Optional[float] = None
+    volatility_pct: Optional[float] = None
+    max_drawdown_pct: Optional[float] = None
+    var95_pct: Optional[float] = Field(None, description="Historical 1-day Value at Risk at 95%, as a % of the portfolio.")
+    cvar95_pct: Optional[float] = Field(None, description="Average loss on the worst 5% of days (expected shortfall).")
+    worst_month_pct: Optional[float] = None
+    calmar: Optional[float] = None
+    n_days: int
+
+
+class AdvisoryWindows(BaseModel):
+    in_sample: AdvisoryRiskMetrics
+    out_of_sample: AdvisoryRiskMetrics
+
+
+class AdvisoryProfile(BaseModel):
+    id: str
+    name: str
+    blurb: str
+    target_volatility_pct: float
+    drawdown_limit_pct: float
+    caps_pct: dict[str, float]
+    recommended_on: str
+    guard_on: bool
+    allocation: list[AdvisoryWeight]
+    harness_status: Status
+    strategy: AdvisoryWindows
+    benchmark: AdvisoryWindows
+    growth_strategy: EquityCurve
+    growth_benchmark: EquityCurve
+    drawdown_strategy_pct: EquityCurve
+    drawdown_benchmark_pct: EquityCurve
+    exposure_pct: EquityCurve
+    n_rebalances: int
+    cost_paid_pct_of_start: float
+
+
+class AdvisoryOption(BaseModel):
+    label: str
+    points: int
+
+
+class AdvisoryQuestion(BaseModel):
+    id: str
+    text: str
+    options: list[AdvisoryOption]
+
+
+class AdvisoryBand(BaseModel):
+    max_points: int
+    profile: str
+
+
+class AdvisoryCorrelation(BaseModel):
+    labels: list[str]
+    matrix: list[list[float]]
+
+
+class AdvisoryRule(BaseModel):
+    vol_lookback_days: int
+    rebalance_every_days: int
+    cost_pct_per_side: float
+    cash_rate_pct: float
+    execution: str
+
+
+class AdvisoryRemovedPrice(BaseModel):
+    asset_id: str
+    date: str
+    price: float
+    neighbour_price: float
+
+
+class AdvisoryCleaning(BaseModel):
+    rule: str
+    removed: list[AdvisoryRemovedPrice] = []
+
+
+class AdvisoryResponse(BaseModel):
+    """
+    The multi-asset, risk-managed allocation tool (research/advisory.py). Educational only: not investment advice,
+    places no orders. Each profile was a registered hypothesis and carries its harness status as of the ledger total
+    at generation; `is_stale` says the ledger has grown since.
+    """
+    generated_at: str
+    data_through: str
+    simulation_start: str
+    in_sample_end: str
+    out_of_sample_start: str
+    ledger_total_at_generation: int
+    ledger_total_now: Optional[int] = None
+    is_stale: bool
+    disclaimer: str
+    benchmark: str
+    rule: AdvisoryRule
+    data_cleaning: AdvisoryCleaning
+    assets: list[AdvisoryAsset]
+    correlation: AdvisoryCorrelation
+    questions: list[AdvisoryQuestion]
+    bands: list[AdvisoryBand]
+    profiles: list[AdvisoryProfile]
+
+
 # --- live prices ------------------------------------------------------------------
 
 class LiveQuote(BaseModel):
