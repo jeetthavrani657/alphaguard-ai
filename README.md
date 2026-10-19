@@ -828,6 +828,10 @@ recommended mix, its risk measures (volatility, maximum drawdown, Value at Risk,
 historical simulation next to the Nifty 50 ETF. The rule is frozen in `ADVISORY.md`; the three profiles are counted
 in the hypothesis ledger (208) and all are `VALIDATED_FAILED`. Educational only: not investment advice, no orders.
 
+The page also explains each weight (role, volatility, share of risk), turns an amount in rupees into an indicative
+shopping list of whole units (printable; `GET /api/advisory/basket`), and shows a display-only trend monitor
+(price against its 210-day average, never back-tested, no performance claim).
+
 ```
 python research/advisory.py              # regenerate reports/output/advisory_latest.json (no ledger change)
 ```

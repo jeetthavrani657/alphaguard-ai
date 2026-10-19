@@ -67,6 +67,16 @@ ASSETS = [
 ]
 RISKY_IDS = [a["id"] for a in ASSETS if a["risky"]]
 BENCHMARK_ID = "equity_large"
+TREND_DAYS = 210                    # about ten months: the trend monitor compares a price with this average
+ROLES = {
+    "equity_large": "Core growth: large, liquid Indian companies.",
+    "equity_mid": "Higher growth and higher risk than large caps.",
+    "intl_equity": "Diversifier: US technology shares, in rupees, so it also carries currency risk.",
+    "gold": "Hedge: tends to hold its value when equities fall; pays no income.",
+    "debt": "Stability: cushions equity falls, but long bonds fall when interest rates rise.",
+    "crypto": "High-risk satellite: extremely volatile, so only a small share is ever allowed.",
+    "cash": "Safety buffer: the part not placed in risky assets; earns the assumed cash rate.",
+}
 CASH_RATE = 0.06
 VOL_LOOKBACK = 63
 REBALANCE_EVERY = 21
@@ -263,6 +273,58 @@ def simulate(returns: pd.DataFrame, profile: dict, start_equity: float = 100.0) 
             "rebalances": log, "cost_paid": cost_paid}
 
 
+def explain_allocation(window: pd.DataFrame, weights: pd.Series, profile: dict) -> tuple:
+    """
+    Why each asset got its weight, from the same window the rule looked at. For every asset held: its role, its
+    recent volatility, its share of the portfolio's RISK (a calm asset can hold much money and little risk, and the
+    reverse) and whether it is held at its cap. Also the assets this profile does not use at all.
+    Returns (allocation list, excluded asset ids).
+    """
+    risky = window[RISKY_IDS]
+    vols = risky.std() * np.sqrt(TRADING_DAYS)
+    cov = (risky.cov() * TRADING_DAYS).values
+    w = weights[RISKY_IDS].values.astype(float)
+    port_var = float(w @ cov @ w)
+    marginal = cov @ w
+    contribution = {k: (float(w[i] * marginal[i] / port_var * 100.0) if port_var > 0 else 0.0) for i, k in enumerate(RISKY_IDS)}
+    out = []
+    for k, wt in weights.sort_values(ascending=False).items():
+        if wt <= 1e-6:
+            continue
+        if k == "cash":
+            out.append({"asset_id": k, "weight_pct": round(float(wt) * 100.0, 2), "role": ROLES[k], "volatility_pct": 0.0,
+                        "risk_contribution_pct": 0.0, "capped": False,
+                        "why": "Volatility targeting and the caps leave this part uninvested; it earns the assumed cash rate and carries no risk."})
+            continue
+        cap = profile["caps"].get(k, 0.0)
+        capped = bool(wt >= cap - 1e-9)
+        why = (f"{vols[k] * 100.0:.1f}% volatility over the last {VOL_LOOKBACK} days; it accounts for {contribution[k]:.0f}% of the portfolio's risk."
+               + (f" Held at its {cap * 100.0:.0f}% cap." if capped else ""))
+        out.append({"asset_id": k, "weight_pct": round(float(wt) * 100.0, 2), "role": ROLES[k],
+                    "volatility_pct": round(float(vols[k]) * 100.0, 2), "risk_contribution_pct": round(contribution[k], 1),
+                    "capped": capped, "why": why})
+    excluded = [k for k in RISKY_IDS if profile["caps"].get(k, 0.0) <= 0]
+    return out, excluded
+
+
+def trend_state(prices: pd.DataFrame) -> list:
+    """
+    Where each risky asset stands against its own ten-month average. A description of the present, nothing more:
+    it makes no claim that the signal predicts anything and was never back-tested (so it is not a hypothesis).
+    """
+    rows = []
+    for a in ASSETS:
+        if not a["risky"]:
+            continue
+        s = prices[a["id"]]
+        last, avg = float(s.iloc[-1]), float(s.iloc[-TREND_DAYS:].mean())
+        rows.append({"asset_id": a["id"], "last_price": round(last, 2), "average_210d": round(avg, 2),
+                     "distance_pct": round((last / avg - 1.0) * 100.0, 2),
+                     "return_12m_pct": round((last / float(s.iloc[-TRADING_DAYS - 1]) - 1.0) * 100.0, 2),
+                     "signal": "UPTREND" if last > avg else "DOWNTREND"})
+    return rows
+
+
 # ---- measuring it -------------------------------------------------------------------------------------------------------
 
 def var_cvar(daily: pd.Series, level: float = VAR_LEVEL) -> tuple:
@@ -332,21 +394,25 @@ def build(returns: pd.DataFrame, prices: pd.DataFrame, register: bool = False, l
             continue
         eq = (1.0 + returns[a["id"]].loc[start:]).cumprod() * 100.0
         m = window_metrics(eq)
-        asset_rows.append({"id": a["id"], "name": a["name"], "ticker": a["ticker"], "asset_class": a["asset_class"],
+        asset_rows.append({"id": a["id"], "name": a["name"], "ticker": a["ticker"], "asset_class": a["asset_class"], "role": ROLES[a["id"]],
                            "cagr_pct": _clean(m["cagr_pct"]), "volatility_pct": _clean(m["volatility_pct"]),
-                           "max_drawdown_pct": _clean(m["max_drawdown_pct"])})
-    asset_rows.append({"id": "cash", "name": ASSETS[-1]["name"], "ticker": None, "asset_class": "Cash", "cagr_pct": CASH_RATE * 100, "volatility_pct": 0.0, "max_drawdown_pct": 0.0})
+                           "max_drawdown_pct": _clean(m["max_drawdown_pct"]),
+                           "last_price": round(float(prices[a["id"]].iloc[-1]), 4) if prices is not None else None,
+                           "price_date": prices.index[-1].strftime("%Y-%m-%d") if prices is not None else None})
+    asset_rows.append({"id": "cash", "name": ASSETS[-1]["name"], "ticker": None, "asset_class": "Cash", "role": ROLES["cash"], "cagr_pct": CASH_RATE * 100,
+                       "volatility_pct": 0.0, "max_drawdown_pct": 0.0, "last_price": None, "price_date": None})
 
     profiles = []
     for (pid, p), res in zip(PROFILES.items(), results):
         s = sims[pid]
         last = s["rebalances"][-1]
-        alloc = [{"asset_id": k, "weight_pct": round(float(v) * 100.0, 2)} for k, v in last["weights"].sort_values(ascending=False).items() if v > 1e-6]
+        window = returns.loc[:last["date"]].iloc[-VOL_LOOKBACK:]
+        alloc, excluded = explain_allocation(window, last["weights"], p)
         status = getattr(res, "status", None) or "UNVALIDATED"
         profiles.append({
             "id": pid, "name": p["name"], "blurb": p["blurb"], "target_volatility_pct": p["target_vol"] * 100.0,
             "drawdown_limit_pct": p["dd_limit"] * 100.0, "caps_pct": {k: v * 100.0 for k, v in p["caps"].items()},
-            "recommended_on": last["date"].strftime("%Y-%m-%d"), "guard_on": bool(last["guard_on"]), "allocation": alloc,
+            "recommended_on": last["date"].strftime("%Y-%m-%d"), "guard_on": bool(last["guard_on"]), "allocation": alloc, "excluded": excluded,
             "harness_status": str(status),
             "p_value_in_sample": _clean(getattr(res, "in_sample_p_value", None)), "p_value_out_of_sample": _clean(getattr(res, "out_of_sample_p_value", None)),
             "bonferroni_bar": _clean(getattr(res, "bonferroni_alpha", None)),
@@ -364,6 +430,7 @@ def build(returns: pd.DataFrame, prices: pd.DataFrame, register: bool = False, l
                           "removed": (prices.attrs.get("removed", []) if prices is not None else [])},
         "rule": {"vol_lookback_days": VOL_LOOKBACK, "rebalance_every_days": REBALANCE_EVERY, "cost_pct_per_side": COST_PCT * 100.0,
                  "cash_rate_pct": CASH_RATE * 100.0, "execution": "decided at the close of day t, carried out one day later"},
+        "trend": trend_state(prices) if prices is not None else [],
         "assets": asset_rows, "correlation": {"labels": list(corr.index), "matrix": [[round(float(x), 2) for x in row] for row in corr.values]},
         "questionnaire": {"questions": QUESTIONS, "bands": BANDS}, "profiles": profiles,
     }

@@ -27,6 +27,7 @@ export type ForwardBook = S["ForwardBook"];
 export type LiveQuotesResponse = S["LiveQuotesResponse"];
 export type AdvisoryResponse = S["AdvisoryResponse"];
 export type AdvisoryProfile = S["AdvisoryProfile"];
+export type BasketResponse = S["BasketResponse"];
 export type LiveQuote = S["LiveQuote"];
 export type Health = S["Health"];
 export type Window = "in_sample" | "out_of_sample";

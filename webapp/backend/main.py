@@ -21,7 +21,9 @@ Ground rules this file keeps (and tests/test_webapp_api.py enforces):
   * Every response is a Pydantic model from schemas.py, validated before it
     leaves. A Sharpe ratio cannot be sent without its status.
   * The only logic here is selection: filter, paginate, look up. No
-    arithmetic on financial values.
+    arithmetic on financial values. (One labelled exception: /advisory/basket
+    converts a user's amount into rupees and whole units from stored weights
+    and prices. It is a unit conversion, not a metric.)
 """
 
 import os
@@ -351,7 +353,7 @@ def advisory():
         profiles.append(schemas.AdvisoryProfile(
             id=p["id"], name=p["name"], blurb=p["blurb"], target_volatility_pct=p["target_volatility_pct"],
             drawdown_limit_pct=p["drawdown_limit_pct"], caps_pct=p["caps_pct"], recommended_on=p["recommended_on"], guard_on=p["guard_on"],
-            allocation=[schemas.AdvisoryWeight(**a) for a in p["allocation"]], harness_status=p["harness_status"],
+            allocation=[schemas.AdvisoryWeight(**a) for a in p["allocation"]], excluded=p.get("excluded", []), harness_status=p["harness_status"],
             strategy=windows("metrics", p["harness_status"], p["p_value_in_sample"], p["p_value_out_of_sample"], p["bonferroni_bar"]),
             benchmark=windows("benchmark_metrics", "BENCHMARK_NOT_A_HYPOTHESIS", None, None, None),
             growth_strategy=p["growth_strategy"], growth_benchmark=p["growth_benchmark"],
@@ -362,7 +364,45 @@ def advisory():
         in_sample_end=raw["in_sample_end"], out_of_sample_start=raw["out_of_sample_start"], ledger_total_at_generation=total,
         ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], benchmark=raw["benchmark"],
         rule=raw["rule"], data_cleaning=raw["data_cleaning"], assets=raw["assets"], correlation=raw["correlation"],
-        questions=raw["questionnaire"]["questions"], bands=raw["questionnaire"]["bands"], profiles=profiles)
+        trend=raw.get("trend", []), questions=raw["questionnaire"]["questions"], bands=raw["questionnaire"]["bands"], profiles=profiles)
+
+
+@api.get("/advisory/basket", response_model=schemas.BasketResponse,
+         summary="An indicative shopping list: the recommended weights of a profile turned into rupees and whole units for a given amount. Not an order.")
+def advisory_basket(profile: str = Query(..., description="Profile id, e.g. moderate."),
+                    amount: float = Query(..., ge=10_000, le=1_000_000_000, description="Rupees to invest.")):
+    # The one place this file does arithmetic, and it is a unit conversion, not a financial metric: the user's amount
+    # times the stored weights, divided by the stored last close. Nothing is estimated, fitted or forecast.
+    raw = store.load_advisory_raw()
+    p = next((x for x in raw["profiles"] if x["id"] == profile), None)
+    if p is None:
+        raise HTTPException(status_code=404, detail=f"Unknown profile '{profile}'. Choose one of: {', '.join(x['id'] for x in raw['profiles'])}.")
+    by_id = {a["id"]: a for a in raw["assets"]}
+    lines, spent = [], 0.0
+    for w in p["allocation"]:
+        a = by_id[w["asset_id"]]
+        rupees = amount * w["weight_pct"] / 100.0
+        price, units, used = a.get("last_price"), None, 0.0
+        if w["asset_id"] == "cash" or not price:
+            used = rupees if w["asset_id"] == "cash" else 0.0
+        elif w["asset_id"] == "crypto":
+            units = int(rupees / price * 1_000_000) / 1_000_000   # Bitcoin can be bought in fractions (rounded down)
+            used = units * price
+        else:
+            units = float(int(rupees // price))          # exchange-traded funds trade in whole units
+            used = units * price
+        if w["asset_id"] != "cash":
+            spent += used
+        lines.append(schemas.BasketLine(asset_id=w["asset_id"], name=a["name"], ticker=a.get("ticker"), weight_pct=w["weight_pct"],
+                                        rupees=round(rupees, 2), price=price, price_date=a.get("price_date"), units=units,
+                                        rupees_used=round(used, 2)))
+    return schemas.BasketResponse(
+        profile_id=p["id"], profile_name=p["name"], amount=amount, recommended_on=p["recommended_on"], lines=lines,
+        cash_left=round(amount - spent, 2),             # the cash weight plus whatever could not buy a whole unit
+        notes=["Prices are the last close in the price file, not live quotes; the price when you act will differ, so units are approximate.",
+               "Brokerage, taxes, the bid-ask spread and any fund expense ratio are not included.",
+               "Bitcoin is not traded on the NSE; it is shown as a fraction of one coin, priced in rupees from a market-data feed.",
+               "This is a list to think with. This project places no orders."])
 
 
 # A price file older than this is "stale": the writer polls every 10 s while the market is open and every

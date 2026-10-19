@@ -52,7 +52,7 @@ export default function App() {
         </Routes>
       </main>
       <footer className="footer">
-        <span><b>AlphaGuard AI</b> is a research tool, not investment advice. It places no orders and has no live data.</span>
+        <span><b>AlphaGuard AI</b> is a research tool, not investment advice. It places no orders.</span>
         <span>Results are produced in the terminal by the validated backtest code; this page only displays them.</span>
       </footer>
     </>

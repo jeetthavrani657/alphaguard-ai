@@ -550,11 +550,52 @@ class AdvisoryAsset(BaseModel):
     cagr_pct: Optional[float] = None
     volatility_pct: Optional[float] = None
     max_drawdown_pct: Optional[float] = None
+    role: Optional[str] = Field(None, description="What this asset is for in a portfolio (growth, hedge, stability...).")
+    last_price: Optional[float] = Field(None, description="Last close in the price file, in rupees. Not a live quote.")
+    price_date: Optional[str] = None
 
 
 class AdvisoryWeight(BaseModel):
     asset_id: str
     weight_pct: float
+    role: Optional[str] = None
+    volatility_pct: Optional[float] = Field(None, description="Annualised volatility over the rule's lookback window.")
+    risk_contribution_pct: Optional[float] = Field(None, description="This asset's share of the portfolio's total risk (adds to 100 over the risky assets).")
+    capped: Optional[bool] = Field(None, description="True when the weight sits at the profile's cap for this asset.")
+    why: Optional[str] = Field(None, description="One sentence from research/advisory.py on why the asset got this weight.")
+
+
+class AdvisoryTrend(BaseModel):
+    """Where a risky asset stands against its own 210-day average. A description of today, not a back-tested signal."""
+    asset_id: str
+    last_price: float
+    average_210d: float
+    distance_pct: float
+    return_12m_pct: float
+    signal: str
+
+
+class BasketLine(BaseModel):
+    asset_id: str
+    name: str
+    ticker: Optional[str] = None
+    weight_pct: float
+    rupees: float
+    price: Optional[float] = None
+    price_date: Optional[str] = None
+    units: Optional[float] = Field(None, description="Whole units for exchange-traded funds; fractional for Bitcoin; None for cash.")
+    rupees_used: float
+
+
+class BasketResponse(BaseModel):
+    """An indicative shopping list for a given amount: the recommended weights turned into rupees and whole units. Not an order."""
+    profile_id: str
+    profile_name: str
+    amount: float
+    recommended_on: str
+    lines: list[BasketLine]
+    cash_left: float = Field(description="Cash weight plus whatever could not buy a whole unit.")
+    notes: list[str]
 
 
 class AdvisoryRiskMetrics(BaseModel):
@@ -585,6 +626,7 @@ class AdvisoryProfile(BaseModel):
     recommended_on: str
     guard_on: bool
     allocation: list[AdvisoryWeight]
+    excluded: list[str] = Field([], description="Asset ids this profile never holds (cap of zero).")
     harness_status: Status
     strategy: AdvisoryWindows
     benchmark: AdvisoryWindows
@@ -658,6 +700,7 @@ class AdvisoryResponse(BaseModel):
     data_cleaning: AdvisoryCleaning
     assets: list[AdvisoryAsset]
     correlation: AdvisoryCorrelation
+    trend: list[AdvisoryTrend] = []
     questions: list[AdvisoryQuestion]
     bands: list[AdvisoryBand]
     profiles: list[AdvisoryProfile]

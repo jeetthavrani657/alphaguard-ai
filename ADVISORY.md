@@ -64,6 +64,20 @@ either. Data goes from 2019-05-15 (the first day all assets exist) to the latest
   in-sample results meaningless. The cleaning rule (a one-day move over 50% that is undone within 3 days is a
   bad print, carried forward) is tested and every removed row is listed in the application.
 
+## Added after the design was frozen (display only, no new hypothesis)
+
+These three additions describe or reuse the frozen rule; none changes it, none was back-tested, so the ledger
+stays at 208.
+
+- **Why this mix.** For each weight, the asset's role (growth, hedge, stability...), its recent volatility, and its
+  share of the portfolio's *risk* (a calm asset can hold much money and little risk). Computed in
+  `explain_allocation` from the same 63-day window the rule used.
+- **Shopping list.** `GET /api/advisory/basket?profile=...&amount=...` turns the recommended weights into rupees and
+  whole units at the last close (Bitcoin in fractions; leftover money stays in cash). It is a unit conversion,
+  clearly labelled as the one piece of arithmetic in the API, and it is not an order: the project places none.
+- **Trend monitor.** Each risky asset against its own 210-day average: a description of today. It makes no claim
+  that the signal predicts anything, so it is shown without performance numbers.
+
 ## Limits
 
 Seven years of history including one crash; ETF and coin prices from a free source; no taxes, no real

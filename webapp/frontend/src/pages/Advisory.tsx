@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
@@ -58,18 +58,105 @@ function Allocation({ p, d }: { p: AdvisoryProfile; d: AdvisoryResponse }) {
       <p className="muted">{p.blurb}</p>
       <div className="alloc">
         {p.allocation.map((w) => (
-          <div className="alloc-row" key={w.asset_id}>
-            <span>{name(w.asset_id)}</span>
-            <div className="alloc-bar"><div className="alloc-fill" style={{ width: `${w.weight_pct}%` }} /></div>
-            <b className="num">{pct(w.weight_pct, 1)}</b>
+          <div key={w.asset_id}>
+            <div className="alloc-row">
+              <span>{name(w.asset_id)}</span>
+              <div className="alloc-bar"><div className="alloc-fill" style={{ width: `${w.weight_pct}%` }} /></div>
+              <b className="num">{pct(w.weight_pct, 1)}</b>
+            </div>
+            {w.role && <p className="why"><b>{w.role}</b> {w.why}</p>}
           </div>
         ))}
       </div>
+      {p.excluded.length > 0 && (
+        <p className="muted">Not used in this profile: {p.excluded.map((id) => name(id).split(" (")[0]).join(", ")}. The profile’s caps rule them out.</p>
+      )}
       <p className="muted">
         Recommended on {p.recommended_on}. Target volatility {pct(p.target_volatility_pct, 0)} a year; drawdown guard at -{pct(p.drawdown_limit_pct, 0)}
         {p.guard_on ? " (the guard is ON: the risky part is halved right now)" : " (the guard is off)"}. Caps:{" "}
         {Object.entries(p.caps_pct).map(([k, v]) => `${name(k).split(" (")[0]} ${pct(v, 0)}`).join(" · ")}.
       </p>
+    </>
+  );
+}
+
+const AMOUNT_CHOICES = [100000, 500000, 1000000, 2500000];
+
+/**
+ * "If I put this much in": the recommended weights as rupees and whole units. The arithmetic is done by the API
+ * (GET /api/advisory/basket); this component only asks and shows. It is a list to think with, never an order.
+ */
+function Basket({ p }: { p: AdvisoryProfile }) {
+  const [text, setText] = useState("500000");
+  const [amount, setAmount] = useState(500000);
+  // Wait for the typing to pause, so every keystroke does not become a request.
+  useEffect(() => {
+    const n = Number(text.replace(/,/g, ""));
+    const t = setTimeout(() => { if (Number.isFinite(n)) setAmount(n); }, 400);
+    return () => clearTimeout(t);
+  }, [text]);
+  const valid = amount >= 10000 && amount <= 1000000000;
+  const state = useApi(() => (valid ? api.basket(p.id, amount) : Promise.reject(new Error("Enter an amount between ₹10,000 and ₹100 crore."))), [p.id, amount, valid]);
+  return (
+    <>
+      <p className="muted">How much would you invest? The mix above is turned into rupees and whole units at the last close.</p>
+      <div className="amountrow">
+        <label>Amount (₹) <input className="amount" inputMode="numeric" value={text} onChange={(e) => setText(e.target.value)} aria-label="Amount to invest in rupees" /></label>
+        {AMOUNT_CHOICES.map((a) => <button key={a} onClick={() => setText(String(a))}>{int(a)}</button>)}
+        <button className="printbtn" onClick={() => window.print()}>Print / save as PDF</button>
+      </div>
+      <Async state={state}>
+        {(b) => (
+          <div className="printable">
+            <h3 className="printonly">AlphaGuard AI: {b.profile_name} mix for ₹{int(b.amount)} (as of {b.recommended_on})</h3>
+            <p className="printonly">Educational research output, not investment advice. This project places no orders.</p>
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th>Asset</th><th>Ticker</th><th className="num">Share</th><th className="num">Rupees</th><th className="num">Last close</th><th className="num">Units</th><th className="num">Rupees used</th></tr></thead>
+                <tbody>
+                  {b.lines.map((l) => (
+                    <tr key={l.asset_id}>
+                      <td>{l.name}</td><td>{l.ticker ?? "—"}</td><td className="num">{pct(l.weight_pct, 1)}</td><td className="num">{int(l.rupees)}</td>
+                      <td className="num">{num(l.price)}</td>
+                      <td className="num">{l.units === null || l.units === undefined ? "—" : l.units < 1 ? num(l.units, 6) : int(l.units)}</td>
+                      <td className="num">{int(l.rupees_used)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p>Left in cash (cash share plus what could not buy a whole unit): <b className="num">₹{int(b.cash_left)}</b></p>
+            <ul className="muted">{b.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+          </div>
+        )}
+      </Async>
+    </>
+  );
+}
+
+function Trend({ d }: { d: AdvisoryResponse }) {
+  const name = (id: string) => d.assets.find((a) => a.id === id)?.name ?? id;
+  return (
+    <>
+      <p className="muted">
+        A plain description of today: is each risky asset above or below its own 210-day (about ten-month) trend line (the mean price level of that period)? This is <b>not</b> part of the
+        allocation rule, was never back-tested, and is not a hypothesis in the ledger: it does not claim that a trend predicts anything.
+      </p>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th>Asset</th><th className="num">Last close</th><th className="num">210-day line</th><th className="num">Distance</th><th className="num">Last 12 months</th><th>Today</th></tr></thead>
+          <tbody>
+            {d.trend.map((t) => (
+              <tr key={t.asset_id}>
+                <td>{name(t.asset_id)}</td><td className="num">{num(t.last_price)}</td><td className="num">{num(t.average_210d)}</td>
+                <td className={`num ${signClass(t.distance_pct)}`}>{pct(t.distance_pct, 1)}</td>
+                <td className={`num ${signClass(t.return_12m_pct)}`}>{pct(t.return_12m_pct, 1)}</td>
+                <td><span className={`sig ${t.signal === "UPTREND" ? "up" : "down"}`}>{t.signal === "UPTREND" ? "▲ above the line" : "▼ below the line"}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
@@ -144,7 +231,11 @@ export function Advisory() {
                 <Allocation p={p} d={d} />
               </Panel>
 
-              <Panel title="3. Risk and a historical simulation">
+              <Panel title="3. If you invest an amount: the shopping list">
+                <Basket p={p} />
+              </Panel>
+
+              <Panel title="4. Risk and a historical simulation">
                 <p className="muted">
                   Simulated from {d.simulation_start} to {d.data_through} with the frozen rule (weights decided at one close, carried out the next day,
                   rebalanced every {d.rule.rebalance_every_days} trading days, {pct(d.rule.cost_pct_per_side, 2)} cost each way, cash at {pct(d.rule.cash_rate_pct, 0)}).
@@ -163,7 +254,7 @@ export function Advisory() {
                 <p className="muted">Blue is this mix; the other line is buying and holding the Nifty 50 ETF over the same days.</p>
               </Panel>
 
-              <Panel title="4. The assets it chooses from">
+              <Panel title="5. The assets it chooses from">
                 <div className="tablewrap">
                   <table>
                     <thead><tr><th>Asset</th><th>Class</th><th className="num">Return a year</th><th className="num">Volatility</th><th className="num">Worst fall</th></tr></thead>
@@ -194,6 +285,10 @@ export function Advisory() {
                   </table>
                 </div>
                 <p className="muted">Low or negative correlation is what makes diversification reduce risk. Shaded green means moves almost independently or opposite; amber means they tend to fall together.</p>
+              </Panel>
+
+              <Panel title="6. Where each asset stands today (trend monitor)">
+                <Trend d={d} />
               </Panel>
 
               <Panel title="How the rule works">

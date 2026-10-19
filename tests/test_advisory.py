@@ -236,3 +236,30 @@ def test_a_bad_print_lasting_two_days_is_removed_whole_and_clean_data_is_returne
     ok = pd.DataFrame({"x": np.linspace(10, 20, 12)}, index=idx)
     same, none = adv.clean_prices(ok)
     pd.testing.assert_frame_equal(same, ok) and none == []
+
+
+def test_explanations_show_each_assets_share_of_risk_and_the_shares_cover_the_whole_portfolio():
+    r = _returns()
+    profile = adv.PROFILES["moderate"]
+    window = r.iloc[-adv.VOL_LOOKBACK:]
+    w = pd.Series(0.0, index=r.columns)
+    w["equity_large"], w["gold"], w["debt"], w["cash"] = 0.2, 0.2, 0.4, 0.2
+    rows, excluded = adv.explain_allocation(window, w, profile)
+    risky = [x for x in rows if x["asset_id"] != "cash"]
+    assert abs(sum(x["risk_contribution_pct"] for x in risky) - 100) < 0.2
+    assert all(x["role"] and x["why"] for x in rows)
+    # debt holds the most money but is the calmest asset, so it carries less than its money share of the risk
+    debt = next(x for x in rows if x["asset_id"] == "debt")
+    assert debt["weight_pct"] == 40 and debt["risk_contribution_pct"] < 40
+
+
+def test_trend_state_compares_the_last_price_with_its_own_210_day_average_and_describes_nothing_more():
+    idx = pd.bdate_range("2020-01-01", periods=400)
+    up = pd.Series(np.linspace(100, 200, 400), index=idx)           # always rising: the last price is above its average
+    down = pd.Series(np.linspace(200, 100, 400), index=idx)
+    prices = pd.DataFrame({a["id"]: (up if i % 2 == 0 else down) for i, a in enumerate(a for a in adv.ASSETS if a["risky"])}, index=idx)
+    rows = adv.trend_state(prices)
+    assert [r["asset_id"] for r in rows] == [a["id"] for a in adv.ASSETS if a["risky"]]
+    assert rows[0]["signal"] == "UPTREND" and rows[0]["distance_pct"] > 0
+    assert rows[1]["signal"] == "DOWNTREND" and rows[1]["distance_pct"] < 0
+    assert rows[0]["average_210d"] == round(float(up.iloc[-210:].mean()), 2)

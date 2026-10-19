@@ -638,7 +638,7 @@ def test_no_health_file_yet_leaves_the_fields_empty_without_breaking_health(clie
 
 # --- multi-asset advisory ---------------------------------------------------------------------------------------
 
-def _advisory_file(tmp_path, monkeypatch, ledger_total_now=204):
+def _advisory_file(tmp_path, monkeypatch, ledger_total_now=204, with_prices=False):
     import advisory as adv
     import numpy as np
     import pandas as pd
@@ -647,7 +647,12 @@ def _advisory_file(tmp_path, monkeypatch, ledger_total_now=204):
     idx = pd.bdate_range("2020-01-01", periods=1500)
     r = pd.DataFrame({k: rng.normal(0.0003, v, 1500) for k, v in vols.items()}, index=idx)
     r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
-    payload = adv.build(r, None, register=False, ledger_total_now=ledger_total_now)
+    # made-up prices that start at 100 (bitcoin at 1,000,000 so it cannot buy a whole unit), built from the same returns
+    prices = None
+    if with_prices:
+        prices = (1 + r[list(vols)]).cumprod() * 100.0
+        prices["crypto"] = prices["crypto"] * 10_000
+    payload = adv.build(r, prices, register=False, ledger_total_now=ledger_total_now)
     path = tmp_path / "advisory.json"
     path.write_text(json.dumps(payload))
     monkeypatch.setenv("WEBAPP_ADVISORY", str(path))
@@ -679,6 +684,40 @@ def test_advisory_results_are_flagged_stale_when_the_ledger_has_grown_since(clie
     _advisory_file(tmp_path, monkeypatch, ledger_total_now=200)         # generated when the ledger said 200; the fixture ledger says 204
     d = client.get("/api/advisory").json()
     assert d["is_stale"] is True and d["ledger_total_at_generation"] == 200 and d["ledger_total_now"] == 204
+
+
+def test_advisory_explains_each_weight_and_the_risk_shares_add_up(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    d = client.get("/api/advisory").json()
+    for p in d["profiles"]:
+        held = [a for a in p["allocation"] if a["asset_id"] != "cash"]
+        assert all(a["role"] and a["why"] for a in p["allocation"])
+        assert abs(sum(a["risk_contribution_pct"] for a in held) - 100) < 0.5      # the shares of risk cover the whole portfolio
+    assert {t["signal"] for t in d["trend"]} <= {"UPTREND", "DOWNTREND"} and len(d["trend"]) == 6
+    assert all(a["last_price"] for a in d["assets"] if a["id"] != "cash")
+
+
+def test_basket_turns_weights_into_rupees_and_whole_units_and_never_overspends(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    b = client.get("/api/advisory/basket", params={"profile": "moderate", "amount": 500000}).json()
+    assert b["amount"] == 500000 and b["profile_id"] == "moderate"
+    spent = 0.0
+    for line in b["lines"]:
+        if line["asset_id"] == "cash":
+            continue
+        assert line["rupees_used"] <= line["rupees"] + 0.01
+        if line["asset_id"] != "crypto":
+            assert line["units"] == int(line["units"])                              # exchange-traded funds: whole units only
+        spent += line["rupees_used"]
+    assert spent <= 500000 and abs(b["cash_left"] - (500000 - spent)) < 0.05
+    assert any("places no orders" in n for n in b["notes"])
+
+
+def test_basket_rejects_unknown_profiles_and_tiny_or_huge_amounts(client, tmp_path, monkeypatch):
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    assert client.get("/api/advisory/basket", params={"profile": "nope", "amount": 500000}).status_code == 404
+    assert client.get("/api/advisory/basket", params={"profile": "moderate", "amount": 50}).status_code == 422
+    assert client.get("/api/advisory/basket", params={"profile": "moderate", "amount": 5e10}).status_code == 422
 
 
 def test_advisory_missing_is_a_helpful_404(client, tmp_path, monkeypatch):

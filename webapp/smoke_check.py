@@ -249,6 +249,15 @@ def run_checks(base: str) -> None:
             check(m["var95_pct"] > 0 and m["cvar95_pct"] >= m["var95_pct"] and m["max_drawdown_pct"] < 0, f"{p['id']} {w}: risk measures are sane")
             check(m["sharpe"]["status"] == p["harness_status"] and m["sharpe"]["as_of_hypotheses"] == ad["ledger_total_at_generation"], f"{p['id']} {w}: Sharpe carries its status and count")
     check(all(c <= 100.0001 for c in ad["profiles"][0]["exposure_pct"]["values"]), "exposure never exceeds 100% (no leverage)")
+    for p in ad["profiles"]:
+        held = [a for a in p["allocation"] if a["asset_id"] != "cash"]
+        check(all(a["why"] for a in p["allocation"]) and abs(sum(a["risk_contribution_pct"] for a in held) - 100) < 0.5, f"{p['id']}: every weight is explained, risk shares add to 100%")
+        st, b = fetch(base, f"/api/advisory/basket?profile={p['id']}&amount=500000")
+        spent = sum(l["rupees_used"] for l in b["lines"] if l["asset_id"] != "cash")
+        check(st == 200 and spent <= 500000 and abs(b["cash_left"] - (500000 - spent)) < 0.05, f"{p['id']}: the basket never spends more than the amount")
+        check(all(l["units"] == int(l["units"]) for l in b["lines"] if l["units"] is not None and l["asset_id"] != "crypto"), f"{p['id']}: funds are bought in whole units")
+    check(fetch(base, "/api/advisory/basket?profile=moderate&amount=5")[0] == 422, "a basket amount below the minimum is refused")
+    check(len(ad["trend"]) == 6 and all(t["signal"] in ("UPTREND", "DOWNTREND") for t in ad["trend"]), "trend monitor covers the six risky assets")
 
     print("[smoke] refusals")
     check(fetch(base, "/api/strategies/definitely_not_one")[0] == 404, "unknown strategy id is 404")

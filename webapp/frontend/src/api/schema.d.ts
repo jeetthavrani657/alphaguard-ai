@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/advisory/basket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An indicative shopping list: the recommended weights of a profile turned into rupees and whole units for a given amount. Not an order. */
+        get: operations["advisory_basket_api_advisory_basket_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live-quotes": {
         parameters: {
             query?: never;
@@ -262,6 +279,18 @@ export interface components {
             volatility_pct?: number | null;
             /** Max Drawdown Pct */
             max_drawdown_pct?: number | null;
+            /**
+             * Role
+             * @description What this asset is for in a portfolio (growth, hedge, stability...).
+             */
+            role?: string | null;
+            /**
+             * Last Price
+             * @description Last close in the price file, in rupees. Not a live quote.
+             */
+            last_price?: number | null;
+            /** Price Date */
+            price_date?: string | null;
         };
         /** AdvisoryBand */
         AdvisoryBand: {
@@ -316,6 +345,12 @@ export interface components {
             guard_on: boolean;
             /** Allocation */
             allocation: components["schemas"]["AdvisoryWeight"][];
+            /**
+             * Excluded
+             * @description Asset ids this profile never holds (cap of zero).
+             * @default []
+             */
+            excluded: string[];
             /**
              * Harness Status
              * @enum {string}
@@ -385,6 +420,11 @@ export interface components {
             /** Assets */
             assets: components["schemas"]["AdvisoryAsset"][];
             correlation: components["schemas"]["AdvisoryCorrelation"];
+            /**
+             * Trend
+             * @default []
+             */
+            trend: components["schemas"]["AdvisoryTrend"][];
             /** Questions */
             questions: components["schemas"]["AdvisoryQuestion"][];
             /** Bands */
@@ -434,17 +474,104 @@ export interface components {
             /** Execution */
             execution: string;
         };
+        /**
+         * AdvisoryTrend
+         * @description Where a risky asset stands against its own 210-day average. A description of today, not a back-tested signal.
+         */
+        AdvisoryTrend: {
+            /** Asset Id */
+            asset_id: string;
+            /** Last Price */
+            last_price: number;
+            /** Average 210D */
+            average_210d: number;
+            /** Distance Pct */
+            distance_pct: number;
+            /** Return 12M Pct */
+            return_12m_pct: number;
+            /** Signal */
+            signal: string;
+        };
         /** AdvisoryWeight */
         AdvisoryWeight: {
             /** Asset Id */
             asset_id: string;
             /** Weight Pct */
             weight_pct: number;
+            /** Role */
+            role?: string | null;
+            /**
+             * Volatility Pct
+             * @description Annualised volatility over the rule's lookback window.
+             */
+            volatility_pct?: number | null;
+            /**
+             * Risk Contribution Pct
+             * @description This asset's share of the portfolio's total risk (adds to 100 over the risky assets).
+             */
+            risk_contribution_pct?: number | null;
+            /**
+             * Capped
+             * @description True when the weight sits at the profile's cap for this asset.
+             */
+            capped?: boolean | null;
+            /**
+             * Why
+             * @description One sentence from research/advisory.py on why the asset got this weight.
+             */
+            why?: string | null;
         };
         /** AdvisoryWindows */
         AdvisoryWindows: {
             in_sample: components["schemas"]["AdvisoryRiskMetrics"];
             out_of_sample: components["schemas"]["AdvisoryRiskMetrics"];
+        };
+        /** BasketLine */
+        BasketLine: {
+            /** Asset Id */
+            asset_id: string;
+            /** Name */
+            name: string;
+            /** Ticker */
+            ticker?: string | null;
+            /** Weight Pct */
+            weight_pct: number;
+            /** Rupees */
+            rupees: number;
+            /** Price */
+            price?: number | null;
+            /** Price Date */
+            price_date?: string | null;
+            /**
+             * Units
+             * @description Whole units for exchange-traded funds; fractional for Bitcoin; None for cash.
+             */
+            units?: number | null;
+            /** Rupees Used */
+            rupees_used: number;
+        };
+        /**
+         * BasketResponse
+         * @description An indicative shopping list for a given amount: the recommended weights turned into rupees and whole units. Not an order.
+         */
+        BasketResponse: {
+            /** Profile Id */
+            profile_id: string;
+            /** Profile Name */
+            profile_name: string;
+            /** Amount */
+            amount: number;
+            /** Recommended On */
+            recommended_on: string;
+            /** Lines */
+            lines: components["schemas"]["BasketLine"][];
+            /**
+             * Cash Left
+             * @description Cash weight plus whatever could not buy a whole unit.
+             */
+            cash_left: number;
+            /** Notes */
+            notes: string[];
         };
         /** BookHolding */
         BookHolding: {
@@ -1716,6 +1843,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdvisoryResponse"];
+                };
+            };
+        };
+    };
+    advisory_basket_api_advisory_basket_get: {
+        parameters: {
+            query: {
+                /** @description Profile id, e.g. moderate. */
+                profile: string;
+                /** @description Rupees to invest. */
+                amount: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
