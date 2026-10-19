@@ -166,14 +166,14 @@ def _fundamental_weights(universe_data: dict, last: pd.Timestamp) -> pd.DataFram
         _fundamental_formation_dates(universe_data, last), top_n=quality_value.TOP_N, strict=True)
 
 
-def _empty_report(book: dict, last: pd.Timestamp, pending: list, note: str) -> dict:
+def _empty_report(book: dict, last: pd.Timestamp, pending: list, note: str, holdings: list | None = None) -> dict:
     return {
         "id": book["id"], "name": book["name"], "kind": _report_kind(book), "universe": book["universe"], **_gate_fields(book),
         "rationale": book["rationale"], "why_forward_tested": book["why_forward_tested"],
         "status": "NOT_STARTED", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": 0, "sharpe_withheld_until_days": MIN_DAYS_FOR_SHARPE,
         "summary": None, "growth_book": None, "growth_benchmark": None, "drawdown_book": None,
-        "drawdown_benchmark": None, "exposure": None, "holdings": [], "pending": pending, "notes": [note],
+        "drawdown_benchmark": None, "exposure": None, "holdings": holdings or [], "pending": pending, "notes": [note],
     }
 
 
@@ -201,10 +201,13 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
     if last < pd.Timestamp(FIRST_COUNTED_DAY):
         note = (f"The first countable session is {FIRST_COUNTED_DAY}; data currently ends {last.date()}. "
                 "Nothing to evaluate yet: the clock has started.")
+        holdings = None
         if book["kind"] == "fundamental":
             w = _fundamental_weights(universe_data, last).iloc[0]            # the picks frozen on the freeze day
             note += " Frozen picks: " + ", ".join(t.replace(".NS", "") for t in w[w > 0].index) + "."
-        return _empty_report(book, last, pending, note)
+            holdings = [{"symbol": t.replace(".NS", ""), "target_weight_pct": round(float(v) * 100, 2),
+                         "as_of_formation_date": FORWARD_START} for t, v in w[w > 0].sort_values(ascending=False).items()]
+        return _empty_report(book, last, pending, note, holdings)
 
     end = last.strftime("%Y-%m-%d")
     notes = []

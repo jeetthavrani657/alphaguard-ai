@@ -199,9 +199,11 @@ def test_before_the_first_counted_day_the_fundamental_book_shows_its_frozen_pick
     monkeypatch.setattr(forward_books, "FIRST_COUNTED_DAY", "2027-01-04")
     monkeypatch.setattr(forward_books, "FORWARD_START", "2026-10-20")
     _use_archive(monkeypatch, *_toy_archive())
-    rep = forward_books.build_book_report(QV_BOOK, _toy_universe(n_symbols=25))
+    rep = forward_books.build_book_report(QV_BOOK, _same_price_universe(25))
     assert rep["status"] == "NOT_STARTED"
     assert "Frozen picks: " in rep["notes"][0] and "S24" in rep["notes"][0]
+    assert {h["symbol"] for h in rep["holdings"]} == {f"S{k:02d}" for k in range(15, 25)}      # also as holdings, for the live panel
+    assert all(h["target_weight_pct"] == 10.0 for h in rep["holdings"])
 
 
 def test_formation_dates_are_the_freeze_day_then_the_last_trading_day_of_each_june(monkeypatch):

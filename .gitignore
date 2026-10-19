@@ -35,3 +35,4 @@ reports/output/fundamentals_last_run.log
 
 # Upstox read-only data cache (data/upstox_client.py): the public instrument list, re-downloaded weekly.
 data/upstox/
+reports/output/live_quotes_latest.json
