@@ -4,6 +4,8 @@ import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
+import { StatusChip } from "../components/StatusChip";
+import { pct, signClass } from "../fmt";
 
 /**
  * The front door. Everything numeric here is read from the API and shown as given:
@@ -15,6 +17,8 @@ export function Overview() {
   const health = useApi(() => api.health(), []);
   const ledger = useApi(() => api.ledger(), []);
   const strategies = useApi(() => api.strategies(), []);
+  const advisory = useApi(() => api.advisory(), []);
+  const forward = useApi(() => api.advisoryForward(), []);
 
   return (
     <div>
@@ -62,7 +66,7 @@ export function Overview() {
         <div className="stat">
           <span className="stat-label">Data through</span>
           <Async state={health}>{(h) => <span className="stat-value">{h.data_through ?? "—"}</span>}</Async>
-          <span className="stat-note">Split- and dividend-adjusted prices. No live feed.</span>
+          <span className="stat-note">Split- and dividend-adjusted prices. Live prices are on the Paper trading page.</span>
         </div>
       </div>
 
@@ -84,6 +88,41 @@ export function Overview() {
                       <td><Ratio ratio={s.out_of_sample_sharpe} /></td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Async>
+      </Panel>
+
+      <Panel title="Risk-managed advisory at a glance" right={<Link to="/advisory" className="muted">open the advisory →</Link>} flush>
+        <Async state={advisory}>
+          {(a) => (
+            <div className="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Profile</th><th className="num">Target volatility</th><th className="num">Worst fall, out-of-sample</th>
+                    <th>Out-of-sample Sharpe, with its status</th><th>Forward paper test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.profiles.map((p) => {
+                    const f = forward.status === "ready" ? forward.data.profiles.find((x) => x.id === p.id) : undefined;
+                    return (
+                      <tr key={p.id}>
+                        <td><Link to="/advisory">{p.name}</Link></td>
+                        <td className="num">{pct(p.target_volatility_pct, 0)}</td>
+                        <td className="num">{pct(p.strategy.out_of_sample.max_drawdown_pct, 1)} <span className="muted">(Nifty 50 ETF {pct(p.benchmark.out_of_sample.max_drawdown_pct, 1)})</span></td>
+                        <td><Ratio ratio={p.strategy.out_of_sample.sharpe} /></td>
+                        <td>
+                          {f?.summary ? (
+                            <span>day {f.n_trading_days}: <b className={signClass(f.summary.return_pct)}>{pct(f.summary.return_pct, 2)}</b> <span className="muted">vs {pct(f.summary.benchmark_return_pct, 2)}</span></span>
+                          ) : f ? <StatusChip status={f.status} /> : <span className="muted">…</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
