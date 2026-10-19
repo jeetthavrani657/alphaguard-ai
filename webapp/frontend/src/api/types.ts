@@ -24,5 +24,7 @@ export type LedgerResponse = S["LedgerResponse"];
 export type ForwardResponse = S["ForwardResponse"];
 export type ForwardBooksResponse = S["ForwardBooksResponse"];
 export type ForwardBook = S["ForwardBook"];
+export type LiveQuotesResponse = S["LiveQuotesResponse"];
+export type LiveQuote = S["LiveQuote"];
 export type Health = S["Health"];
 export type Window = "in_sample" | "out_of_sample";

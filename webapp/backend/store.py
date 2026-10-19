@@ -57,6 +57,16 @@ def forward_path() -> str:
     return os.environ.get("WEBAPP_FORWARD_CSV", os.path.join(ROOT, "reports", "output", "forward_snapshots.csv"))
 
 
+def live_quotes_path() -> str:
+    return os.environ.get("WEBAPP_LIVE_QUOTES", os.path.join(ROOT, "reports", "output", "live_quotes_latest.json"))
+
+
+def load_live_quotes_raw() -> Optional[dict]:
+    """research/live_quotes.py's latest file, or None if the writer has never run (the page explains that)."""
+    path = live_quotes_path()
+    return _read_json(path) if os.path.exists(path) else None
+
+
 def forward_books_path() -> str:
     return os.environ.get("WEBAPP_FORWARD_BOOKS", os.path.join(ROOT, "reports", "output", "forward_books_latest.json"))
 

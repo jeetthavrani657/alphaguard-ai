@@ -1,13 +1,14 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { useApi } from "../api/useApi";
+import { useApi, usePolling } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { int, num, pct, signClass } from "../fmt";
-import type { ForwardBook } from "../api/types";
+import type { ForwardBook, LiveQuote } from "../api/types";
 
 /**
  * Paper trading: the frozen candidate strategies, run forward on data that did not exist when they
@@ -139,6 +140,68 @@ function BookCard({ book }: { book: ForwardBook }) {
   );
 }
 
+/**
+ * Near-live prices of the stocks the books hold. A display only: the books run on daily bars and never use
+ * these prices. research/live_quotes.py writes them (and works out the change %); this page shows them,
+ * refreshing every 10 seconds, and says so plainly when the feed is off, stale or the token has expired.
+ */
+function LivePrices({ books }: { books: ForwardBook[] }) {
+  const state = usePolling(() => api.liveQuotes(), 10000);
+  const [bookId, setBookId] = useState("all");
+  return (
+    <Panel title="Live prices" right={state.status === "ready" ? <LiveStatus quotes={state.data} /> : undefined}>
+      <Async state={state}>
+        {(d) => {
+          if (!d.available) {
+            return <p className="note warn">{d.reason ?? "Live prices are not available."}</p>;
+          }
+          const rows: LiveQuote[] = bookId === "all" ? d.quotes : d.quotes.filter((q) => q.held_by.includes(bookId));
+          return (
+            <>
+              {d.is_stale && (
+                <p className="note warn">
+                  These prices are {int(d.age_seconds)} seconds old, so the price writer has probably stopped. Restart it with{" "}
+                  <code>python research/live_quotes.py --loop</code>.
+                </p>
+              )}
+              <div className="tabs" role="tablist" aria-label="Show stocks held by">
+                <button role="tab" aria-selected={bookId === "all"} onClick={() => setBookId("all")}>All ({d.quotes.length})</button>
+                {books.map((b) => (
+                  <button key={b.id} role="tab" aria-selected={bookId === b.id} onClick={() => setBookId(b.id)}>{b.name}</button>
+                ))}
+              </div>
+              <div className="tablewrap scroll" style={{ maxHeight: 340, marginTop: 10 }}>
+                <table>
+                  <thead>
+                    <tr><th>Stock</th><th className="num">Last</th><th className="num">Prev close</th><th className="num">Change</th><th className="num">Volume</th></tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((q) => (
+                      <tr key={q.symbol}>
+                        <td><Link to={`/stock/${encodeURIComponent(q.symbol)}`}>{q.symbol}</Link></td>
+                        <td className="num">{num(q.last_price)}</td>
+                        <td className="num">{num(q.prev_close)}</td>
+                        <td className={`num ${signClass(q.change_pct)}`}>{pct(q.change_pct, 2)}</td>
+                        <td className="num">{int(q.volume)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted">{d.market_note} A display only: the books trade on daily bars, not on these prices.</p>
+            </>
+          );
+        }}
+      </Async>
+    </Panel>
+  );
+}
+
+function LiveStatus({ quotes }: { quotes: { market_status: string; available: boolean; age_seconds?: number | null } }) {
+  if (!quotes.available) return <span className="muted">feed off</span>;
+  return <span><b>{quotes.market_status.toUpperCase()}</b> <span className="muted">updated {int(quotes.age_seconds)} s ago</span></span>;
+}
+
 export function PaperTrading() {
   const state = useApi(() => api.forwardBooks(), []);
   return (
@@ -155,6 +218,7 @@ export function PaperTrading() {
               . The dip-buying rule's own forward test is on the{" "}
               <Link to="/research">Research record</Link> page.
             </p>
+            <LivePrices books={d.books} />
             {d.books.map((b) => <BookCard key={b.id} book={b} />)}
             <p className="muted">Generated {d.generated_at.slice(0, 16).replace("T", " ")} UTC.</p>
           </>

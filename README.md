@@ -254,6 +254,7 @@ the same way `run_forward_log.bat` does.
 | `python run_webapp.py --dev` | Two processes with hot reload for editing the UI: API on 8000, Vite dev server on 5173. |
 | `python run_webapp.py --rebuild` | Force a fresh UI build. |
 | `python run_webapp.py --port 8010` | Use another port (default mode). |
+| `python run_webapp.py --live` | Also runs the near-live price writer (`research/live_quotes.py --loop`) for the Paper trading page's **Live prices** panel, and stops it with the app. Needs `UPSTOX_ACCESS_TOKEN` in a Windows environment variable; the token expires, so regenerate it by hand in Upstox Developer Apps each day, otherwise the panel says so. A display only (polls every 10 s while the market is open): the paper books trade on daily bars and never use these prices. |
 | `python -m webapp.backend.snapshot --list` | Show the strategy ids the snapshot knows. |
 | `python webapp/smoke_check.py` | Smoke test: starts the app on a spare port and sweeps every route, every strategy and window, and all 441 stocks against the real results (about 1 minute). Run it after regenerating results or changing the backend. |
 | `python -m webapp.backend.snapshot --manifest-only` | Rewrite `manifest.json` from the strategy files already on disk (instant). Its provenance is always that of the OLDEST strategy result. |

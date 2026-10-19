@@ -25,6 +25,7 @@ Ground rules this file keeps (and tests/test_webapp_api.py enforces):
 """
 
 import os
+from datetime import datetime, timezone
 from bisect import bisect_left, bisect_right
 from pathlib import Path
 from typing import Literal, Optional
@@ -307,6 +308,29 @@ def forward_books():
             notes=b.get("notes", [])))
     return schemas.ForwardBooksResponse(generated_at=raw["generated_at"], start=raw["start"],
                                         first_counted_day=raw["first_counted_day"], books=books)
+
+
+# A price file older than this is "stale": the writer polls every 10 s while the market is open and every
+# 5 minutes otherwise, so these leave generous room before the page warns that the feed has stopped.
+LIVE_STALE_OPEN_SECONDS = 60
+LIVE_STALE_OTHER_SECONDS = 900
+
+
+@api.get("/live-quotes", response_model=schemas.LiveQuotesResponse,
+         summary="Near-live prices of the stocks the paper books hold (a display; written by research/live_quotes.py).")
+def live_quotes():
+    raw = store.load_live_quotes_raw()
+    if raw is None:
+        return schemas.LiveQuotesResponse(
+            reason="The live price writer has not run yet. Start it from the project root with: "
+                   "python research/live_quotes.py --loop")
+    age = int((datetime.now(timezone.utc) - datetime.strptime(raw["generated_at"], "%Y-%m-%dT%H:%M:%SZ")
+               .replace(tzinfo=timezone.utc)).total_seconds())
+    limit = LIVE_STALE_OPEN_SECONDS if raw["market_status"] == "open" else LIVE_STALE_OTHER_SECONDS
+    return schemas.LiveQuotesResponse(
+        generated_at=raw["generated_at"], age_seconds=age, is_stale=age > limit, market_status=raw["market_status"],
+        market_note=raw["market_note"], available=raw["available"], reason=raw["reason"], n_requested=raw["n_requested"],
+        quotes=[schemas.LiveQuote(**q) for q in raw["quotes"]])
 
 
 @api.get("/forward-test", response_model=schemas.ForwardResponse,

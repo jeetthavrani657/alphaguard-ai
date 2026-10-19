@@ -540,6 +540,34 @@ class ForwardBooksResponse(BaseModel):
     books: list[ForwardBook]
 
 
+# --- live prices ------------------------------------------------------------------
+
+class LiveQuote(BaseModel):
+    symbol: str
+    last_price: Optional[float] = None
+    prev_close: Optional[float] = None
+    change_pct: Optional[float] = None      # worked out by research/live_quotes.py, never by the page
+    volume: Optional[float] = None
+    held_by: list[str] = []                 # ids of the paper books that hold (or would hold) the stock
+
+
+class LiveQuotesResponse(BaseModel):
+    """
+    Near-live last traded prices written by `python research/live_quotes.py --loop`. A display only: the
+    paper books run on daily bars and never use these prices. `available` is false, with a plain reason,
+    when the writer has not run or the Upstox token has expired.
+    """
+    generated_at: Optional[str] = None
+    age_seconds: Optional[int] = None
+    is_stale: bool = True
+    market_status: Literal["open", "pre-open", "closed", "unknown"] = "unknown"
+    market_note: str = ""
+    available: bool = False
+    reason: Optional[str] = None
+    n_requested: int = 0
+    quotes: list[LiveQuote] = []
+
+
 # --- housekeeping ------------------------------------------------------------
 
 class Manifest(BaseModel):

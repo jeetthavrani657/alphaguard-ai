@@ -554,3 +554,49 @@ def test_forward_books_missing_is_a_helpful_404_not_a_crash(client, tmp_path, mo
     monkeypatch.setenv("WEBAPP_FORWARD_BOOKS", str(tmp_path / "nope.json"))
     r = client.get("/api/forward-books")
     assert r.status_code == 404 and "forward_books.py" in r.json()["detail"]
+
+
+# --- live prices ------------------------------------------------------------------------------------------
+
+def _live_file(tmp_path, monkeypatch, **over):
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc) - timedelta(seconds=over.pop("age", 5))
+    payload = {"generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "market_status": "open", "market_note": "note",
+               "available": True, "reason": None, "n_requested": 2,
+               "quotes": [{"symbol": "TCS", "last_price": 2449.4, "prev_close": 2440.0, "change_pct": 0.39, "volume": 5,
+                           "held_by": ["quality_value_nifty50"]},
+                          {"symbol": "ITC", "last_price": None, "prev_close": None, "change_pct": None, "volume": None,
+                           "held_by": []}]}
+    payload.update(over)
+    path = tmp_path / "live.json"
+    path.write_text(json.dumps(payload))
+    monkeypatch.setenv("WEBAPP_LIVE_QUOTES", str(path))
+
+
+def test_live_quotes_are_served_as_written_with_their_age(client, tmp_path, monkeypatch):
+    _live_file(tmp_path, monkeypatch)
+    d = client.get("/api/live-quotes").json()
+    assert d["available"] is True and d["market_status"] == "open" and d["is_stale"] is False
+    assert 0 <= d["age_seconds"] < 60
+    by = {q["symbol"]: q for q in d["quotes"]}
+    assert by["TCS"]["change_pct"] == 0.39 and by["TCS"]["held_by"] == ["quality_value_nifty50"]
+    assert by["ITC"]["last_price"] is None                                    # a missing price stays missing
+
+
+def test_an_old_file_is_flagged_stale_with_a_shorter_limit_while_the_market_is_open(client, tmp_path, monkeypatch):
+    _live_file(tmp_path, monkeypatch, age=120)
+    assert client.get("/api/live-quotes").json()["is_stale"] is True          # 2 minutes old while open
+    _live_file(tmp_path, monkeypatch, age=120, market_status="closed")
+    assert client.get("/api/live-quotes").json()["is_stale"] is False         # the same age is fine when closed
+
+
+def test_an_expired_token_arrives_as_a_reason_not_an_error(client, tmp_path, monkeypatch):
+    _live_file(tmp_path, monkeypatch, available=False, reason="The Upstox access token has expired.", quotes=[])
+    r = client.get("/api/live-quotes")
+    assert r.status_code == 200 and r.json()["available"] is False and "expired" in r.json()["reason"]
+
+
+def test_no_live_file_yet_explains_how_to_start_the_writer(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_LIVE_QUOTES", str(tmp_path / "nope.json"))
+    r = client.get("/api/live-quotes")
+    assert r.status_code == 200 and r.json()["available"] is False and "live_quotes.py" in r.json()["reason"]

@@ -191,6 +191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/live-quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Near-live prices of the stocks the paper books hold (a display; written by research/live_quotes.py). */
+        get: operations["live_quotes_api_live_quotes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/forward-test": {
         parameters: {
             query?: never;
@@ -556,6 +573,69 @@ export interface components {
             cumulative_hypotheses_before_run: number;
             /** Cumulative Hypotheses After Run */
             cumulative_hypotheses_after_run: number;
+        };
+        /** LiveQuote */
+        LiveQuote: {
+            /** Symbol */
+            symbol: string;
+            /** Last Price */
+            last_price?: number | null;
+            /** Prev Close */
+            prev_close?: number | null;
+            /** Change Pct */
+            change_pct?: number | null;
+            /** Volume */
+            volume?: number | null;
+            /**
+             * Held By
+             * @default []
+             */
+            held_by: string[];
+        };
+        /**
+         * LiveQuotesResponse
+         * @description Near-live last traded prices written by `python research/live_quotes.py --loop`. A display only: the
+         *     paper books run on daily bars and never use these prices. `available` is false, with a plain reason,
+         *     when the writer has not run or the Upstox token has expired.
+         */
+        LiveQuotesResponse: {
+            /** Generated At */
+            generated_at?: string | null;
+            /** Age Seconds */
+            age_seconds?: number | null;
+            /**
+             * Is Stale
+             * @default true
+             */
+            is_stale: boolean;
+            /**
+             * Market Status
+             * @default unknown
+             * @enum {string}
+             */
+            market_status: "open" | "pre-open" | "closed" | "unknown";
+            /**
+             * Market Note
+             * @default
+             */
+            market_note: string;
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * N Requested
+             * @default 0
+             */
+            n_requested: number;
+            /**
+             * Quotes
+             * @default []
+             */
+            quotes: components["schemas"]["LiveQuote"][];
         };
         /**
          * PriceSeries
@@ -1388,6 +1468,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForwardBooksResponse"];
+                };
+            };
+        };
+    };
+    live_quotes_api_live_quotes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveQuotesResponse"];
                 };
             };
         };
