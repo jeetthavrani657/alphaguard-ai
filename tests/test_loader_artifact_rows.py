@@ -45,3 +45,21 @@ def test_ordinary_rows_including_a_real_zero_volume_day_with_a_price_move_are_ke
         [101, 103, 100, 102, 1500],
     ])
     assert len(_drop_phantom_rows(df)) == 3
+
+
+def test_a_refresh_keeps_a_cached_day_that_yahoo_lists_without_prices_and_lets_a_priced_day_win(tmp_path, monkeypatch):
+    import loader
+    monkeypatch.setattr(loader, "CACHE_DIR", tmp_path)
+    idx = pd.bdate_range("2026-10-14", periods=4)                                    # Wed 14 .. Mon 19
+    cached = pd.DataFrame({"open": 1.0, "high": 2.0, "low": 0.5, "close": [10.0, 11.0, 12.0, 13.0], "volume": 100}, index=idx)
+    cached.index.name = "date"
+    loader._save_cache("ABC.NS", cached)
+    unpriced = cached.copy()
+    unpriced.loc[idx[-1], ["open", "high", "low", "close"]] = np.nan                  # Yahoo: a volume, no prices yet
+    monkeypatch.setattr(loader, "_download_with_retry", lambda *a, **k: unpriced.rename(columns=str.title))
+    out = loader.load_price_data("ABC.NS", "2026-10-14", "2026-10-20")
+    assert list(out.index) == list(idx) and out["close"].iloc[-1] == 13.0              # the provisional 19th survives
+    priced = cached.copy()
+    priced.loc[idx[-1], "close"] = 13.5                                               # later Yahoo prices it: the fresh value wins
+    monkeypatch.setattr(loader, "_download_with_retry", lambda *a, **k: priced.rename(columns=str.title))
+    assert loader.load_price_data("ABC.NS", "2026-10-14", "2026-10-21")["close"].iloc[-1] == 13.5

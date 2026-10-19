@@ -222,6 +222,15 @@ def load_price_data(symbol: str, start: str, end: str, force_refresh: bool = Fal
 
     combined = _drop_phantom_rows(_clean_columns(fresh))
 
+    # Yahoo can list the newest session with a volume but no prices for hours after the close, and the line above drops
+    # that row. If the cache already held that day (from an earlier download that had provisional prices), replacing
+    # the cache would delete a real session and set every forward test back a day (found 2026-10-20). So cached rows
+    # LATER than the newest priced row of the fresh download are kept; once Yahoo prices that day, the fresh row wins.
+    if existing is not None and not existing.empty and not combined.empty:
+        later = existing.loc[existing.index > combined.index.max()]
+        if not later.empty:
+            combined = pd.concat([combined, later])
+
     # Vendor-truncation guard. Replacing the cache is only safe if the new download is
     # at least as deep as what we hold. Yahoo sometimes re-lists a ticker and then serves
     # only the history since the re-listing (found: HEG.NS began 2026-07-17 on a refresh,
