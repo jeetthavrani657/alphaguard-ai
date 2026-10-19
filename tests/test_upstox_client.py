@@ -270,3 +270,28 @@ def test_get_ltp_needs_a_token(monkeypatch):
     monkeypatch.setattr(uc, "get_credential", lambda name: None)
     with pytest.raises(RuntimeError, match="UPSTOX_ACCESS_TOKEN is not set"):
         uc.get_ltp(["TCS"], IMAP)
+
+
+# --- today's daily candle ----------------------------------------------------------------------------------------------
+
+def test_todays_candle_comes_from_the_intraday_endpoint_for_the_right_instrument(monkeypatch):
+    urls = []
+    monkeypatch.setattr(uc, "_http_get", lambda url, token=None, retries=3: urls.append((url, token)) or json.dumps(
+        _payload([["2026-10-19T00:00:00+05:30", 2458.0, 2497.0, 2432.1, 2460.9, 8676373, 0]])).encode())
+    f = uc.fetch_today_daily("TCS.NS", IMAP, token="tok")
+    assert urls == [(uc.HISTORICAL_PREFIX + "intraday/NSE_EQ%7CINE467B01029/days/1", "tok")]
+    assert list(f.index) == [pd.Timestamp("2026-10-19")] and f.loc["2026-10-19", "close"] == 2460.9
+
+
+def test_before_the_open_there_is_simply_no_row(monkeypatch):
+    monkeypatch.setattr(uc, "_http_get", lambda url, token=None, retries=3: json.dumps(_payload([])).encode())
+    assert uc.fetch_today_daily("TCS", IMAP, token="tok").empty
+
+
+def test_todays_candle_needs_a_token_and_a_listed_symbol(monkeypatch):
+    _no_network(monkeypatch)
+    monkeypatch.setattr(uc, "get_credential", lambda name: None)
+    with pytest.raises(RuntimeError, match="UPSTOX_ACCESS_TOKEN is not set"):
+        uc.fetch_today_daily("TCS", IMAP)
+    with pytest.raises(KeyError, match="NOPE"):
+        uc.fetch_today_daily("NOPE", IMAP, token="tok")

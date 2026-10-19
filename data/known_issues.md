@@ -360,3 +360,15 @@ INFY, TATASTEEL, TCS, ITC, MARUTI, ASIANPAINT. **This is a sample of 8, not the 
   the gap if it ever matters.
 - **Not tested:** delisted/removed stocks (the instrument list covers listed ones), minute data, the live
   feed, and the other ~440 stocks.
+
+- **Upstox's daily endpoint does not return the current day.** `fetch_daily` stops at the last COMPLETED day
+  (asking for 2026-10-19 on the evening of 2026-10-19 returned nothing). Today's candle comes from the intraday
+  endpoint, `upstox_client.fetch_today_daily`. Found while verifying the first forward day (below).
+
+## First forward day, verified independently (2026-10-19)
+
+The quality + value book reported -0.480% for its first counted day. Recomputed by hand, outside the engine: the
+ten frozen picks' opens and closes from **Upstox** and from the **yfinance cache** agree exactly (10 of 10, equal-
+weight gross return -0.319% from both); with whole-share rounding (99.0% of capital invested) and the engine's
+buy-side costs (STT 0.1%, stamp 0.015%, exchange and SEBI charges, GST, 0.05% slippage) the net is -0.480%. The
+forward machinery, the data and the cost model reproduce a real day to three decimals.

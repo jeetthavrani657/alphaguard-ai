@@ -193,6 +193,24 @@ def fetch_daily(instrument_key: str, start: str, end: str, token: str | None = N
     return frame[~frame.index.duplicated(keep="last")].sort_index()
 
 
+def fetch_today_daily(symbol: str, instrument_map: dict | None = None, token: str | None = None) -> pd.DataFrame:
+    """
+    TODAY's daily candle (open, high, low, close so far, volume) for one symbol: zero or one row. The ordinary
+    daily endpoint (fetch_daily) stops at the last COMPLETED day, even after the close, so the current day has to
+    come from the intraday endpoint (found when checking the first forward day, 2026-10-19). Empty before the open
+    and on non-trading days. Same address prefix as the historical candles, so the same gate applies.
+    """
+    token = token or get_credential("UPSTOX_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set (see CLAUDE.md rule 5: keys live in environment variables)")
+    instrument_map = instrument_map or load_instrument_map()
+    symbol = symbol.removesuffix(".NS")
+    if symbol not in instrument_map:
+        raise KeyError(f"{symbol} is not in Upstox's NSE equity list")
+    key = urllib.parse.quote(instrument_map[symbol], safe="")
+    return parse_candles(json.loads(_http_get(f"{HISTORICAL_PREFIX}intraday/{key}/days/1", token)))
+
+
 def parse_ltp(payload: dict, instrument_map: dict) -> dict:
     """
     {symbol: {"last_price", "prev_close", "volume"}} from an LTP response. Each entry is matched to its
