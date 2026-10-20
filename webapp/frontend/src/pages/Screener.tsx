@@ -68,11 +68,10 @@ export function Screener() {
 
   return (
     <div>
-      <div className="pagehead"><h1>Screener</h1></div>
+      <div className="pagehead"><h1>Stocks</h1></div>
       <p className="note info">
-        Buy-and-hold returns per window. <b>No Sharpe is shown here on purpose:</b> ranking 441 stocks by Sharpe is a
-        multiple comparison, the exact trap the hypothesis ledger exists to prevent. Stocks marked ⚠ have a data
-        problem: read the flag before the return.
+        Returns shown are what simply holding each stock would have made in each window. There is no Sharpe ranking here on purpose: with 441 stocks, the top of
+        such a list would mostly be lucky ones. Stocks marked ⚠ have a data problem; read the flag before the return.
       </p>
       <Panel title="Stocks" right={controls}>
         <Async state={state}>

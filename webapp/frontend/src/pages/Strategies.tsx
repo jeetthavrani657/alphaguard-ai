@@ -5,27 +5,32 @@ import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
+import { Term } from "../components/Term";
+import { when } from "../fmt";
 
 export function Strategies() {
   const state = useApi(() => api.strategies(), []);
   return (
     <div>
       <div className="pagehead"><h1>Strategies</h1></div>
+      <p className="lede">
+        Each row is a trading rule tested on a whole list of stocks, first on an early window and then on a later one it was not first judged on. Click one for the detail.
+        Most rules that look good in one window fail the honest check, and the status beside each Sharpe ratio says which.
+      </p>
       <Async state={state}>
         {(d) => (
           <>
             <p className="note info">
-              Hypothesis ledger now: <b>{d.ledger_total_now}</b> · results generated {d.snapshot_generated_at}. A status
-              is only true as of the hypothesis count beside it: the Bonferroni bar is 0.05 divided by that count, so it
-              only gets harder as more things are tried.
+              <b>{d.ledger_total_now}</b> ideas have been tried so far, and results were generated {when(d.snapshot_generated_at)}. A status is only true as of the
+              count beside it: the <Term k="bonferroni">Bonferroni bar</Term> is 0.05 divided by that count, so it only gets harder as more things are tried.
             </p>
             <Panel title="Registered strategies" flush>
               <div className="tablewrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Strategy</th><th>Universe</th><th>Status</th><th>In-sample Sharpe</th>
-                      <th>Out-of-sample Sharpe</th><th>Fresh?</th>
+                      <th>Strategy</th><th>Universe</th><th>Status</th><th><Term k="in_sample">In-sample</Term> <Term k="sharpe">Sharpe</Term></th>
+                      <th><Term k="out_of_sample">Out-of-sample</Term> <Term k="sharpe">Sharpe</Term></th><th>Up to date?</th>
                     </tr>
                   </thead>
                   <tbody>

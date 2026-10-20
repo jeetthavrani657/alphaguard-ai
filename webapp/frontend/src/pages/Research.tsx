@@ -4,6 +4,8 @@ import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { StatusChip } from "../components/StatusChip";
+import { plain } from "../labels";
+import { Term } from "../components/Term";
 import { int, pct, signClass } from "../fmt";
 
 export function Research() {
@@ -13,30 +15,32 @@ export function Research() {
 
   return (
     <div>
-      <div className="pagehead"><h1>Research record</h1></div>
+      <div className="pagehead"><h1>Research log</h1></div>
+      <p className="lede">
+        The full, honest record: every idea that was ever tried (the failures too), the paper test that was frozen in advance, and the stocks whose data has a known problem.
+        This is what keeps the scoreboard from being a highlight reel.
+      </p>
 
-      <Panel title="Hypothesis ledger" flush>
+      <Panel title="Every idea ever tried" flush>
         <Async state={ledger}>
           {(l) => (
             <>
               <div style={{ padding: "10px 14px" }}>
                 <p className="note info" style={{ margin: 0 }}>
-                  <b>{l.cumulative_hypotheses}</b> hypotheses registered in total. Results were generated when the
-                  count was <b>{l.snapshot_total ?? "?"}</b>
-                  {l.snapshot_is_stale ? " (STALE: more have been registered since)" : ""}; the harness's Bonferroni
-                  bar at that point was <code>{l.bonferroni_bar_at_snapshot ?? "?"}</code>.
+                  <b>{l.cumulative_hypotheses}</b> ideas tried in total. The results on the other pages were worked out when the count was <b>{l.snapshot_total ?? "?"}</b>
+                  {l.snapshot_is_stale ? " (more have been tried since)" : ""}; the <Term k="bonferroni">Bonferroni bar</Term> then was <b>{l.bonferroni_bar_at_snapshot?.toFixed(6) ?? "?"}</b>.
                 </p>
               </div>
               <div className="tablewrap scroll" style={{ maxHeight: 420 }}>
                 <table>
                   <thead>
-                    <tr><th>When (UTC)</th><th>What was tried</th><th className="num">New</th><th className="num">Total after</th></tr>
+                    <tr><th>When</th><th>What was tried</th><th className="num">Ideas added</th><th className="num">Total so far</th></tr>
                   </thead>
                   <tbody>
                     {l.runs.map((r) => (
                       <tr key={r.run_id}>
                         <td>{r.timestamp.slice(0, 16).replace("T", " ")}</td>
-                        <td className="wrap">{r.context}</td>
+                        <td className="wrap">{plain(r.context)}</td>
                         <td className="num">{r.n_hypotheses_this_run}</td>
                         <td className="num">{r.cumulative_hypotheses_after_run}</td>
                       </tr>
@@ -50,7 +54,7 @@ export function Research() {
       </Panel>
 
       <div className="grid2">
-        <Panel title="Forward test (pre-registered, FORWARD_TEST.md)" flush>
+        <Panel title="The dip-buying forward test (frozen in advance)" flush>
           <Async state={forward}>
             {(f) => (
               <>
@@ -88,13 +92,12 @@ export function Research() {
           </Async>
         </Panel>
 
-        <Panel title="Data quality · stocks with an unresolved issue">
+        <Panel title="Stocks with a data problem">
           <Async state={quality}>
             {(q) => (
               <>
                 <p className="muted">
-                  {q.n_symbols} stocks checked · {q.n_usable} usable · {q.n_with_unresolved_discontinuity} with an
-                  unresolved discontinuity
+                  {q.n_symbols} stocks checked · {q.n_usable} usable · {q.n_with_unresolved_discontinuity} with a price jump that could not be explained
                 </p>
                 {q.symbols.length === 0 && <p>None.</p>}
                 {q.symbols.map((s) => (

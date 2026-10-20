@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
@@ -7,13 +7,15 @@ import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
-import { int, num, pct, signClass } from "../fmt";
+import { Term } from "../components/Term";
+import { plain } from "../labels";
+import { int, num, pct, signClass, when } from "../fmt";
 import type { Window, WindowMetrics } from "../api/types";
 
 const PAGE = 10;
 
 function MetricsTable({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
-  const row = (label: string, f: (m: WindowMetrics) => string, sign?: (m: WindowMetrics) => number | null) => (
+  const row = (label: ReactNode, f: (m: WindowMetrics) => string, sign?: (m: WindowMetrics) => number | null) => (
     <tr>
       <td>{label}</td>
       <td className={`num ${sign ? signClass(sign(s)) : ""}`}>{f(s)}</td>
@@ -23,18 +25,18 @@ function MetricsTable({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
   return (
     <div className="tablewrap">
       <table>
-        <thead><tr><th></th><th className="num">Strategy</th><th className="num">Buy &amp; hold (same stocks)</th></tr></thead>
+        <thead><tr><th></th><th className="num">Strategy</th><th className="num">Buy &amp; hold (same stocks) <Term k="benchmark">?</Term></th></tr></thead>
         <tbody>
-          <tr><td>Sharpe</td><td className="num"><Ratio ratio={s.sharpe} /></td><td className="num"><Ratio ratio={b.sharpe} /></td></tr>
-          <tr><td>Sortino</td><td className="num"><Ratio ratio={s.sortino} /></td><td className="num"><Ratio ratio={b.sortino} /></td></tr>
+          <tr><td><Term k="sharpe">Sharpe</Term></td><td className="num"><Ratio ratio={s.sharpe} /></td><td className="num"><Ratio ratio={b.sharpe} /></td></tr>
+          <tr><td><Term k="sortino">Sortino</Term></td><td className="num"><Ratio ratio={s.sortino} /></td><td className="num"><Ratio ratio={b.sortino} /></td></tr>
           {row("Total return", (m) => pct(m.total_return_pct), (m) => m.total_return_pct)}
-          {row("CAGR", (m) => pct(m.cagr_pct), (m) => m.cagr_pct)}
-          {row("Max drawdown", (m) => pct(m.max_drawdown_pct))}
+          {row(<Term k="cagr">CAGR</Term>, (m) => pct(m.cagr_pct), (m) => m.cagr_pct)}
+          {row(<Term k="drawdown">Max drawdown</Term>, (m) => pct(m.max_drawdown_pct))}
           {row("Longest drawdown (days)", (m) => int(m.max_drawdown_duration_days))}
           {row("Win rate (closed trades)", (m) => pct(m.win_rate_pct))}
-          {row("Profit factor", (m) => (m.profit_factor === null ? "undefined" : num(m.profit_factor)))}
+          {row("Profit factor", (m) => (m.profit_factor === null ? "no losing trades" : num(m.profit_factor)))}
           {row("Closed trades", (m) => int(m.total_trades))}
-          {row("Market exposure", (m) => pct(m.market_exposure_pct))}
+          {row(<Term k="exposure">Market exposure</Term>, (m) => pct(m.market_exposure_pct))}
           {row("Stocks included", (m) => int(m.n_symbols_included))}
         </tbody>
       </table>
@@ -67,22 +69,27 @@ export function StrategyPage() {
               <span className="muted">as of {d.as_of_hypotheses} hypotheses</span>
               {d.stale && <span className="chip stale">STALE: ledger has grown since</span>}
             </div>
-            <p className="muted">{d.rationale} · parameters <code>{JSON.stringify(d.params)}</code></p>
-            {d.notes.map((n) => <p className="note" key={n}>{n}</p>)}
+            <p className="lede">
+              {d.rationale}
+              {Object.keys(d.params).length > 0 && <> Settings: {Object.entries(d.params).map(([k, v]) => `${k.replaceAll("_", " ")} ${String(v)}`).join(" · ")}.</>}
+            </p>
+            {d.notes.map((n) => <p className="note" key={n}>{plain(n)}</p>)}
 
             <div className="grid2">
-              <Panel title={`In-sample · ${d.in_sample.start} → ${d.in_sample.end}`} flush>
+              <Panel title={`Early window (in-sample) · ${d.in_sample.start} → ${d.in_sample.end}`} flush>
                 <MetricsTable s={d.in_sample.strategy} b={d.in_sample.benchmark} />
               </Panel>
-              <Panel title={`Out-of-sample · ${d.out_of_sample.start} → ${d.out_of_sample.end}`} flush>
+              <Panel title={`Later window (out-of-sample) · ${d.out_of_sample.start} → ${d.out_of_sample.end}`} flush>
                 <MetricsTable s={d.out_of_sample.strategy} b={d.out_of_sample.benchmark} />
               </Panel>
             </div>
-            <p className="muted" style={{ marginTop: -4 }}>
-              Generated {d.provenance.generated_at} · code {d.provenance.git_commit ?? "?"}
-              {d.provenance.git_dirty ? " (uncommitted changes)" : ""} · data through {d.provenance.data_through} ·
-              annual risk-free rate {d.provenance.risk_free_rate} · ledger {d.provenance.ledger_total_at_snapshot}
-            </p>
+            <details className="provenance">
+              <summary>Where these numbers came from</summary>
+              <p className="muted">
+                Worked out {when(d.provenance.generated_at)} · prices through {d.provenance.data_through} ·
+                yearly cash rate used for the Sharpe ratio {d.provenance.risk_free_rate} · {d.provenance.ledger_total_at_snapshot} ideas tested at the time
+              </p>
+            </details>
           </>
         )}
       </Async>

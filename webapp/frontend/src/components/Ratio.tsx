@@ -1,5 +1,7 @@
 import type { RiskAdjustedRatio } from "../api/types";
 import { StatusChip } from "./StatusChip";
+import { strategyLabel } from "../labels";
+import { Term } from "./Term";
 
 /**
  * THE ONLY WAY A SHARPE OR SORTINO IS RENDERED IN THIS APP.
@@ -25,11 +27,11 @@ export function Ratio({ ratio }: { ratio: RiskAdjustedRatio }) {
       <span className="asof">as of {ratio.as_of_hypotheses}</span>
       {isSlice && (
         <span className="parent">
-          slice of {ratio.parent_strategy_id} ({ratio.parent_status}) · not a standalone test
+          part of the {ratio.parent_strategy_id ? strategyLabel(ratio.parent_strategy_id) : "pooled"} test ({ratio.parent_status?.replaceAll("_", " ").toLowerCase()}) · not a result on its own
         </span>
       )}
-      {ratio.clears_bar === true && <span className="bar pos">clears Bonferroni bar</span>}
-      {ratio.clears_bar === false && <span className="bar neg">below Bonferroni bar</span>}
+      {ratio.clears_bar === true && <span className="bar pos">clears <Term k="bonferroni">Bonferroni bar</Term></span>}
+      {ratio.clears_bar === false && <span className="bar neg">below <Term k="bonferroni">Bonferroni bar</Term></span>}
     </span>
   );
 }

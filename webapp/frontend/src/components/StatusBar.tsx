@@ -1,43 +1,40 @@
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
+import { day, when } from "../fmt";
 
 /**
- * The strip across the top. Where FINAGENT shows a live index ticker, this
- * shows what is actually true about THIS data: how fresh it is, which code
- * produced it, and how many hypotheses stand behind every status on screen.
- * Every value is read from the API; nothing here is simulated.
+ * The strip across the top: is everything up to date, which date the research prices run to, and how many ideas have been
+ * tried. A problem is always shown on the strip itself; the technical details (when the results were produced, which version of
+ * the code) are one click away. Every value is read from the API; nothing here is simulated.
  */
 export function StatusBar() {
   const state = useApi(() => api.health(), []);
-  if (state.status === "loading") return <div className="statusbar">connecting to API…</div>;
+  if (state.status === "loading") return <div className="statusbar">Connecting…</div>;
   if (state.status === "error") {
-    return <div className="statusbar"><span className="bad">API UNREACHABLE</span> {state.message}</div>;
+    return <div className="statusbar"><span className="bad">● Can't reach the data service</span> <span>{state.message}</span></div>;
   }
   const h = state.data;
+  const problems: string[] = [];
+  if (!h.ok) problems.push(h.detail ?? "The data service is not ready.");
+  if (h.snapshot_stale) problems.push(`Results were computed when ${h.snapshot_ledger_total} ideas had been tried; more have been added since.`);
+  if (h.forward_health_stale) problems.push("The daily paper-test health check has stopped running.");
+  else if (h.forward_health && h.forward_health !== "OK") problems.push(`Daily paper test: ${h.forward_health}. ${h.forward_health_problems.join(" · ")}`);
+  const good = problems.length === 0;
   return (
     <div className="statusbar">
-      <span className={h.ok ? "ok" : "bad"}>● {h.ok ? "API OK" : "API NOT READY"}</span>
-      {!h.ok && <span className="warn">{h.detail}</span>}
-      <span>DATA THROUGH <b>{h.data_through ?? "—"}</b></span>
-      <span>LEDGER <b>{h.ledger_total_now ?? "—"}</b> hypotheses</span>
-      {h.snapshot_stale && <span className="warn">⚠ RESULTS COMPUTED AT {h.snapshot_ledger_total} — STALE</span>}
-      {h.forward_health && (
-        h.forward_health_stale ? (
-          <span className="warn">⚠ FORWARD-TEST HEALTH CHECK HAS STOPPED (last {h.forward_health_generated_at?.slice(0, 16).replace("T", " ")} UTC)</span>
-        ) : h.forward_health === "OK" ? (
-          <span>FORWARD TEST <b className="ok">OK</b></span>
-        ) : (
-          <span className={h.forward_health === "FAIL" ? "bad" : "warn"}>
-            ⚠ FORWARD TEST {h.forward_health}: {h.forward_health_problems.join(" · ")}
-          </span>
-        )
-      )}
-      <span>RESULTS GENERATED <b>{h.snapshot_generated_at?.slice(0, 16).replace("T", " ") ?? "—"}</b> UTC</span>
-      <span>
-        CODE <b>{h.git_commit ?? "?"}</b>
-        {h.git_dirty ? <span className="warn"> +uncommitted changes</span> : null}
+      <span className={good ? "ok" : "warn"} title={good ? "Data, results and the daily paper test are all up to date." : problems.join(" ")}>
+        ● {good ? "All up to date" : "Needs attention"}
       </span>
-      <span>RESEARCH PRICES: SPLIT/DIVIDEND-ADJUSTED, THROUGH THE DATE ABOVE</span>
+      <span>Backtest prices through <b>{day(h.data_through)}</b></span>
+      <span><b>{h.ledger_total_now ?? "—"}</b> ideas tested so far</span>
+      {problems.map((p) => <span className="warn" key={p}>⚠ {p}</span>)}
+      <details className="tech">
+        <summary>Details</summary>
+        <div>
+          <p>Results generated <b>{when(h.snapshot_generated_at)}</b></p>
+          <p>Research prices are adjusted for splits and dividends and run to the date above. Live prices are on the Paper trading page.</p>
+        </div>
+      </details>
     </div>
   );
 }

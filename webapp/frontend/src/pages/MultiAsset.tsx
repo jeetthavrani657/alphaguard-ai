@@ -7,6 +7,7 @@ import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
+import { Term } from "../components/Term";
 import { num, pct, signClass } from "../fmt";
 import type { MultiassetResponse } from "../api/types";
 
@@ -28,8 +29,8 @@ function ResultsTable({ d }: { d: MultiassetResponse }) {
       <table>
         <thead>
           <tr>
-            <th>Rule</th><th>Sharpe in-sample, with its status</th><th>Sharpe out-of-sample, with its status</th>
-            <th className="num">Return a year (out-of-sample)</th><th className="num">Volatility</th><th className="num">Worst fall</th><th className="num">Calmar</th>
+            <th>Rule</th><th><Term k="sharpe">Sharpe</Term> <Term k="in_sample">in-sample</Term>, with its status</th><th><Term k="sharpe">Sharpe</Term> <Term k="out_of_sample">out-of-sample</Term>, with its status</th>
+            <th className="num"><Term k="cagr">Return a year</Term> (out-of-sample)</th><th className="num"><Term k="volatility">Volatility</Term></th><th className="num"><Term k="drawdown">Worst fall</Term></th><th className="num"><Term k="calmar">Calmar</Term></th>
           </tr>
         </thead>
         <tbody>
@@ -91,6 +92,9 @@ export function MultiAsset() {
   return (
     <div>
       <div className="pagehead"><h1>Multi-asset trading rules</h1></div>
+      <p className="lede">
+        What a simple trend rule would have done across six asset classes, set against just holding them. The point is the comparison: a rule only earns its place if it beats the no-timing row.
+      </p>
       <Async state={state}>
         {(d) => {
           const s = d.strategies.find((x) => x.id === chosen) ?? d.strategies[0];
@@ -99,12 +103,12 @@ export function MultiAsset() {
             <>
               <p className="note">{d.disclaimer}</p>
               {d.is_stale && (
-                <p className="note">These results were computed when the ledger held {d.ledger_total_at_generation} hypotheses; it now holds {d.ledger_total_now}. Regenerate with <code>python research/multiasset_trend.py</code>.</p>
+                <p className="note warn">These results were worked out when {d.ledger_total_at_generation} ideas had been tried; {d.ledger_total_now} have been tried since. The statuses shown may be a little out of date.</p>
               )}
               <p className="note info">
                 A <b>trend filter</b> across six assets: Nifty 50, Nifty Midcap 150, Nasdaq-100, gold, government bonds and Bitcoin. An asset is held while its close is above its own{" "}
                 {d.trend_days}-day trend line (its mean price over that time) and replaced by cash otherwise; decisions are made every {d.rule.rebalance_every_days} trading days and carried out one day later, with {pct(d.rule.cost_pct_per_side, 2)} cost each way.
-                The design was frozen in <code>{d.design_document}</code> before any result was looked at. Two variants were registered as hypotheses; the comparison that matters for a
+                The rules were written down in full before any result was looked at. Two variants were registered as hypotheses; the comparison that matters for a
                 timing rule is the same six assets held <b>without</b> timing. See <Link to="/methodology">Methodology</Link>.
               </p>
 

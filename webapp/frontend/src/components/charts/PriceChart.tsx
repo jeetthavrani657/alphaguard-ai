@@ -1,3 +1,4 @@
+import { indicatorLabel, strategyLabel } from "../../labels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, createChart, createSeriesMarkers,
@@ -105,7 +106,7 @@ export function PriceChart({ prices, markers }: { prices: PriceSeries; markers: 
       <div className="legendline">
         <b>{prices.dates[i]}</b> · O <b>{num(prices.open[i])}</b> H <b>{num(prices.high[i])}</b> L{" "}
         <b>{num(prices.low[i])}</b> C <b>{num(prices.close[i])}</b> · Vol <b>{int(prices.volume[i])}</b>
-        {ind.map((k) => <span key={k}> · {k} <b>{num(prices.indicators[k][i])}</b></span>)}
+        {ind.map((k) => <span key={k}> · {indicatorLabel(k)} <b>{num(prices.indicators[k][i])}</b></span>)}
       </div>
       <div className="controls" style={{ marginBottom: 10 }}>
         <span className="seg">
@@ -116,7 +117,7 @@ export function PriceChart({ prices, markers }: { prices: PriceSeries; markers: 
         {strategies.length > 0 && <span className="muted">Trade markers:</span>}
         {strategies.map((id) => (
           <label key={id}>
-            <input type="checkbox" checked={isShown(id)} onChange={(e) => setShown({ ...shown, [id]: e.target.checked })} /> {id}
+            <input type="checkbox" checked={isShown(id)} onChange={(e) => setShown({ ...shown, [id]: e.target.checked })} /> {strategyLabel(id)}
           </label>
         ))}
       </div>

@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
+import { checkLabel, strategyLabel } from "../labels";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { PriceChart } from "../components/charts/PriceChart";
@@ -46,7 +47,7 @@ function ResultBlock({ r }: { r: SymbolStrategyResult }) {
           <table>
             <thead>
               <tr>
-                <th>Window</th><th>Sharpe (this stock)</th><th className="num">Strategy return</th>
+                <th>Window</th><th>Sharpe (this stock only)</th><th className="num">Strategy return</th>
                 <th className="num">Buy&amp;hold return</th><th className="num">Max drawdown</th>
                 <th className="num">Win rate (closed)</th><th className="num">Exposure</th>
               </tr>
@@ -69,7 +70,7 @@ export function Stock() {
 
   return (
     <div>
-      <Link to="/screener" className="back">← Screener</Link>
+      <Link to="/screener" className="back">← All stocks</Link>
       <Async state={detail}>
         {(d) => (
           <div className="pagehead">
@@ -80,16 +81,16 @@ export function Stock() {
             <span className="muted">adj. close · {d.last_date}</span>
             <span className="chip">{d.universe}</span>
             {d.sector && <span className="chip">{d.sector}</span>}
-            {!d.usable && <span className="chip flag">UNUSABLE</span>}
+            {!d.usable && <span className="chip flag" title="Its price data has a problem, so no strategy was tested on it.">DATA PROBLEM: NOT TESTED</span>}
             {d.quality?.discontinuities.some((x) => x.status !== "GENUINE") && (
-              <span className="chip flag">UNRESOLVED DATA DISCONTINUITY</span>
+              <span className="chip flag" title="A large one-day price move that could not be explained as a real move.">UNEXPLAINED PRICE JUMP</span>
             )}
             <span className="muted">{d.first_date} → {d.last_date}</span>
           </div>
         )}
       </Async>
 
-      <Panel title="Price · SMA 50/200 · volume · RSI 14 · strategy trades">
+      <Panel title="Price chart, with the trades each strategy made">
         <Async state={prices}>
           {(p) => (
             <Async state={detail}>{(d) => <PriceChart prices={p} markers={d.markers} />}</Async>
@@ -113,7 +114,7 @@ export function Stock() {
                     <ul style={{ margin: 0, paddingLeft: 18 }}>
                       {d.quality.checks.map((c) => (
                         <li key={c.name} className={c.passed ? "" : d.usable ? "muted" : "neg"}>
-                          {c.passed ? "pass" : d.usable ? "note (soft check, stock still usable)" : "FAIL"} — {c.name}
+                          {c.passed ? "OK" : d.usable ? "Minor note" : "Problem"} — {checkLabel(c.name)}
                           {c.affected_rows > 0 ? ` (${c.affected_rows} rows)` : ""}
                         </li>
                       ))}
@@ -131,7 +132,7 @@ export function Stock() {
                     )}
                   </>
                 ) : (
-                  <p className="muted">No quality report in the snapshot.</p>
+                  <p className="muted">No data-quality report is available for this stock.</p>
                 )}
               </Panel>
 
@@ -142,7 +143,7 @@ export function Stock() {
                     <tbody>
                       {d.markers.map((m, i) => (
                         <tr key={i}>
-                          <td>{m.strategy_id}</td>
+                          <td>{strategyLabel(m.strategy_id)}</td>
                           <td className="num">{m.entry_date} @ {num(m.entry_price)}</td>
                           <td className="num">{m.exit_date} @ {num(m.exit_price)}</td>
                           <td className={`num ${signClass(m.return_pct)}`}>{pct(m.return_pct)}</td>

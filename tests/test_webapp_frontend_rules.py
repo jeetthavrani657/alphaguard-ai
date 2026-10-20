@@ -104,3 +104,26 @@ def test_brand_assets_exist_and_the_old_product_name_is_gone_from_the_ui():
     assert "<title>AlphaGuard AI</title>" in html and "/favicon.svg" in html
     for name, text in _source_files():
         assert not re.search(r"NSE[\s·_-]*RESEARCH|NSE Research Terminal", text, flags=re.I), f"{name} still uses the old name"
+
+
+def test_every_term_used_in_the_ui_has_a_glossary_entry_and_every_validation_status_is_explained():
+    """<Term k="..."> with an unknown key would silently show plain text with no explanation; catch the typo here."""
+    glossary = open(os.path.join(SRC, "glossary.ts"), encoding="utf-8").read()
+    defined = set(re.findall(r"^\s{2}(\w+):\s*\{", glossary, flags=re.M))
+    used = set()
+    for name, text in _source_files():
+        used |= set(re.findall(r'<Term k="(\w+)"', text))
+    assert used, "no <Term> found: the tooltips were removed?"
+    assert used <= defined, f"unknown glossary keys: {sorted(used - defined)}"
+    from webapp.backend.main import app
+    statuses = set(app.openapi()["components"]["schemas"]["Status"]["enum"]) if "Status" in app.openapi()["components"]["schemas"] else set()
+    assert statuses <= defined, f"validation statuses with no plain-English explanation: {sorted(statuses - defined)}"
+    for key, entry in re.findall(r"^\s{2}(\w+):\s*\{\s*term:[^}]*short:\s*\"([^\"]*)\"", glossary, flags=re.M):
+        assert len(entry) > 20, f"glossary entry '{key}' is too short to explain anything"
+
+
+def test_every_page_sets_a_distinct_browser_tab_title_and_the_app_shell_is_not_cached():
+    app_tsx = open(os.path.join(SRC, "App.tsx"), encoding="utf-8").read()
+    for route in ("advisory", "multiasset", "strategies", "screener", "stock", "paper", "research", "methodology"):
+        assert "[/^\\/" + route in app_tsx or "/^\\/" + route in app_tsx, f"no tab title for /{route}"
+    assert "document.title" in app_tsx and "window.scrollTo(0, 0)" in app_tsx

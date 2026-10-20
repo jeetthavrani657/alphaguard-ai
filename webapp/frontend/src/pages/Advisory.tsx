@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
+import { StatusChip } from "../components/StatusChip";
+import { Term } from "../components/Term";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { int, num, pct, signClass } from "../fmt";
 import type { AdvisoryProfile, AdvisoryResponse } from "../api/types";
@@ -88,12 +90,18 @@ const AMOUNT_CHOICES = [100000, 500000, 1000000, 2500000];
  * (GET /api/advisory/basket); this component only asks and shows. It is a list to think with, never an order.
  */
 function Basket({ p }: { p: AdvisoryProfile }) {
-  const [text, setText] = useState("500000");
-  const [amount, setAmount] = useState(500000);
+  const remembered = (() => { try { return window.localStorage.getItem("alphaguard.amount") || "500000"; } catch { return "500000"; } })();
+  const [text, setText] = useState(remembered);
+  const [amount, setAmount] = useState(Number(remembered.replace(/,/g, "")) || 500000);
   // Wait for the typing to pause, so every keystroke does not become a request.
   useEffect(() => {
     const n = Number(text.replace(/,/g, ""));
-    const t = setTimeout(() => { if (Number.isFinite(n)) setAmount(n); }, 400);
+    const t = setTimeout(() => {
+      if (Number.isFinite(n)) {
+        setAmount(n);
+        try { window.localStorage.setItem("alphaguard.amount", text); } catch { /* private window: the amount is simply not remembered */ }
+      }
+    }, 400);
     return () => clearTimeout(t);
   }, [text]);
   const valid = amount >= 10000 && amount <= 1000000000;
@@ -285,6 +293,11 @@ function Stress({ d, p }: { d: AdvisoryResponse; p: AdvisoryProfile }) {
   );
 }
 
+const LABEL_TERMS: Record<string, string> = {
+  "Return a year (CAGR)": "cagr", "Volatility a year": "volatility", "Worst fall from a peak": "drawdown",
+  "1-day Value at Risk (95%)": "var", "1-day Expected Shortfall (95%)": "cvar", "Return per unit of drawdown (Calmar)": "calmar",
+};
+
 function Metrics({ p }: { p: AdvisoryProfile }) {
   const rows: [string, (m: AdvisoryProfile["strategy"]["in_sample"]) => string][] = [
     ["Return a year (CAGR)", (m) => pct(m.cagr_pct, 1)],
@@ -307,13 +320,13 @@ function Metrics({ p }: { p: AdvisoryProfile }) {
         <tbody>
           {rows.map(([label, f]) => (
             <tr key={label}>
-              <td>{label}</td>
+              <td>{LABEL_TERMS[label] ? <Term k={LABEL_TERMS[label]}>{label}</Term> : label}</td>
               <td className="num">{f(p.strategy.in_sample)}</td><td className="num">{f(p.benchmark.in_sample)}</td>
               <td className="num">{f(p.strategy.out_of_sample)}</td><td className="num">{f(p.benchmark.out_of_sample)}</td>
             </tr>
           ))}
           <tr>
-            <td>Sharpe ratio, with its status</td>
+            <td><Term k="sharpe">Sharpe ratio</Term>, with its status</td>
             <td className="num"><Ratio ratio={p.strategy.in_sample.sharpe} /></td><td className="num"><Ratio ratio={p.benchmark.in_sample.sharpe} /></td>
             <td className="num"><Ratio ratio={p.strategy.out_of_sample.sharpe} /></td><td className="num"><Ratio ratio={p.benchmark.out_of_sample.sharpe} /></td>
           </tr>
@@ -325,10 +338,16 @@ function Metrics({ p }: { p: AdvisoryProfile }) {
 
 export function Advisory() {
   const state = useApi(() => api.advisory(), []);
-  const [chosen, setChosen] = useState("moderate");
+  const [params, setParams] = useSearchParams();
+  const chosen = params.get("profile") ?? "moderate";
+  const setChosen = (id: string) => setParams({ profile: id }, { replace: true });
   return (
     <div>
-      <div className="pagehead"><h1>Multi-asset advisory</h1></div>
+      <div className="pagehead"><h1>Portfolio advisor</h1></div>
+      <p className="lede">
+        Pick how much risk you can live with, and see a mix across equity, gold, bonds, international shares and crypto that is built to stay near that level of risk,
+        what it means in rupees, and what it would have done in the past, including the bad years. Educational only.
+      </p>
       <Async state={state}>
         {(d) => {
           const p = d.profiles.find((x) => x.id === chosen) ?? d.profiles[0];
@@ -336,8 +355,15 @@ export function Advisory() {
             <>
               <p className="note">{d.disclaimer}</p>
               {d.is_stale && (
-                <p className="note">These results were computed when the ledger held {d.ledger_total_at_generation} hypotheses; it now holds {d.ledger_total_now}. Regenerate with <code>python research/advisory.py</code>.</p>
+                <p className="note warn">These results were worked out when {d.ledger_total_at_generation} ideas had been tried; {d.ledger_total_now} have been tried since. The statuses shown may be a little out of date.</p>
               )}
+
+              <nav className="toc" aria-label="On this page">
+                <span className="muted">Jump to:</span>
+                {[["mix", "Your mix"], ["amount", "In rupees"], ["rebalance", "If you already hold some"], ["risk", "Risk and history"], ["assets", "The assets"], ["trend", "Trend today"], ["stress", "Past crises"]].map(([id, label]) => (
+                  <a key={id} href={`#${id}`} onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</a>
+                ))}
+              </nav>
 
               <Panel title="1. Choose a risk profile">
                 <div className="tabs" role="tablist" aria-label="Risk profile">
@@ -351,19 +377,40 @@ export function Advisory() {
                 </details>
               </Panel>
 
-              <Panel title={`2. Recommended mix: ${p.name}`}>
+              <div className="stats" aria-label={`${p.name} at a glance`}>
+                <div className="stat">
+                  <span className="stat-label">Risk it aims for</span>
+                  <span className="stat-value">{pct(p.target_volatility_pct, 0)}</span>
+                  <span className="stat-note">a year, measured as <Term k="volatility">volatility</Term>. The rule scales the risky part down to stay near it.</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Worst fall in the test</span>
+                  <span className="stat-value">{pct(p.strategy.out_of_sample.max_drawdown_pct, 1)}</span>
+                  <span className="stat-note">out-of-sample, against {pct(p.benchmark.out_of_sample.max_drawdown_pct, 1)} for the Nifty 50 ETF. Past, not a promise.</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Honest status</span>
+                  <span className="stat-note"><StatusChip status={p.harness_status} /> as of {d.ledger_total_at_generation} ideas tested. The status says whether its returns survived the honest check.</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Paper test</span>
+                  <span className="stat-note">This rule is now running forward on new days without real money. <Link to="/paper">See how it is doing</Link>.</span>
+                </div>
+              </div>
+
+              <Panel title={`2. Recommended mix: ${p.name}`} id="mix">
                 <Allocation p={p} d={d} />
               </Panel>
 
-              <Panel title="3. If you invest an amount: the shopping list">
+              <Panel title="3. If you invest an amount: the shopping list" id="amount">
                 <Basket p={p} />
               </Panel>
 
-              <Panel title="4. Already invested? What to change">
+              <Panel title="4. Already invested? What to change" id="rebalance">
                 <Rebalance p={p} d={d} />
               </Panel>
 
-              <Panel title="5. Risk and a historical simulation">
+              <Panel title="5. Risk and a historical simulation" id="risk">
                 <p className="muted">
                   Simulated from {d.simulation_start} to {d.data_through} with the frozen rule (weights decided at one close, carried out the next day,
                   rebalanced every {d.rule.rebalance_every_days} trading days, {pct(d.rule.cost_pct_per_side, 2)} cost each way, cash at {pct(d.rule.cash_rate_pct, 0)}).
@@ -382,7 +429,7 @@ export function Advisory() {
                 <p className="muted">Blue is this mix; the other line is buying and holding the Nifty 50 ETF over the same days.</p>
               </Panel>
 
-              <Panel title="6. The assets it chooses from">
+              <Panel title="6. The assets it chooses from" id="assets">
                 <div className="tablewrap">
                   <table>
                     <thead><tr><th>Asset</th><th>Class</th><th className="num">Return a year</th><th className="num">Volatility</th><th className="num">Worst fall</th></tr></thead>
@@ -415,11 +462,11 @@ export function Advisory() {
                 <p className="muted">Low or negative correlation is what makes diversification reduce risk. Shaded green means moves almost independently or opposite; amber means they tend to fall together.</p>
               </Panel>
 
-              <Panel title="7. Where each asset stands today (trend monitor)">
+              <Panel title="7. Where each asset stands today (trend monitor)" id="trend">
                 <Trend d={d} />
               </Panel>
 
-              <Panel title="8. How it behaved in past crises (stress test)">
+              <Panel title="8. How it behaved in past crises (stress test)" id="stress">
                 <Stress d={d} p={p} />
               </Panel>
 

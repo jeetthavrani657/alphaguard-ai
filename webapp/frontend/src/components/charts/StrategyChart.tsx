@@ -5,6 +5,7 @@ import {
 } from "lightweight-charts";
 import type { EquityResponse } from "../../api/types";
 import { num, pct } from "../../fmt";
+import { plain } from "../../labels";
 import { baseChartOptions, chartColors } from "./theme";
 
 type Curve = { dates: string[]; values: number[] };
@@ -112,10 +113,10 @@ export function StrategyChart({ data }: { data: ChartData }) {
       </div>
       <div className="chartbox"><div ref={host} style={{ height: CHART_HEIGHT, width: "100%" }} /></div>
       <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-        Exposure: {data.exposure_definition ?? "not in this snapshot — regenerate it"}
+        {data.exposure_definition ? `Exposure: ${plain(data.exposure_definition)}` : ""}
       </p>
       {!data.drawdown_strategy_pct && (
-        <p className="error" role="alert">This snapshot predates drawdown/exposure series: re-run the snapshot command.</p>
+        <p className="note">The drawdown and exposure panes are not available for this strategy.</p>
       )}
     </div>
   );

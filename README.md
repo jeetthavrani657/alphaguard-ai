@@ -836,6 +836,8 @@ how each profile behaved in four named bad stretches (COVID 2020, the 2021-22 be
 winter), including where it did not help. The Paper trading page lists each book's simulated fills (a paper blotter), and
 the Methodology page explains how every result was produced. None of this adds a hypothesis or places an order.
 
+The interface is built to be learned by using it: the home page starts from what you want to do (build a portfolio, see what a rule would have done, watch the paper tests, look up a stock), every technical word (Sharpe ratio, drawdown, Bonferroni bar...) explains itself on hover or tap from one glossary (`webapp/frontend/src/glossary.ts`, listed on the How it works page), pages load on demand with placeholders, the Portfolio advisor remembers your risk profile (in the address) and your amount, and the browser tab names each page.
+
 The daily books run can take the newest sessions from the read-only Upstox client when Yahoo has not priced them yet (`data/upstox_tail.py`; needs the daily-regenerated token, falls back to Yahoo alone without it).
 
 Order execution is not built and is deliberately gated: see [EXECUTION_DESIGN.md](EXECUTION_DESIGN.md) for the conditions and the safety design that would have to exist first.

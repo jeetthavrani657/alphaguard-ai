@@ -489,6 +489,12 @@ def test_unbuilt_frontend_says_how_to_build_it(client, tmp_path, monkeypatch):
     assert r.status_code == 404 and "npm run build" in r.json()["detail"]
 
 
+def test_the_app_shell_is_always_revalidated_and_hashed_assets_are_cached_for_a_year(served):
+    assert served.get("/").headers["cache-control"] == "no-cache"                       # else a browser keeps showing yesterday's page after a rebuild
+    assert served.get("/advisory").headers["cache-control"] == "no-cache"
+    assert "immutable" in served.get("/assets/app.js").headers["cache-control"]
+
+
 def test_the_ui_is_read_only_too(served):
     assert served.post("/").status_code == 405
 

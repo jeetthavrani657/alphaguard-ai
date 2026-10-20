@@ -7,7 +7,8 @@ import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
-import { int, num, pct, signClass } from "../fmt";
+import { Term } from "../components/Term";
+import { ago, int, num, pct, signClass, when } from "../fmt";
 import type { AdvisoryForwardProfile, AdvisoryForwardResponse, ForwardBook, LiveQuote } from "../api/types";
 
 /**
@@ -32,8 +33,8 @@ function Clock({ book }: { book: ForwardBook }) {
       </div>
       <progress value={book.n_trading_days} max={book.days_needed_for_verdict} aria-label="forward days toward a verdict" />
       <span className="muted">
-        Started {book.start}; first countable session {book.first_counted_day}. No verdict before{" "}
-        {book.days_needed_for_verdict} days{book.verdict_note ? ` ${book.verdict_note}` : ""} (criteria: {book.criteria_document}).
+        Started {book.start}; first day that counts {book.first_counted_day}. No verdict before{" "}
+        {book.days_needed_for_verdict} days{book.verdict_note ? ` ${book.verdict_note}` : ""}.
       </span>
     </div>
   );
@@ -176,7 +177,7 @@ function BookCard({ book }: { book: ForwardBook }) {
 function AdvisoryProfileCard({ p, need, name }: { p: AdvisoryForwardProfile; need: number; name: (id: string) => string }) {
   const s = p.summary;
   return (
-    <Panel title={p.name} right={<span><StatusChip status={p.status} /> <span className="muted">data through {p.data_through}</span></span>}>
+    <Panel id={`adv-${p.id}`} title={p.name} right={<span><StatusChip status={p.status} /> <span className="muted">data through {p.data_through}</span></span>}>
       <div className="clock">
         <div className="clock-head">
           <span className="stat-label">Forward clock</span>
@@ -268,8 +269,7 @@ function LivePrices({ books }: { books: ForwardBook[] }) {
             <>
               {d.is_stale && (
                 <p className="note warn">
-                  These prices are {int(d.age_seconds)} seconds old, so the price writer has probably stopped. Restart it with{" "}
-                  <code>python research/live_quotes.py --loop</code>.
+                  These prices are {ago(d.age_seconds)} old: live updating is paused right now, so treat them as the last known prices.
                 </p>
               )}
               <div className="tabs" role="tablist" aria-label="Show stocks held by">
@@ -307,29 +307,68 @@ function LivePrices({ books }: { books: ForwardBook[] }) {
 
 function LiveStatus({ quotes }: { quotes: { market_status: string; available: boolean; age_seconds?: number | null } }) {
   if (!quotes.available) return <span className="muted">feed off</span>;
-  return <span><b>{quotes.market_status.toUpperCase()}</b> <span className="muted">updated {int(quotes.age_seconds)} s ago</span></span>;
+  return <span><b>{quotes.market_status.toUpperCase()}</b> <span className="muted">updated {ago(quotes.age_seconds)} ago</span></span>;
+}
+
+/** One line per paper test, side by side: how far along it is, and how it stands against simply holding. Display only. */
+function Scoreboard() {
+  const books = useApi(() => api.forwardBooks(), []);
+  const adv = useApi(() => api.advisoryForward(), []);
+  type Row = { id: string; name: string; status: string; days: number; need: number; ret: number | null | undefined; bench: number | null | undefined; to: string };
+  const rows: Row[] = [];
+  if (books.status === "ready") for (const b of books.data.books) rows.push({ id: b.id, name: b.name, status: b.status, days: b.n_trading_days, need: b.days_needed_for_verdict, ret: b.summary?.return_pct, bench: b.summary?.benchmark_return_pct, to: `#book-${b.id}` });
+  if (adv.status === "ready") for (const p of adv.data.profiles) rows.push({ id: p.id, name: p.name, status: p.status, days: p.n_trading_days, need: adv.data.days_needed_for_verdict, ret: p.summary?.return_pct, bench: p.summary?.benchmark_return_pct, to: `#adv-${p.id}` });
+  return (
+    <Panel title="Where every paper test stands" flush>
+      {rows.length === 0 ? <div style={{ padding: 14 }}><Async state={books}>{() => null}</Async></div> : (
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Test</th><th>Status</th><th className="num">Days so far</th><th className="num">Return since start</th><th className="num">Holding the same instead</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td><a href={r.to}>{r.name}</a></td>
+                  <td><StatusChip status={r.status} /></td>
+                  <td className="num">{r.days} of {r.need}</td>
+                  <td className={`num ${signClass(r.ret)}`}>{r.ret === null || r.ret === undefined ? "—" : pct(r.ret, 2)}</td>
+                  <td className={`num ${signClass(r.bench)}`}>{r.bench === null || r.bench === undefined ? "—" : pct(r.bench, 2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
 }
 
 export function PaperTrading() {
   const state = useApi(() => api.forwardBooks(), []);
+  const [showLive, setShowLive] = useState(false);
   return (
     <div>
       <div className="pagehead"><h1>Paper trading</h1></div>
+      <p className="lede">
+        Rules that were written down and frozen <i>before</i> the days being judged, run forward on new days with no real money. This is the part of the project that cannot be flattered by hindsight, so
+        nothing is judged until a full year of days has passed. Until then these numbers are just a way of watching, not evidence.
+      </p>
       <Async state={state}>
         {(d) => (
           <>
             <p className="note info">
-              {d.disclaimer} The books and their pass criteria were frozen before any forward data existed, in{" "}
-              {Array.from(new Set(d.books.map((b) => b.criteria_document))).map((doc, i) => (
-                <span key={doc}>{i > 0 && " and "}<code>{doc}</code></span>
-              ))}
-              . The dip-buying rule's own forward test is on the{" "}
-              <Link to="/research">Research record</Link> page.
+              {d.disclaimer} What counts as a pass was written down before the first day. The dip-buying rule has its own forward test on the <Link to="/research">Research log</Link> page.
+              A <Term k="paper">paper test</Term> places no order.
             </p>
-            <LivePrices books={d.books} />
-            {d.books.map((b) => <BookCard key={b.id} book={b} />)}
+            <Scoreboard />
+            {d.books.map((b) => <div id={`book-${b.id}`} key={b.id}><BookCard book={b} /></div>)}
             <AdvisoryForward />
-            <p className="muted">Generated {d.generated_at.slice(0, 16).replace("T", " ")} UTC.</p>
+            <details className="liveprices" onToggle={(e) => setShowLive((e.currentTarget as HTMLDetailsElement).open)}>
+              <summary>Live prices of the stocks these books hold (optional)</summary>
+              {showLive && <LivePrices books={d.books} />}
+            </details>
+            <p className="muted">Generated {when(d.generated_at)}.</p>
           </>
         )}
       </Async>

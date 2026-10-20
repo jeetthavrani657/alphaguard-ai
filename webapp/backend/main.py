@@ -586,6 +586,10 @@ def frontend(path: str):
     candidate = (dist / path).resolve()
     # Serve a real file only if it really lives inside dist (blocks ../ traversal); otherwise
     # fall back to the app shell.
+    # The app shell must always be re-checked, or a browser keeps showing yesterday's page after a rebuild. Files under /assets
+    # have a content hash in their name, so they can never change and may be kept for a year.
+    revalidate = {"Cache-Control": "no-cache"}
     if path and candidate.is_file() and candidate.is_relative_to(dist):
-        return FileResponse(candidate)
-    return FileResponse(index)
+        hashed = path.startswith("assets/")
+        return FileResponse(candidate, headers={"Cache-Control": "public, max-age=31536000, immutable"} if hashed else revalidate)
+    return FileResponse(index, headers=revalidate)

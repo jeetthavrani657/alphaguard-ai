@@ -2,10 +2,11 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Panel } from "../components/Panel";
+import { GLOSSARY } from "../glossary";
 
 /**
  * How everything in this application was produced, in one place, for a reader who wants to judge the method before
- * the numbers. The two figures that change (the hypothesis count and the significance bar) are read from the API; the
+ * the numbers. The two figures that change (the hypothesis count and the significance bar) are read from the data service; the
  * rest describes fixed design decisions and names the file that holds each one, so a claim here can be checked.
  */
 export function Methodology() {
@@ -16,7 +17,7 @@ export function Methodology() {
 
   return (
     <div>
-      <div className="pagehead"><h1>Methodology</h1></div>
+      <div className="pagehead"><h1>How it works</h1></div>
       <p className="note info">
         This page explains how the results were produced and what they can and cannot show. Nothing here is a forecast, and nothing in the
         application places an order: it is read-only research.
@@ -32,8 +33,8 @@ export function Methodology() {
 
       <Panel title="2. Data">
         <ul>
-          <li><b>Prices:</b> daily bars for NSE stocks and ETFs from a free source, adjusted for splits and dividends (<code>data/loader.py</code>).</li>
-          <li><b>Validation before use:</b> every series passes a data-quality gate (<code>data/validator.py</code>). Price jumps that look like unadjusted corporate actions block a stock from the tests instead of being silently trusted. Known problems are listed in <code>data/known_issues.md</code>.</li>
+          <li><b>Prices:</b> daily bars for NSE stocks and ETFs from a free source, adjusted for splits and dividends.</li>
+          <li><b>Validation before use:</b> every series passes a data-quality gate. Price jumps that look like unadjusted corporate actions block a stock from the tests instead of being silently trusted. Every known problem is written down.</li>
           <li><b>Survivorship bias is disclosed, not hidden:</b> the stock lists are today’s index members, so stocks that fell out of the index are missing, which flatters every result. The bias is quantified in the findings documents.</li>
           <li><b>Free-data bad prints:</b> the advisory’s ETF prices once held one-day errors that looked like a 90% crash. They are detected by a stated rule, carried forward, and listed on the Advisory page.</li>
           <li><b>Latest day:</b> the free source publishes the newest day late, so the paper books take today’s candle from a read-only broker market-data feed. No order, position or funds data is ever requested.</li>
@@ -42,8 +43,8 @@ export function Methodology() {
 
       <Panel title="3. Testing protocol">
         <ul>
-          <li><b>No look-ahead:</b> a signal formed at one close is acted on one day later. This single lag lives in one place in the engine, and a guard fails loudly if it is ever removed (<code>engine/backtest.py</code>).</li>
-          <li><b>Two windows:</b> in-sample runs from 2015-01-01 to 2020-06-30 and out-of-sample from 2020-07-01 to 2025-12-31 (<code>config.py</code>). A result is only called confirmed if it holds in both.</li>
+          <li><b>No look-ahead:</b> a signal formed at one close is acted on one day later. This single lag lives in one place in the engine, and a guard fails loudly if it is ever removed.</li>
+          <li><b>Two windows:</b> in-sample runs from 2015-01-01 to 2020-06-30 and out-of-sample from 2020-07-01 to 2025-12-31. A result is only called confirmed if it holds in both.</li>
           <li><b>Universe, not a single stock:</b> a rule is tested across a whole index. One stock’s Sharpe is a slice of that test, labelled as such, and never evidence by itself.</li>
           <li><b>Benchmark:</b> buy-and-hold of the same assets over the same days, with the same costs.</li>
           <li><b>Zero-skill control:</b> for portfolio rules, hundreds of random portfolios with the same size and rebalance dates give the Sharpe ratio luck alone produces; a result has to beat that distribution, not just beat zero.</li>
@@ -52,7 +53,7 @@ export function Methodology() {
 
       <Panel title="4. The hypothesis ledger and the significance bar">
         <p>
-          Every strategy, parameter set or universe ever tried is registered in a ledger (<code>research/hypothesis_ledger.json</code>),
+          Every strategy, parameter set or universe ever tried is registered in a ledger,
           successes and failures alike. The Bonferroni correction divides the 5% significance level by the <b>cumulative</b> number of hypotheses,
           so the bar only ever gets harder as more is tried.
         </p>
@@ -74,7 +75,7 @@ export function Methodology() {
 
       <Panel title="5. Costs">
         <ul>
-          <li><b>Equity strategies</b> (<code>engine/costs.py</code>, rates in <code>config.py</code>): securities transaction tax 0.1% on both buy and sell for delivery, stamp duty 0.015% on the buy side, NSE transaction charge 0.00307%, SEBI fee, 18% GST on the charges it applies to, zero brokerage, and a 0.05% slippage assumption per side. Midcap and smallcap runs add a liquidity-based cost per stock.</li>
+          <li><b>Equity strategies</b>: securities transaction tax 0.1% on both buy and sell for delivery, stamp duty 0.015% on the buy side, NSE transaction charge 0.00307%, SEBI fee, 18% GST on the charges it applies to, zero brokerage, and a 0.05% slippage assumption per side. Midcap and smallcap runs add a liquidity-based cost per stock.</li>
           <li><b>Advisory</b>: a flat 0.10% of the amount traded on each side, and cash assumed to earn 6% a year. Taxes and the exact spread of each fund are not modelled.</li>
         </ul>
       </Panel>
@@ -94,7 +95,7 @@ export function Methodology() {
 
       <Panel title="7. The multi-asset trading rules">
         <p>
-          A trend filter over the advisory’s six assets (<code>MULTIASSET_TREND.md</code>, <code>research/multiasset_trend.py</code>): an asset is held while its close is above its own 210-day trend line
+          A trend filter over the advisory’s six assets : an asset is held while its close is above its own 210-day trend line
           and replaced by cash otherwise, checked every 21 trading days and carried out one day later. Two variants were registered as hypotheses (equal slots, and the advisory’s risk machinery applied to the assets in an uptrend).
           The benchmark that matters for a timing rule is the same assets <b>without</b> timing, because that answers whether the timing itself added anything. See the <Link to="/multiasset">Multi-asset</Link> page.
         </p>
@@ -110,19 +111,51 @@ export function Methodology() {
 
       <Panel title="9. What this does not do">
         <ul>
-          <li>It does not place orders, hold positions or connect to an account. The broker feed is read-only market data. Order execution is intended as later work, gated on a validated rule and the owner’s written change to the project’s rules (see <code>EXECUTION_DESIGN.md</code>).</li>
+          <li>It does not place orders, hold positions or connect to an account. The broker feed is read-only market data. Order execution is intended as later work, gated on a validated rule and the owner’s written change to the project’s rules.</li>
           <li>It does not claim an edge: the research record is mainly a list of things that looked good and were not.</li>
           <li>It is not investment advice. Simulations are not forecasts, and history from a free data source covers a short, unusual period.</li>
           <li>Backtests use today’s index members; the survivorship bias is disclosed and only partly estimated.</li>
         </ul>
       </Panel>
 
+      <Panel title="Glossary: the terms in plain words">
+        <dl className="glossary">
+          {Object.entries(GLOSSARY).filter(([k]) => k === k.toLowerCase()).map(([k, e]) => (
+            <div key={k} id={`term-${k}`}>
+              <dt>{e.term}</dt>
+              <dd>{e.short}{e.long ? ` ${e.long}` : ""}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="muted">Hover or tap any dotted-underlined word in the app to see its meaning without coming here.</p>
+      </Panel>
+
       <Panel title="10. How to check any of this">
         <p>
-          Every number comes from code in the repository, with automated tests for the engine, the harness, the advisory, the API and the interface rules (the page is not
-          allowed to compute a result, only to show it). The full record is in <code>FINDINGS.md</code>, with <code>ADVISORY.md</code>, <code>FORWARD_BOOKS.md</code> and <code>FUNDAMENTALS_PREREG.md</code> holding the frozen designs.
+          Every number comes from code in the repository, with automated tests for the engine, the testing procedure, the advisor, the data service and the interface rules (the page is not
+          allowed to compute a result, only to show it). Each strategy’s design was written down and frozen before it was run; the file names are listed below for anyone who wants to check.
         </p>
       </Panel>
+
+      <details className="provenance reviewers">
+        <summary>For reviewers: where each part lives in the code</summary>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th>What</th><th>Where</th></tr></thead>
+            <tbody>
+              <tr><td>Price loading, cleaning and the data-quality gate</td><td><code>data/loader.py</code>, <code>data/validator.py</code>, <code>data/known_issues.md</code></td></tr>
+              <tr><td>The one-day execution lag, costs and metrics</td><td><code>engine/backtest.py</code>, <code>engine/costs.py</code>, <code>engine/metrics.py</code>, <code>config.py</code></td></tr>
+              <tr><td>The idea ledger and the significance bar</td><td><code>research/harness.py</code>, <code>research/hypothesis_ledger.json</code></td></tr>
+              <tr><td>The full research record, strategy by strategy</td><td><code>FINDINGS.md</code></td></tr>
+              <tr><td>The portfolio advisor: rule, design, findings</td><td><code>research/advisory.py</code>, <code>ADVISORY.md</code></td></tr>
+              <tr><td>The multi-asset trading rules</td><td><code>research/multiasset_trend.py</code>, <code>MULTIASSET_TREND.md</code></td></tr>
+              <tr><td>The paper tests and what counts as a pass</td><td><code>research/forward_books.py</code>, <code>research/advisory_forward.py</code>, <code>FORWARD_BOOKS.md</code>, <code>FUNDAMENTALS_PREREG.md</code></td></tr>
+              <tr><td>Why there is no order placement, and what would have to exist first</td><td><code>EXECUTION_DESIGN.md</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
     </div>
   );
 }
