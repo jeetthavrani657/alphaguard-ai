@@ -6,6 +6,7 @@ import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
+import { Tabs } from "../components/Tabs";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { Term } from "../components/Term";
 import { ago, int, num, pct, signClass, when } from "../fmt";
@@ -272,12 +273,8 @@ function LivePrices({ books }: { books: ForwardBook[] }) {
                   These prices are {ago(d.age_seconds)} old: live updating is paused right now, so treat them as the last known prices.
                 </p>
               )}
-              <div className="tabs" role="tablist" aria-label="Show stocks held by">
-                <button role="tab" aria-selected={bookId === "all"} onClick={() => setBookId("all")}>All ({d.quotes.length})</button>
-                {books.map((b) => (
-                  <button key={b.id} role="tab" aria-selected={bookId === b.id} onClick={() => setBookId(b.id)}>{b.name}</button>
-                ))}
-              </div>
+              <Tabs label="Show stocks held by" value={bookId} onChange={setBookId}
+                items={[{ id: "all", label: `All (${d.quotes.length})` }, ...books.map((b) => ({ id: b.id, label: b.name }))]} />
               <div className="tablewrap scroll" style={{ maxHeight: 340, marginTop: 10 }}>
                 <table>
                   <thead>

@@ -6,6 +6,7 @@ import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
+import { Tabs } from "../components/Tabs";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { Term } from "../components/Term";
 import { num, pct, signClass } from "../fmt";
@@ -121,11 +122,7 @@ export function MultiAsset() {
               </Panel>
 
               <Panel title="2. Growth, drawdown and exposure">
-                <div className="tabs" role="tablist" aria-label="Rule">
-                  {d.strategies.map((x) => (
-                    <button key={x.id} role="tab" aria-selected={chosen === x.id} onClick={() => setChosen(x.id)}>{x.name}</button>
-                  ))}
-                </div>
+                <Tabs label="Rule" items={d.strategies.map((x) => ({ id: x.id, label: x.name }))} value={chosen} onChange={setChosen} />
                 <p className="muted">{s.blurb} Status: <StatusChip status={s.harness_status} /></p>
                 <StrategyChart
                   data={{

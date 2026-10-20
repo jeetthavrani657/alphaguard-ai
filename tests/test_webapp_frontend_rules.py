@@ -127,3 +127,20 @@ def test_every_page_sets_a_distinct_browser_tab_title_and_the_app_shell_is_not_c
     for route in ("advisory", "multiasset", "strategies", "screener", "stock", "paper", "research", "methodology"):
         assert "[/^\\/" + route in app_tsx or "/^\\/" + route in app_tsx, f"no tab title for /{route}"
     assert "document.title" in app_tsx and "window.scrollTo(0, 0)" in app_tsx
+
+
+def test_the_pages_are_wrapped_in_an_error_boundary_so_a_failed_draw_never_leaves_a_blank_screen():
+    app_tsx = open(os.path.join(SRC, "App.tsx"), encoding="utf-8").read()
+    boundary = open(os.path.join(SRC, "components", "ErrorBoundary.tsx"), encoding="utf-8").read()
+    assert "getDerivedStateFromError" in boundary and "window.location.reload" in boundary
+    assert "<ErrorBoundary key={pathname}>" in app_tsx                   # keyed by address, so a crash does not stick to the next page
+    assert app_tsx.index("<Guarded>") < app_tsx.index("<Routes>") < app_tsx.index("</Guarded>")
+
+
+def test_every_tab_group_uses_the_shared_keyboard_friendly_tabs_component():
+    for name, text in _source_files():
+        if name != "components/Tabs.tsx":
+            assert 'role="tablist"' not in text, f"{name} builds its own tabs: use components/Tabs.tsx so the arrow keys work"
+    tabs = open(os.path.join(SRC, "components", "Tabs.tsx"), encoding="utf-8").read()
+    for key in ("ArrowRight", "ArrowLeft", "Home", "End"):
+        assert key in tabs

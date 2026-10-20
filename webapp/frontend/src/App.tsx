@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { Skeleton } from "./components/Async";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { StatusBar } from "./components/StatusBar";
 import { strategyLabel } from "./labels";
 import { Overview } from "./pages/Overview";
@@ -50,6 +51,12 @@ function PageChrome() {
   return null;
 }
 
+/** One boundary per address: moving to another page clears a failure, so a crash on one page never sticks to the next. */
+function Guarded({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>;
+}
+
 export default function App() {
   const tab = ({ isActive }: { isActive: boolean }) => (isActive ? "tab active" : "tab");
   return (
@@ -74,7 +81,7 @@ export default function App() {
         <span className="readonly" title="This application only shows research results. It cannot place orders or touch any account.">read-only</span>
       </nav>
       <main id="main">
-        <Suspense fallback={<div className="loading"><Skeleton lines={4} /></div>}>
+        <Guarded><Suspense fallback={<div className="loading"><Skeleton lines={4} /></div>}>
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/screener" element={<Screener />} />
@@ -88,7 +95,7 @@ export default function App() {
             <Route path="/methodology" element={<Methodology />} />
             <Route path="*" element={<div className="note">No such page. <a href="/">Back to the home page</a>.</div>} />
           </Routes>
-        </Suspense>
+        </Suspense></Guarded>
       </main>
       <footer className="footer">
         <span><b>AlphaGuard AI</b> is a research tool, not investment advice. It places no orders.</span>
