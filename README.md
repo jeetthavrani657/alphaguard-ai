@@ -877,6 +877,8 @@ The **Multi-asset** page holds the trading side of the topic: two trend-filter r
 `research/multiasset_trend.py`), registered once as hypotheses (ledger 210), judged by the same harness against a no-timing benchmark
 and the Nifty 50 ETF. Both are `VALIDATED_FAILED`: the filter lowered drawdowns but did not beat holding the same assets without timing.
 
+A second family, **dual momentum** (`MULTIASSET_MOMENTUM.md`, `research/multiasset_momentum.py`), holds the assets with the best twelve-month return and only if that return is positive. It was written down before it was run and counted as two more hypotheses (ledger 212). The rules made money in the backtest (the best-two rule about 34% a year out-of-sample) but both are `VALIDATED_FAILED`: their p-values are far above the bar, and selecting assets did not beat holding all six per unit of risk. Making money in a backtest and passing the multiple-testing bar are different things, and the project keeps them apart.
+
 ```
 python research/advisory.py              # regenerate reports/output/advisory_latest.json (no ledger change)
 ```

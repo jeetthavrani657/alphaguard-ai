@@ -4,3 +4,5 @@ run_date,profile_id,data_through,status,n_trading_days,return_pct,benchmark_retu
 2026-10-20,aggressive,2026-10-19,NOT_STARTED,0,,,,
 2026-10-20,trend_equal_weight,2026-10-19,NOT_STARTED,0,,,,
 2026-10-20,trend_risk_managed,2026-10-19,NOT_STARTED,0,,,,
+2026-10-20,momentum_top2,2026-10-19,NOT_STARTED,0,,,,
+2026-10-20,momentum_top3_risk_managed,2026-10-19,NOT_STARTED,0,,,,

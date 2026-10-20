@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
@@ -87,15 +87,29 @@ function Stress({ d }: { d: MultiassetResponse }) {
   );
 }
 
+type Family = "trend" | "momentum";
+
 export function MultiAsset() {
-  const state = useApi(() => api.multiasset(), []);
-  const [chosen, setChosen] = useState("trend_risk_managed");
+  const [params, setParams] = useSearchParams();
+  const family: Family = params.get("family") === "momentum" ? "momentum" : "trend";
   return (
     <div>
       <div className="pagehead"><h1>Multi-asset trading rules</h1></div>
       <p className="lede">
-        What a simple trend rule would have done across six asset classes, set against just holding them. The point is the comparison: a rule only earns its place if it beats the no-timing row.
+        What simple trading rules would have done across six asset classes, set against just holding them. The point is the comparison: a rule only earns its place if it beats the row that holds the same assets without any selection.
       </p>
+      <Tabs label="Kind of rule" value={family} onChange={(id) => setParams({ family: id }, { replace: true })}
+        items={[{ id: "trend", label: "Trend filter" }, { id: "momentum", label: "Dual momentum" }]} />
+      <Rules key={family} family={family} />
+    </div>
+  );
+}
+
+function Rules({ family }: { family: Family }) {
+  const state = useApi(() => api.multiasset(family), [family]);
+  const [chosen, setChosen] = useState(family === "trend" ? "trend_risk_managed" : "momentum_top2");
+  return (
+    <div>
       <Async state={state}>
         {(d) => {
           const s = d.strategies.find((x) => x.id === chosen) ?? d.strategies[0];
@@ -106,17 +120,25 @@ export function MultiAsset() {
               {d.is_stale && (
                 <p className="note warn">These results were worked out when {d.ledger_total_at_generation} ideas had been tried; {d.ledger_total_now} have been tried since. The statuses shown may be a little out of date.</p>
               )}
-              <p className="note info">
-                A <b>trend filter</b> across six assets: Nifty 50, Nifty Midcap 150, Nasdaq-100, gold, government bonds and Bitcoin. An asset is held while its close is above its own{" "}
-                {d.trend_days}-day trend line (its mean price over that time) and replaced by cash otherwise; decisions are made every {d.rule.rebalance_every_days} trading days and carried out one day later, with {pct(d.rule.cost_pct_per_side, 2)} cost each way.
-                The rules were written down in full before any result was looked at. Two variants were registered as hypotheses; the comparison that matters for a
-                timing rule is the same six assets held <b>without</b> timing. See <Link to="/methodology">Methodology</Link>.
-              </p>
+              {family === "trend" ? (
+                <p className="note info">
+                  A <b>trend filter</b> across six assets: Nifty 50, Nifty Midcap 150, Nasdaq-100, gold, government bonds and Bitcoin. An asset is held while its close is above its own{" "}
+                  {d.trend_days}-day trend line (its mean price over that time) and replaced by cash otherwise; decisions are made every {d.rule.rebalance_every_days} trading days and carried out one day later, with {pct(d.rule.cost_pct_per_side, 2)} cost each way.
+                  The rules were written down in full before any result was looked at. Two variants were registered as hypotheses; the comparison that matters for a
+                  timing rule is the same six assets held <b>without</b> timing. See <Link to="/methodology">How it works</Link>.
+                </p>
+              ) : (
+                <p className="note info">
+                  <b>Dual momentum</b> across the same six assets. Every {d.rule.rebalance_every_days} trading days, rank the assets by their return over the last {d.lookback_days} trading days (twelve months) and hold the best ones, but only
+                  those whose own return is positive; anything else sits in cash. Decisions are carried out one day later, with {pct(d.rule.cost_pct_per_side, 2)} cost each way. The rules were written down in full before any result was looked at,
+                  and two variants were registered as hypotheses. The comparison that matters is the same six assets held <b>without</b> any selection. See <Link to="/methodology">How it works</Link>.
+                </p>
+              )}
 
               <Panel title={`1. Results, simulated from ${d.simulation_start}`}>
                 <p className="muted">
                   In-sample ends {d.in_sample_end}; nothing was fitted on either window. Each rule is one of {d.ledger_total_at_generation} tested hypotheses, so its Sharpe ratio is judged against that count.
-                  If a rule’s Sharpe is not above the no-timing row, timing added nothing beyond being in these assets.
+                  If a rule’s Sharpe is not above the no-selection row, picking assets added nothing beyond being in all of them. A rule can make money and still fail its check: the status says whether the result is distinguishable from luck.
                 </p>
                 <ResultsTable d={d} />
               </Panel>
@@ -129,22 +151,30 @@ export function MultiAsset() {
                     growth_strategy: s.growth, growth_benchmark: d.static_benchmark.growth,
                     drawdown_strategy_pct: s.drawdown_pct, drawdown_benchmark_pct: d.static_benchmark.drawdown_pct,
                     exposure_strategy_pct: s.exposure_pct,
-                    exposure_definition: "Share of the portfolio held in the six assets (the rest is cash). The trend filter and the risk rules lower it when assets turn down.",
+                    exposure_definition: "Share of the portfolio held in the six assets (the rest is cash). The rule and its risk controls lower it when assets turn down.",
                   }}
                 />
-                <p className="muted">Blue is the selected rule; the other line is the same six assets held without timing. {s.n_rebalances} rebalances, total cost {pct(s.cost_paid_pct_of_start, 2)} of the starting amount.</p>
+                <p className="muted">Blue is the selected rule; the other line is the same six assets held without any selection. {s.n_rebalances} rebalances, total cost {pct(s.cost_paid_pct_of_start, 2)} of the starting amount.</p>
               </Panel>
 
-              <Panel title="3. Where the trend filter stands today">
-                <p className="muted">A description of the present: each asset against its own {d.trend_days}-day trend line at the latest close, and what each rule was holding at its last decision ({s.held_decided_on}).</p>
+              <Panel title={family === "trend" ? "3. Where the trend filter stands today" : "3. What the momentum rules would pick today"}>
+                <p className="muted">
+                  {family === "trend"
+                    ? `A description of the present: each asset against its own ${d.trend_days}-day trend line at the latest close, and what each rule was holding at its last decision (${s.held_decided_on}).`
+                    : `A description of the present: each asset's twelve-month return at the latest close, and what each rule was holding at its last decision (${s.held_decided_on}).`}
+                </p>
                 <div className="tablewrap">
                   <table>
-                    <thead><tr><th>Asset</th><th>Today</th>{d.strategies.map((x) => <th key={x.id} className="num">Held by: {x.name}</th>)}</tr></thead>
+                    <thead><tr><th>Asset</th><th>{family === "trend" ? "Today" : "Last twelve months"}</th>{d.strategies.map((x) => <th key={x.id} className="num">Held by: {x.name}</th>)}</tr></thead>
                     <tbody>
                       {d.signals_now.map((g) => (
                         <tr key={g.asset_id}>
                           <td>{name(g.asset_id)}</td>
-                          <td><span className={`sig ${g.uptrend ? "up" : "down"}`}>{g.uptrend ? "▲ above the line" : "▼ below the line"}</span></td>
+                          <td>
+                            {family === "trend"
+                              ? <span className={`sig ${g.uptrend ? "up" : "down"}`}>{g.uptrend ? "▲ above the line" : "▼ below the line"}</span>
+                              : <span className={`num ${signClass(g.return_12m_pct)}`}>{pct(g.return_12m_pct, 1)}{g.chosen_by.length > 0 ? " · would be picked" : ""}</span>}
+                          </td>
                           {d.strategies.map((x) => <td key={x.id} className="num">{pct(x.held_now.find((h) => h.asset_id === g.asset_id)?.weight_pct ?? 0, 1)}</td>)}
                         </tr>
                       ))}

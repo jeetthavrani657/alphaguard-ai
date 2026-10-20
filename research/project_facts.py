@@ -49,6 +49,7 @@ def build(client: TestClient) -> str:
     health, ledger, strategies = get("/api/health"), get("/api/ledger"), get("/api/strategies")
     advisory, multi = get("/api/advisory"), get("/api/multiasset")
     books, fwd = get("/api/forward-books"), get("/api/advisory/forward")
+    momentum = get("/api/multiasset?family=momentum")
     total = ledger["cumulative_hypotheses"]
     bar = ledger["bonferroni_bar_at_snapshot"]
     lines = []
@@ -108,6 +109,21 @@ def build(client: TestClient) -> str:
                      _f(b["metrics"]["out_of_sample"]["max_drawdown_pct"], 1, "%")])
     add(_table(["Rule", "Sharpe in-sample", "Sharpe out-of-sample", "OOS worst fall"], rows))
     add("\nReading: the trend filter lowered drawdowns but did not beat holding the same assets without timing.\n")
+
+    add("## 4b. Multi-asset dual-momentum rules (twelve-month lookback, six assets)\n")
+    add(f"Registered once as hypotheses (ledger {momentum['ledger_total_at_generation']} at generation); simulated from {momentum['simulation_start']}. "
+        "Benchmarks: the same six assets with no selection, and the Nifty 50 ETF.\n")
+    rows = []
+    for s in momentum["strategies"]:
+        m = s["metrics"]
+        rows.append([s["name"], _f(m["in_sample"]["cagr_pct"], 1, "%"), _f(m["out_of_sample"]["cagr_pct"], 1, "%"), _ratio(m["out_of_sample"]["sharpe"]),
+                     _f(m["out_of_sample"]["max_drawdown_pct"], 1, "%")])
+    for key in ("static_benchmark", "nifty_benchmark"):
+        b = momentum[key]
+        rows.append([b["name"] + " (comparison)", _f(b["metrics"]["in_sample"]["cagr_pct"], 1, "%"), _f(b["metrics"]["out_of_sample"]["cagr_pct"], 1, "%"),
+                     _ratio(b["metrics"]["out_of_sample"]["sharpe"]), _f(b["metrics"]["out_of_sample"]["max_drawdown_pct"], 1, "%")])
+    add(_table(["Rule", "CAGR in-sample", "CAGR out-of-sample", "Sharpe out-of-sample", "OOS worst fall"], rows))
+    add("\nReading: the rules made money in the backtest but failed the bar, and selection did not beat holding all six assets per unit of risk.\n")
 
     add("## 5. Paper (forward) tests: nothing is judged before the pre-registered number of days\n")
     rows = []

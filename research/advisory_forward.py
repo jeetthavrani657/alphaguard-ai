@@ -4,8 +4,8 @@ research/advisory_forward.py
 Forward paper tracking for the three multi-asset advisory profiles (ADVISORY.md). The rule is frozen and the three
 profiles are already counted in the hypothesis ledger (208), so this adds NO hypothesis: it only collects out-of-time
 evidence, the same way research/forward_books.py does for the equity books. Research only: it logs what each profile
-WOULD have done, places no orders and connects to no broker. It tracks the three advisory profiles and the two multi-asset
-trend rules (MULTIASSET_TREND.md).
+WOULD have done, places no orders and connects to no broker. It tracks the three advisory profiles, the two multi-asset
+trend rules (MULTIASSET_TREND.md) and the two dual-momentum rules (MULTIASSET_MOMENTUM.md).
 
   * Everything is recomputed from raw prices with the same simulate() as the advisory page, so running it twice on the
     same data gives the same answer. The clock starts at the close of FORWARD_START; the first countable session is
@@ -35,6 +35,7 @@ sys.path.insert(0, PROJECT_ROOT)
 import pandas as pd
 
 import advisory as adv
+import multiasset_momentum as mm
 import multiasset_trend as mt
 
 # ---- FROZEN. Do not edit. -----------------------------------------------------------------------
@@ -140,6 +141,9 @@ def main(argv=None) -> int:
     trend_sims = mt.run_all(prices, returns) if returns.index[-1] >= pd.Timestamp(FIRST_COUNTED_DAY) else {}
     for s in mt.STRATEGIES:
         reports.append(build_trend(s["id"], s["name"], returns, trend_sims.get(s["id"])))
+    momentum_sims = mm.run_all(prices, returns) if returns.index[-1] >= pd.Timestamp(FIRST_COUNTED_DAY) else {}
+    for s in mm.STRATEGIES:                                                         # frozen on 2026-10-20 as well, so it shares the trend rules' clock
+        reports.append(build_trend(s["id"], s["name"], returns, momentum_sims.get(s["id"])))
     for rep in reports:
         append_history(rep)
         s = rep["summary"]

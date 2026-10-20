@@ -45,3 +45,4 @@ reports/output/advisory_latest.json
 reports/output/advisory_forward_latest.json
 reports/output/advisory_forward_last_run.log
 reports/output/multiasset_trend_latest.json
+reports/output/multiasset_momentum_latest.json

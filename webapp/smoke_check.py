@@ -277,11 +277,20 @@ def run_checks(base: str) -> None:
         check(o["status"] == s["harness_status"] and o["as_of_hypotheses"] == ma["ledger_total_at_generation"], f"{s['id']}: Sharpe carries its status and count")
     check(ma["static_benchmark"]["metrics"]["out_of_sample"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS", "the no-timing benchmark is not counted as a hypothesis")
     check(len(ma["signals_now"]) == 6, "today's trend signals cover the six assets")
+    st, mo = fetch(base, "/api/multiasset?family=momentum")
+    check(st == 200 and [s["id"] for s in mo["strategies"]] == ["momentum_top2", "momentum_top3_risk_managed"] and mo["family"] == "momentum",
+          "multi-asset momentum responds with the two registered rules")
+    check(bare_ratios(mo) == [] and mo["is_stale"] is False and len(mo["signals_now"]) == 6, "no bare ratio in momentum, not stale, six signals")
+    for s in mo["strategies"]:
+        o = s["metrics"]["out_of_sample"]["sharpe"]
+        check(o["status"] == s["harness_status"] and o["as_of_hypotheses"] == mo["ledger_total_at_generation"] and max(s["exposure_pct"]["values"]) <= 100.0001,
+              f"{s['id']}: Sharpe carries its status and count, exposure never above 100%")
+    check(fetch(base, "/api/multiasset?family=nope")[0] == 422, "an unknown rule family is refused")
 
     print("[smoke] advisory forward paper tracking")
     st, af = fetch(base, "/api/advisory/forward")
-    check(st == 200 and [p["id"] for p in af["profiles"]] == ["conservative", "moderate", "aggressive", "trend_equal_weight", "trend_risk_managed"],
-          "advisory forward responds with the three profiles and the two trend rules")
+    check(st == 200 and [p["id"] for p in af["profiles"]] == ["conservative", "moderate", "aggressive", "trend_equal_weight", "trend_risk_managed", "momentum_top2", "momentum_top3_risk_managed"],
+          "advisory forward responds with the three profiles, the two trend rules and the two momentum rules")
     check(bare_ratios(af) == [] and all("sharpe" not in (p["summary"] or {}) for p in af["profiles"]), "no Sharpe is served before the forward gate")
     for p in af["profiles"]:
         if p["status"] == "RUNNING":

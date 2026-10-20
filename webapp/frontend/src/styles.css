@@ -396,3 +396,6 @@ a.task:hover { text-decoration: none; border-color: var(--accent); transform: tr
 
 .crash { max-width: 560px; margin: 60px auto; padding: 24px 26px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, var(--panel), #0f161e); }
 .crash h1 { margin-bottom: 10px; }
+
+/* The screen-reader text inside a term is absolutely positioned; without a positioned parent it escaped the table scroll areas and widened the whole page. */
+.term { position: relative; }

@@ -144,3 +144,9 @@ def test_every_tab_group_uses_the_shared_keyboard_friendly_tabs_component():
     tabs = open(os.path.join(SRC, "components", "Tabs.tsx"), encoding="utf-8").read()
     for key in ("ArrowRight", "ArrowLeft", "Home", "End"):
         assert key in tabs
+
+
+def test_the_screen_reader_text_inside_a_term_is_contained_so_it_cannot_widen_the_page():
+    css = open(os.path.join(SRC, "styles.css"), encoding="utf-8").read()
+    assert ".sr-only { position: absolute" in css
+    assert re.search(r"\.term\s*\{[^}]*position:\s*relative", css), "an absolutely positioned .sr-only inside a table's scroll area escapes it and adds a sideways scrollbar to the page"

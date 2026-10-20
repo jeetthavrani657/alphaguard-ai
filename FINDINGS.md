@@ -33,6 +33,11 @@ produced.
 > **Third ledger update (2026-10-20): 208 became 210.** Two multi-asset trend-trading rules
 > (`MULTIASSET_TREND.md`, `research/multiasset_trend.py`) were registered and judged once; both are `VALIDATED_FAILED`.
 > Bonferroni bar is now 0.05/210 = 0.000238. No result in this document changed (Smallcap MA, p = 0.000231, still clears it).
+>
+> **Fourth ledger update (2026-10-20): 210 became 212.** Two multi-asset dual-momentum rules
+> (`MULTIASSET_MOMENTUM.md`, `research/multiasset_momentum.py`) were registered and judged once; both are `VALIDATED_FAILED`
+> (profitable in the backtest, about fifty times short of the bar). Bonferroni bar is now 0.05/212 = 0.000236. No result in this
+> document changed (Smallcap MA, p = 0.000231, still clears it).
 
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a

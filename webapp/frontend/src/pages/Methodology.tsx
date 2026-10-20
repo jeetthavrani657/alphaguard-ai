@@ -97,7 +97,8 @@ export function Methodology() {
         <p>
           A trend filter over the advisory’s six assets : an asset is held while its close is above its own 210-day trend line
           and replaced by cash otherwise, checked every 21 trading days and carried out one day later. Two variants were registered as hypotheses (equal slots, and the advisory’s risk machinery applied to the assets in an uptrend).
-          The benchmark that matters for a timing rule is the same assets <b>without</b> timing, because that answers whether the timing itself added anything. See the <Link to="/multiasset">Multi-asset</Link> page.
+          The benchmark that matters for a timing rule is the same assets <b>without</b> timing, because that answers whether the timing itself added anything. A second family, <b>dual momentum</b>
+          (hold the assets with the best twelve-month return, and only if that return is positive), was also written down before it was run and counted as two more hypotheses. See the <Link to="/multiasset">Multi-asset</Link> page.
         </p>
       </Panel>
 

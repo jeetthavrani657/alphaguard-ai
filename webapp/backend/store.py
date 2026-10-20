@@ -79,15 +79,22 @@ def load_advisory_raw() -> dict:
     return _read_json(path)
 
 
-def multiasset_path() -> str:
-    return os.environ.get("WEBAPP_MULTIASSET", os.path.join(ROOT, "reports", "output", "multiasset_trend_latest.json"))
+MULTIASSET_FAMILIES = {
+    "trend": ("WEBAPP_MULTIASSET", "multiasset_trend_latest.json", "research/multiasset_trend.py"),
+    "momentum": ("WEBAPP_MULTIASSET_MOMENTUM", "multiasset_momentum_latest.json", "research/multiasset_momentum.py"),
+}
 
 
-def load_multiasset_raw() -> dict:
-    """research/multiasset_trend.py's latest file, untouched (the API only labels and validates it)."""
-    path = multiasset_path()
+def multiasset_path(family: str = "trend") -> str:
+    env, filename, _ = MULTIASSET_FAMILIES[family]
+    return os.environ.get(env, os.path.join(ROOT, "reports", "output", filename))
+
+
+def load_multiasset_raw(family: str = "trend") -> dict:
+    """research/multiasset_trend.py's (or multiasset_momentum.py's) latest file, untouched (the API only labels and validates it)."""
+    path = multiasset_path(family)
     if not os.path.exists(path):
-        raise NotFound("No multi-asset trading results yet. Generate them from the project root with: python research/multiasset_trend.py")
+        raise NotFound(f"No multi-asset {family} results yet. Generate them from the project root with: python {MULTIASSET_FAMILIES[family][2]}")
     return _read_json(path)
 
 

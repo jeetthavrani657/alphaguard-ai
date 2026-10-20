@@ -215,7 +215,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Multi-asset trend trading rules (research/multiasset_trend.py): two registered hypotheses against a no-timing benchmark. */
+        /** Multi-asset trading rules (research/multiasset_trend.py or multiasset_momentum.py): two registered hypotheses each, against a no-selection benchmark. */
         get: operations["multiasset_api_multiasset_get"];
         put?: never;
         post?: never;
@@ -1196,8 +1196,16 @@ export interface components {
             is_stale: boolean;
             /** Disclaimer */
             disclaimer: string;
+            /**
+             * Family
+             * @default trend
+             * @enum {string}
+             */
+            family: "trend" | "momentum";
             /** Trend Days */
-            trend_days: number;
+            trend_days?: number | null;
+            /** Lookback Days */
+            lookback_days?: number | null;
             /** Design Document */
             design_document: string;
             rule: components["schemas"]["MultiassetRule"];
@@ -1223,12 +1231,22 @@ export interface components {
             /** Execution */
             execution: string;
         };
-        /** MultiassetSignal */
+        /**
+         * MultiassetSignal
+         * @description Where one asset stands today. A trend rule fills `uptrend`; a momentum rule fills `return_12m_pct` and `chosen_by`.
+         */
         MultiassetSignal: {
             /** Asset Id */
             asset_id: string;
             /** Uptrend */
-            uptrend: boolean;
+            uptrend?: boolean | null;
+            /** Return 12M Pct */
+            return_12m_pct?: number | null;
+            /**
+             * Chosen By
+             * @default []
+             */
+            chosen_by: string[];
         };
         /**
          * MultiassetStrategy
@@ -2239,7 +2257,10 @@ export interface operations {
     };
     multiasset_api_multiasset_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description trend (the 210-day trend filter) or momentum (dual momentum). */
+                family?: "trend" | "momentum";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2253,6 +2274,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MultiassetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

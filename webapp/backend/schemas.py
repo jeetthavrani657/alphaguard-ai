@@ -761,8 +761,11 @@ class MultiassetBenchmark(BaseModel):
 
 
 class MultiassetSignal(BaseModel):
+    """Where one asset stands today. A trend rule fills `uptrend`; a momentum rule fills `return_12m_pct` and `chosen_by`."""
     asset_id: str
-    uptrend: bool
+    uptrend: Optional[bool] = None
+    return_12m_pct: Optional[float] = None
+    chosen_by: list[str] = []
 
 
 class MultiassetResponse(BaseModel):
@@ -779,7 +782,9 @@ class MultiassetResponse(BaseModel):
     ledger_total_now: Optional[int] = None
     is_stale: bool
     disclaimer: str
-    trend_days: int
+    family: Literal["trend", "momentum"] = "trend"
+    trend_days: Optional[int] = None
+    lookback_days: Optional[int] = None
     design_document: str
     rule: MultiassetRule
     strategies: list[MultiassetStrategy]

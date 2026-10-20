@@ -22,6 +22,7 @@ export function Overview() {
   const advisory = useApi(() => api.advisory(), []);
   const forward = useApi(() => api.advisoryForward(), []);
   const multi = useApi(() => api.multiasset(), []);
+  const momentum = useApi(() => api.multiasset("momentum"), []);
 
   return (
     <div>
@@ -169,6 +170,13 @@ export function Overview() {
                   {m.strategies.map((s) => (
                     <tr key={s.id}>
                       <td><Link to="/multiasset">{s.name}</Link></td>
+                      <td><Ratio ratio={s.metrics.out_of_sample.sharpe} /></td>
+                      <td className="num">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
+                    </tr>
+                  ))}
+                  {momentum.status === "ready" && momentum.data.strategies.map((s) => (
+                    <tr key={s.id}>
+                      <td><Link to="/multiasset?family=momentum">{s.name}</Link></td>
                       <td><Ratio ratio={s.metrics.out_of_sample.sharpe} /></td>
                       <td className="num">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
                     </tr>

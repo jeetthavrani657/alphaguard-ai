@@ -369,9 +369,9 @@ def advisory():
 
 
 @api.get("/multiasset", response_model=schemas.MultiassetResponse,
-         summary="Multi-asset trend trading rules (research/multiasset_trend.py): two registered hypotheses against a no-timing benchmark.")
-def multiasset():
-    raw = store.load_multiasset_raw()
+         summary="Multi-asset trading rules (research/multiasset_trend.py or multiasset_momentum.py): two registered hypotheses each, against a no-selection benchmark.")
+def multiasset(family: Literal["trend", "momentum"] = Query("trend", description="trend (the 210-day trend filter) or momentum (dual momentum).")):
+    raw = store.load_multiasset_raw(family)
     total = int(raw["ledger_total"])
     now = store.ledger_total_now()
 
@@ -389,7 +389,7 @@ def multiasset():
     return schemas.MultiassetResponse(
         generated_at=raw["generated_at"], data_through=raw["data_through"], simulation_start=raw["simulation_start"],
         in_sample_end=raw["in_sample_end"], out_of_sample_start=raw["out_of_sample_start"], ledger_total_at_generation=total,
-        ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], trend_days=raw["trend_days"],
+        ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], family=family, trend_days=raw.get("trend_days"), lookback_days=raw.get("lookback_days"),
         design_document=raw["design_document"], rule=raw["rule"], strategies=strategies, static_benchmark=bench["static"],
         nifty_benchmark=bench["nifty"], signals_now=raw["signals_now"], stress=raw["stress"], assets=raw["assets"])
 

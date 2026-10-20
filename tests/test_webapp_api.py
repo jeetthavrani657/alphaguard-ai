@@ -805,6 +805,41 @@ def _multiasset_file(tmp_path, monkeypatch, ledger_total_now=204):
     monkeypatch.setenv("WEBAPP_MULTIASSET", str(path))
 
 
+def _momentum_file(tmp_path, monkeypatch, ledger_total_now=204):
+    import multiasset_momentum as mm
+    import numpy as np
+    import pandas as pd
+    import advisory as adv
+    rng = np.random.default_rng(7)
+    vols = {"equity_large": 0.010, "equity_mid": 0.013, "intl_equity": 0.012, "gold": 0.008, "debt": 0.004, "crypto": 0.035}
+    idx = pd.bdate_range("2019-01-01", periods=1700)
+    r = pd.DataFrame({k: rng.normal(0.0003, v, 1700) for k, v in vols.items()}, index=idx)
+    r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
+    prices = (1 + r[list(vols)]).cumprod() * 100.0
+    path = tmp_path / "momentum.json"
+    path.write_text(json.dumps(mm.build(prices, r, register=False, ledger_total_now=ledger_total_now)))
+    monkeypatch.setenv("WEBAPP_MULTIASSET_MOMENTUM", str(path))
+
+
+def test_the_momentum_family_is_served_with_its_own_signals_and_the_default_family_is_still_trend(client, tmp_path, monkeypatch):
+    _momentum_file(tmp_path, monkeypatch)
+    _multiasset_file(tmp_path, monkeypatch)
+    d = client.get("/api/multiasset", params={"family": "momentum"}).json()
+    assert d["family"] == "momentum" and d["lookback_days"] == 252 and d["trend_days"] is None
+    assert [s["id"] for s in d["strategies"]] == ["momentum_top2", "momentum_top3_risk_managed"] and _find_bare_ratios(d) == []
+    assert len(d["signals_now"]) == 6 and all(g["return_12m_pct"] is not None and g["uptrend"] is None for g in d["signals_now"])
+    assert d["strategies"][0]["metrics"]["out_of_sample"]["sharpe"]["status"] == d["strategies"][0]["harness_status"]
+    t = client.get("/api/multiasset").json()
+    assert t["family"] == "trend" and t["trend_days"] == 210 and [s["id"] for s in t["strategies"]] == ["trend_equal_weight", "trend_risk_managed"]
+    assert client.get("/api/multiasset", params={"family": "nope"}).status_code == 422
+
+
+def test_a_missing_momentum_file_is_a_helpful_404_naming_the_command(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_MULTIASSET_MOMENTUM", str(tmp_path / "nope.json"))
+    r = client.get("/api/multiasset", params={"family": "momentum"})
+    assert r.status_code == 404 and "multiasset_momentum.py" in r.json()["detail"]
+
+
 def test_multiasset_serves_two_strategies_two_benchmarks_signals_and_stress(client, tmp_path, monkeypatch):
     _multiasset_file(tmp_path, monkeypatch)
     d = client.get("/api/multiasset").json()

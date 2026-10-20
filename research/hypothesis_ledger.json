@@ -87,7 +87,15 @@
       "n_hypotheses_this_run": 2,
       "cumulative_hypotheses_before_run": 208,
       "cumulative_hypotheses_after_run": 210
+    },
+    {
+      "run_id": "run_20261020T084317Z_11",
+      "timestamp": "2026-10-20T08:43:17.446411+00:00",
+      "context": "Multi-asset dual momentum: 2 hypotheses (research/multiasset_momentum.py), registered once",
+      "n_hypotheses_this_run": 2,
+      "cumulative_hypotheses_before_run": 210,
+      "cumulative_hypotheses_after_run": 212
     }
   ],
-  "cumulative_hypotheses": 210
+  "cumulative_hypotheses": 212
 }
