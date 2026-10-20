@@ -835,6 +835,39 @@ def test_multiasset_results_are_flagged_stale_when_the_ledger_has_grown_and_miss
     assert r.status_code == 404 and "multiasset_trend.py" in r.json()["detail"]
 
 
+def _independent_oos_metrics(growth: dict, oos_start: str):
+    """Sharpe, CAGR and worst fall of the out-of-sample part of a served growth series, written out from scratch (no engine code)."""
+    import numpy as np
+    import pandas as pd
+    v = pd.Series(growth["values"], index=pd.to_datetime(growth["dates"])).loc[oos_start:]
+    r = v.pct_change().dropna()
+    rf = 1.06 ** (1 / 252) - 1
+    sharpe = float((r - rf).mean() / r.std() * np.sqrt(252))
+    years = (v.index[-1] - v.index[0]).days / 365.25
+    cagr = ((v.iloc[-1] / v.iloc[0]) ** (1 / years) - 1) * 100
+    worst = float((v / v.cummax() - 1).min() * 100)
+    return sharpe, cagr, worst
+
+
+def test_the_served_risk_numbers_match_an_independent_recomputation_from_the_served_growth_series(client, tmp_path, monkeypatch):
+    """The page shows a Sharpe, a return and a worst fall AND the curve they came from; rebuilding them from the curve must agree."""
+    _advisory_file(tmp_path, monkeypatch, with_prices=True)
+    a = client.get("/api/advisory").json()
+    for p in a["profiles"]:
+        sharpe, cagr, worst = _independent_oos_metrics(p["growth_strategy"], a["out_of_sample_start"])
+        served = p["strategy"]["out_of_sample"]
+        assert sharpe == pytest.approx(served["sharpe"]["value"], abs=0.02), p["id"]
+        assert cagr == pytest.approx(served["cagr_pct"], abs=0.1), p["id"]
+        assert worst == pytest.approx(served["max_drawdown_pct"], abs=0.05), p["id"]
+    _multiasset_file(tmp_path, monkeypatch)
+    m = client.get("/api/multiasset").json()
+    for s in m["strategies"]:
+        sharpe, _cagr, worst = _independent_oos_metrics(s["growth"], m["out_of_sample_start"])
+        served = s["metrics"]["out_of_sample"]
+        assert sharpe == pytest.approx(served["sharpe"]["value"], abs=0.02), s["id"]
+        assert worst == pytest.approx(served["max_drawdown_pct"], abs=0.05), s["id"]
+
+
 def test_advisory_serves_stress_episodes_and_marks_one_the_simulation_does_not_reach_as_not_covered(client, tmp_path, monkeypatch):
     _advisory_file(tmp_path, monkeypatch, with_prices=True)                       # made-up history starts 2020-01-01, so COVID precedes the simulation
     d = client.get("/api/advisory").json()
