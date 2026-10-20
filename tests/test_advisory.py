@@ -295,3 +295,35 @@ def test_a_stress_window_that_starts_before_the_simulation_is_reported_as_not_co
     sims = {pid: adv.simulate(r, p) for pid, p in adv.PROFILES.items()}
     rows = {e["id"]: e for e in adv.stress_tests(sims, r)}
     assert rows["covid"]["covered"] is False and rows["covid"]["profiles"] == [] and rows["covid"]["benchmark"] is None
+
+
+# --- randomised property checks (found no bug; they keep it that way) ---------------------------------------------------------------
+
+def test_capped_inverse_vol_respects_every_cap_never_goes_negative_and_never_exceeds_one_on_random_inputs():
+    rng = np.random.default_rng(0)
+    for _ in range(1500):
+        vols = pd.Series(rng.uniform(0.0005, 0.2, len(adv.RISKY_IDS)), index=adv.RISKY_IDS)
+        if rng.random() < 0.1:
+            vols.iloc[rng.integers(len(adv.RISKY_IDS))] = 0.0                      # a dead price series (zero volatility)
+        caps = pd.Series(rng.choice([0, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0], len(adv.RISKY_IDS)), index=adv.RISKY_IDS)
+        w = adv.capped_inverse_vol(vols, caps)
+        assert np.isfinite(w).all() and (w >= -1e-12).all() and (w <= caps + 1e-9).all()
+        assert w.sum() <= 1 + 1e-9 and (w[caps == 0] == 0).all()
+
+
+def test_simulations_on_random_markets_keep_equity_positive_exposure_within_0_to_100_and_weights_summing_to_one():
+    rng = np.random.default_rng(1)
+    for _ in range(12):
+        idx = pd.bdate_range("2020-01-01", periods=400)
+        r = pd.DataFrame({k: rng.normal(0.0003, rng.uniform(0.002, 0.05), 400) for k in adv.RISKY_IDS}, index=idx)
+        if rng.random() < 0.3:
+            r["gold"] = 0.0                                                         # a flat asset
+        if rng.random() < 0.3:
+            r.iloc[rng.integers(100, 300), rng.integers(0, 6)] = -0.6               # a crash day
+        r["cash"] = (1 + adv.CASH_RATE) ** (1 / adv.TRADING_DAYS) - 1
+        for p in adv.PROFILES.values():
+            s = adv.simulate(r, p)
+            assert np.isfinite(s["equity"]).all() and (s["equity"] > 0).all()
+            assert (s["exposure_pct"] >= -1e-9).all() and (s["exposure_pct"] <= 100 + 1e-6).all()
+            for entry in s["rebalances"]:
+                assert abs(entry["weights"].sum() - 1) < 1e-9 and (entry["weights"] >= -1e-9).all()
