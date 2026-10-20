@@ -23,6 +23,10 @@ from yfinance.exceptions import YFRateLimitError
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
+# An optional second source for the LATEST sessions only (see set_tail_source). None means yfinance alone, which is
+# what every backtest and every test uses; only the daily forward run switches it on.
+_TAIL_SOURCE = [None]
+
 MAX_RETRIES = 4
 INITIAL_BACKOFF_SECONDS = 2
 COLUMNS = ["open", "high", "low", "close", "volume"]
@@ -40,6 +44,35 @@ def _normalize_symbol(symbol: str) -> str:
     if symbol.startswith("^") or symbol.endswith(".NS"):
         return symbol
     return symbol + ".NS"
+
+
+def set_tail_source(source) -> None:
+    """
+    Register (or, with None, remove) a function `source(symbol, start, end) -> DataFrame` that supplies the newest sessions
+    yfinance has not priced yet. Used only by the daily forward run, with the read-only Upstox client (data/upstox_tail.py),
+    so that a day Yahoo publishes late does not hold the forward tests back. Rows it returns go through the same
+    cleaning as Yahoo's, are saved to the cache, and are replaced by Yahoo's own value as soon as Yahoo prices that day.
+    """
+    _TAIL_SOURCE[0] = source
+
+
+def _tail_rows(symbol: str, combined: pd.DataFrame, end_ts: pd.Timestamp) -> pd.DataFrame:
+    """Rows after the newest priced Yahoo day, from the registered tail source; empty when there is none, or on any failure."""
+    source = _TAIL_SOURCE[0]
+    if source is None or combined.empty or end_ts <= combined.index.max():
+        return combined.iloc[0:0]
+    try:
+        rows = source(symbol, combined.index.max() + pd.Timedelta(days=1), end_ts)
+    except Exception as e:                       # the second source is an extra: its failure must never break the primary load
+        print(f"[loader] tail source failed for {symbol}: {str(e)[:80]}")
+        return combined.iloc[0:0]
+    if rows is None or rows.empty:
+        return combined.iloc[0:0]
+    rows = _drop_phantom_rows(rows[COLUMNS].astype(float))
+    rows = rows[(rows[["open", "high", "low", "close"]] > 0).all(axis=1) & (rows["high"] >= rows["low"])]      # a priceless or impossible bar is never kept
+    rows = rows[(rows.index > combined.index.max()) & (rows.index <= end_ts)]
+    rows.index.name = "date"
+    return rows
 
 
 def _cache_path(symbol: str) -> Path:
@@ -246,6 +279,10 @@ def load_price_data(symbol: str, start: str, end: str, force_refresh: bool = Fal
             if held.empty:
                 raise ValueError(f"No data available for '{symbol}' between {start} and {end}.")
             return held.copy()
+
+    extra = _tail_rows(symbol, combined, end_ts)
+    if not extra.empty:
+        combined = pd.concat([combined, extra])
 
     result = combined.loc[start_ts:end_ts].copy()
     if result.empty:

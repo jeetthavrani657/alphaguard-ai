@@ -836,6 +836,8 @@ how each profile behaved in four named bad stretches (COVID 2020, the 2021-22 be
 winter), including where it did not help. The Paper trading page lists each book's simulated fills (a paper blotter), and
 the Methodology page explains how every result was produced. None of this adds a hypothesis or places an order.
 
+The daily books run can take the newest sessions from the read-only Upstox client when Yahoo has not priced them yet (`data/upstox_tail.py`; needs the daily-regenerated token, falls back to Yahoo alone without it).
+
 Order execution is not built and is deliberately gated: see [EXECUTION_DESIGN.md](EXECUTION_DESIGN.md) for the conditions and the safety design that would have to exist first.
 
 The **Multi-asset** page holds the trading side of the topic: two trend-filter rules over the same six assets (`MULTIASSET_TREND.md`,
