@@ -840,6 +840,8 @@ The interface is built to be learned by using it: the home page starts from what
 
 The daily books run can take the newest sessions from the read-only Upstox client when Yahoo has not priced them yet (`data/upstox_tail.py`; needs the daily-regenerated token, falls back to Yahoo alone without it).
 
+`python research/project_facts.py` writes one markdown file of every headline number (strategies, advisory, stress test, multi-asset rules, paper tests) straight from the app's own data service, so a write-up such as the college report is built from current facts instead of memory.
+
 Order execution is not built and is deliberately gated: see [EXECUTION_DESIGN.md](EXECUTION_DESIGN.md) for the conditions and the safety design that would have to exist first.
 
 The **Multi-asset** page holds the trading side of the topic: two trend-filter rules over the same six assets (`MULTIASSET_TREND.md`,
