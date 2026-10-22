@@ -30,6 +30,17 @@ _TAIL_SOURCE = [None]
 
 MAX_RETRIES = 4
 INITIAL_BACKOFF_SECONDS = 2
+
+# Circuit breaker. When Yahoo is unreachable (found 2026-10-22, right after the laptop woke), yfinance does not raise: it prints
+# "possibly delisted" and returns an empty frame, after about 15 seconds of its own retrying PER SYMBOL, so a run over 450 symbols
+# could take two hours to learn nothing. A download that spans more than a year is never legitimately empty, so
+# BREAKER_AFTER of them in a row mean the source is down: stop asking for BREAKER_COOLDOWN_SECONDS and serve the cache, then probe again.
+# The cache is served as it is (the health check's price-data age shows the lag); nothing is invented.
+BREAKER_AFTER = 5
+BREAKER_COOLDOWN_SECONDS = 300
+LONG_RANGE_DAYS = 365
+_BREAKER = {"failures": 0, "open_until": 0.0}
+_EMPTY = ["Open", "High", "Low", "Close", "Volume"]
 COLUMNS = ["open", "high", "low", "close", "volume"]
 
 
@@ -159,6 +170,33 @@ def _drop_phantom_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df[~(is_phantom | has_nan_price)]
 
 
+CANARY_SYMBOL = "^NSEI"                      # the Nifty 50 index: always listed, so an empty answer means the source is down
+
+
+def _yahoo_answers() -> bool:
+    """One small request for the canary. Any failure counts as 'not answering'."""
+    try:
+        return not yf.download(CANARY_SYMBOL, period="5d", progress=False, multi_level_index=False).empty
+    except Exception:
+        return False
+
+
+def _record_download(failed: bool) -> None:
+    """Count a failed long-range download, open the breaker after BREAKER_AFTER in a row, and reset the count on any success."""
+    if not failed:
+        _BREAKER["failures"] = 0
+        return
+    _BREAKER["failures"] += 1
+    if _BREAKER["failures"] >= BREAKER_AFTER:
+        _BREAKER["failures"] = 0
+        if _yahoo_answers():                    # the index came back: these were bad tickers, not a dead source
+            print(f"[loader] {BREAKER_AFTER} downloads in a row came back empty, but Yahoo answers for the index: carrying on.")
+            return
+        _BREAKER["open_until"] = time.monotonic() + BREAKER_COOLDOWN_SECONDS
+        print(f"[loader] {BREAKER_AFTER} downloads in a row came back empty: Yahoo looks unreachable. "
+              f"No more requests for {BREAKER_COOLDOWN_SECONDS // 60} minutes; cached prices are served as they are.")
+
+
 def _download_with_retry(symbol: str, start: str, end: str) -> pd.DataFrame:
     """
     Call yfinance with retry + exponential backoff on rate limiting or
@@ -169,12 +207,17 @@ def _download_with_retry(symbol: str, start: str, end: str) -> pd.DataFrame:
     that mean "up to and including day D" must pass D + 1 day
     (load_price_data does).
     """
+    if time.monotonic() < _BREAKER["open_until"]:
+        print(f"[loader] Yahoo looks unreachable: not asking for {symbol} (the cache is served as it is).")
+        return pd.DataFrame(columns=_EMPTY)
+
+    long_range = (pd.Timestamp(end) - pd.Timestamp(start)).days > LONG_RANGE_DAYS
     backoff = INITIAL_BACKOFF_SECONDS
     last_error = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            return yf.download(
+            frame = yf.download(
                 symbol,
                 start=start,
                 end=end,
@@ -182,6 +225,8 @@ def _download_with_retry(symbol: str, start: str, end: str) -> pd.DataFrame:
                 progress=False,
                 multi_level_index=False,  # flat columns, even for one ticker
             )
+            _record_download(failed=long_range and frame.empty)
+            return frame
         except YFRateLimitError as e:
             last_error = e
             print(f"[loader] Rate limited fetching {symbol} "
@@ -195,6 +240,7 @@ def _download_with_retry(symbol: str, start: str, end: str) -> pd.DataFrame:
             time.sleep(backoff)
             backoff *= 2
 
+    _record_download(failed=True)
     raise RuntimeError(
         f"Failed to download data for {symbol} after {MAX_RETRIES} attempts. "
         f"This may mean Yahoo Finance is rate-limiting or unreachable. "

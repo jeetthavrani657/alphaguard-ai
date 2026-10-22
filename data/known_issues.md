@@ -425,3 +425,13 @@ Yahoo's close was 258.90 with 15.3M). The 22 October rows were removed from thos
 three logs now hold the full-day figures (the Nifty 50 benchmark for the day moved from -2.16% to -1.75% over the books' three days).
 Lesson: a bar saved by an earlier, unguarded run cannot be recognised afterwards, so after any run during market hours, strip that
 day's last cache row before the evening run (the new guard keeps this from happening again).
+
+## When Yahoo is unreachable the downloads came back empty and slowly (found 2026-10-22, breaker added the same day)
+
+Right after the laptop woke, yfinance did not raise: it printed "possibly delisted" and returned an empty frame for every symbol, after
+about 15 seconds of its own retrying each, so one step of the daily run could spend 15 minutes (a run over 450 symbols could spend two
+hours) learning nothing. `data/loader.py` now counts long-range downloads (more than a year, which are never legitimately empty) that
+come back empty; after five in a row it asks for the Nifty 50 index. If the index answers, the failures were bad tickers and the run carries on;
+if not, it stops asking for five minutes and serves the cache as it is, then probes again. The prices are then older, which the health check's
+price-data age and the web app's status strip show; nothing is invented, and the next run catches up. The daily task also now wakes the laptop
+(on mains power) and may run for two hours. Tests: `tests/test_loader_breaker.py`.
