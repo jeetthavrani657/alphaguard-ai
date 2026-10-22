@@ -9,7 +9,7 @@ design *before* any code means the decision to build it is made on rules, not on
 Nothing is automated until a candidate rule has passed **its own pre-registered forward test**: its frozen criteria met on
 data that did not exist when it was frozen, after the pre-registered number of sessions (252 for the paper books and the
 advisory/trend tracking; 504 plus two rebalances for the quality + value book), and judged against the cumulative hypothesis
-count at that time. As of 2026-10-20: 210 hypotheses, none validated as an edge, and every forward clock has just started. So the
+count at that time. As of 2026-10-22: 215 hypotheses, none validated as an edge (two stock-selection ideas and Smallcap MA clear the bar only in the later window), and every forward clock has just started. So the
 honest answer today is that there is nothing to execute. Execution of a rule that failed validation would only automate a loss.
 
 ## Gate 2: the owner changes rule 5 in writing
@@ -35,10 +35,34 @@ target list** and never computes a signal itself. Requirements before it may tou
 | Costs and slippage | Fills are compared with the engine's cost model; a persistent gap is reported, because the backtest's assumptions are then wrong. |
 | Paper first | The same layer runs for weeks against the broker's sandbox or against a paper account, with real market data, before any money is involved. |
 | Audit | An append-only log of every ticket, confirmation, order and fill. |
-| Rules of the market | Retail algorithmic trading in India is regulated by SEBI and the exchanges, and brokers have their own approval and rate-limit requirements. These rules change; they must be checked against the current circulars and the broker's own terms before building. They were not verified for this document. |
+| Rules of the market | Retail algorithmic trading in India is regulated by SEBI and the exchanges, and brokers have their own approval and rate-limit requirements. These rules change. A first reading (secondary sources only) is in the next section; the primary circular text still has to be read and the rules re-checked against the current circulars and the broker's own terms immediately before any build. |
 
 ## What this project can honestly say today
 
 * It is a research and advisory system with paper trading running forward (three equity books, three advisory profiles, two multi-asset trend rules).
 * The "order" artefacts it has are **simulated**: a blotter of fills the engine would have had, and an indicative shopping list. Neither is sent anywhere.
 * Order execution is future work, gated as above, and the most likely reading of the research so far is that there is not yet a validated rule to execute.
+
+## What the rules appear to mean for this project (read 2026-10-22, secondary sources only, to be re-verified)
+
+Sources: SEBI circular SEBI/HO/MIRSD/MIRSD-PoD/P/CIR/2025/0000013, "Safer participation of retail investors in Algorithmic trading", dated 4 February 2025
+(only its header could be read; the body was NOT read), the NSE circular it refers to (NSE/INVG/67858, not read), Upstox's own announcement
+["Important new SEBI/Exchange mandates for API trading, effective 1st April 2026"](https://community.upstox.com/t/important-new-sebi-exchange-mandates-for-api-trading-effective-1st-april-2026/14822)
+(read), and commentary such as [QuantInsti](https://www.quantinsti.com/articles/algorithmic-trading-india/) and
+[Business Standard on the phased rollout](https://www.business-standard.com/markets/news/sebi-extends-retail-algo-trading-framework-rollout-to-2026-125093000956_1.html)
+(search summaries only). Where these disagree, the broker's own page is quoted and the point is marked open.
+
+| Point | What was found | Consequence here |
+|---|---|---|
+| Timing | The framework was postponed more than once; the full set applies from 1 April 2026 (broker notice, not SEBI text). Nothing after April 2026 was checked. | Re-check the current position before building. |
+| Static IP | Upstox: mandatory for API order calls (place, modify, cancel, multi-order, GTT) from 1 April 2026; orders from other IPs may be blocked. A change is allowed once in 7 days (secondary source). Sharing among family members is now supported (Upstox reply, May 2026). | A home connection with a changing address cannot place orders. A fixed address (ISP static IP or a small always-on server) must exist first. Data calls, which this project already makes, are not order calls. |
+| Registration threshold | Upstox: algos above 10 orders per second must be registered with the exchange; "until further notice, only strategies below the threshold are permitted". | A daily-bar rule that sends a handful of orders a day is far below it, so no exchange registration is expected. A faster rule is out of scope. |
+| One API app per user | Upstox: only a single active API app per user. | The design above asks for separate data and trading keys. With one app that may be impossible; separation would then have to be enforced in code (an execution module that is the only place a trading call exists) and by the token's scope, which is an OPEN question to ask Upstox. Until then, rule 5's data-only client and any trading client cannot both be separate apps. |
+| Algo ID | Commentary says every algo order must carry an exchange-assigned Algo-ID from April 2026. Upstox's page does not mention it. | Open: ask the broker whether an own-account algo below the threshold is tagged by the broker. |
+| Market orders | Upstox's page is inconsistent (heading says plain market orders are not allowed, body describes market protection). | Irrelevant to the design: orders are limit orders inside a price band. |
+| Doing it for others | Commentary: a black-box strategy offered to others needs the provider to be a SEBI-registered Research Analyst, and providers must work through a registered broker. | Own-account use only. Nothing in this project may be offered to or run for anyone else, and the web app stays a private tool that says it is not advice. |
+
+**Open questions to settle, in this order, before Gate 2 can be considered:** (1) read the SEBI and NSE circulars themselves; (2) ask Upstox, in writing, how a
+single-app account separates data access from order access, whether an own-account algo below 10 orders per second needs any registration or tagging, and which
+instruments and order types an API app may use; (3) decide how a static IP will be provided; (4) tax treatment of algorithmic trading profits (business or capital gains, STT, GST on charges) with an accountant, because it changes what a rule must earn to be worth running.
+None of this builds anything: it only decides whether a build is possible at all.
