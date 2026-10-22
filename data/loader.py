@@ -14,6 +14,7 @@ Verified against yfinance 1.6.0 (see requirements.txt) on 2026-09-02:
 """
 
 import time
+from datetime import datetime, time as dtime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -73,6 +74,29 @@ def _tail_rows(symbol: str, combined: pd.DataFrame, end_ts: pd.Timestamp) -> pd.
     rows = rows[(rows.index > combined.index.max()) & (rows.index <= end_ts)]
     rows.index.name = "date"
     return rows
+
+
+IST = timezone(timedelta(hours=5, minutes=30))     # NSE sessions are dated in Indian time
+SESSION_COMPLETE_IST = dtime(16, 0)                # the session ends 15:30; give the vendors until 16:00 to settle the day
+
+
+def _now_utc() -> datetime:
+    """The current time. A separate function so a test can pretend it is a different hour."""
+    return datetime.now(timezone.utc)
+
+
+def _drop_incomplete_today(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Remove today's bar while the session is still running (before 16:00 IST). Yahoo serves a live, half-finished bar for
+    today during market hours; kept, it would be cached and logged as if it were the day's close (found 2026-10-22, when
+    a catch-up run at noon counted a partial day in the forward books). Applied to downloads AND to the cache.
+    """
+    if df is None or df.empty:
+        return df
+    ist_now = _now_utc().astimezone(IST)
+    if ist_now.time() >= SESSION_COMPLETE_IST:
+        return df
+    return df[df.index < pd.Timestamp(ist_now.date())]     # keep only days strictly before today's IST date
 
 
 def _cache_path(symbol: str) -> Path:
@@ -207,7 +231,7 @@ def load_price_data(symbol: str, start: str, end: str, force_refresh: bool = Fal
     if start_ts > end_ts:
         raise ValueError(f"start ({start}) is after end ({end}).")
 
-    existing = _load_cache(symbol)            # what is on disk, even when force_refresh ignores it for coverage
+    existing = _drop_incomplete_today(_load_cache(symbol))   # what is on disk, even when force_refresh ignores it for coverage
     cached = None if force_refresh else existing
     have_cache = cached is not None and not cached.empty
 
@@ -253,7 +277,7 @@ def load_price_data(symbol: str, start: str, end: str, force_refresh: bool = Fal
             f"no trading history in this range."
         )
 
-    combined = _drop_phantom_rows(_clean_columns(fresh))
+    combined = _drop_incomplete_today(_drop_phantom_rows(_clean_columns(fresh)))
 
     # Yahoo can list the newest session with a volume but no prices for hours after the close, and the line above drops
     # that row. If the cache already held that day (from an earlier download that had provisional prices), replacing

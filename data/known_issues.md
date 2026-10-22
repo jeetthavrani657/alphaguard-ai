@@ -407,3 +407,21 @@ advisory rule was committed at 21:26 on 2026-10-19, after that day's close, so i
 day is not out-of-time. The clock now starts from the 2026-10-19 close and counts from 2026-10-20 (the trend rules, frozen on 2026-10-20,
 use the same dates). The "day 1" figures shown earlier (about -0.6% for the profiles) were therefore not forward evidence and were
 removed from `advisory_forward.csv`. The paper books were frozen on 2026-10-16, before 2026-10-19, so their dates stand.
+
+## A catch-up run in market hours counted a half-finished day (found and corrected 2026-10-22)
+
+The laptop slept from the evening of 2026-10-20 to the late morning of 2026-10-22, so the 19:00 run of 2026-10-21 was missed and
+Windows ran it as a catch-up at about noon on 2026-10-22. Yahoo serves a live, half-finished bar for the current day while the
+session is open (ITC showed 7M shares against a normal 12-20M), the loader cached it, and one row dated 2026-10-22 reached
+`forward_books.csv` and `forward_snapshots.csv` as if it were a close. Both rows were removed. `data/loader.py` now drops today's
+bar, from a download and from the cache, until 16:00 India time (test: `tests/test_loader_incomplete_today.py`). The same run was
+also killed by the task's 30-minute limit, because Yahoo failed many downloads for the first minutes after the wake-up; the numbers
+are recomputed from the full price history on every run, so the next evening run catches up with no gap in the results.
+
+The same incident had a second effect, found the same evening. The noon run had already saved 2026-10-22's half-finished bar to the
+cache files of about 295 stocks, and the guard above only stops new partial bars, so the 19:00 run found those files "complete"
+(cache reaches the requested day: no download) and logged the day's numbers from noon prices (ITC cached at 257.25 with 7.1M shares;
+Yahoo's close was 258.90 with 15.3M). The 22 October rows were removed from those cache files, the forward steps were re-run, and the
+three logs now hold the full-day figures (the Nifty 50 benchmark for the day moved from -2.16% to -1.75% over the books' three days).
+Lesson: a bar saved by an earlier, unguarded run cannot be recognised afterwards, so after any run during market hours, strip that
+day's last cache row before the evening run (the new guard keeps this from happening again).
