@@ -795,6 +795,75 @@ class MultiassetResponse(BaseModel):
     assets: list[AdvisoryAsset]
 
 
+class StockSelectionWindow(BaseModel):
+    """How one idea behaved in one window, beyond its return: how much of the time it was invested, how much it traded, and how it
+    compared with picking the same number of stocks by lot."""
+    window: Window
+    start: str
+    end: str
+    n_eligible: int = Field(description="Stocks the rule could choose from (the price-jump gate removes some).")
+    exposure_pct: float
+    avg_turnover_pct: Optional[float] = Field(None, description="Average share of the portfolio traded at each monthly rebalance.")
+    avg_names_held: float
+    zero_skill_percentile: Optional[float] = Field(None, description="Where the rule's Sharpe sits among portfolios that pick stocks by lot (100 = better than all).")
+    zero_skill_n_portfolios: int
+
+
+class StockSelectionIdea(BaseModel):
+    id: str
+    name: str
+    rationale: str
+    universe: str
+    top_n: int
+    harness_status: Status
+    strategy: AdvisoryWindows
+    universe_benchmark: AdvisoryWindows = Field(description="Every stock in the universe, equal weight, same monthly rebalance and costs: no selection.")
+    windows: list[StockSelectionWindow]
+
+
+class SurvivorshipMetrics(BaseModel):
+    cagr_pct: float
+    max_drawdown_pct: float
+
+
+class SurvivorshipRow(BaseModel):
+    window: Window
+    start: str
+    end: str
+    todays_list: SurvivorshipMetrics
+    with_casualties: SurvivorshipMetrics
+    without_late_listed: SurvivorshipMetrics
+    n_without_late_listed: int
+    late_listed_share_of_universe_pct: float
+    late_listed_share_of_picks_pct: Optional[float] = None
+    casualty_picks: int
+
+
+class SurvivorshipCheck(BaseModel):
+    """A diagnostic of an already-registered idea (not a hypothesis): how much of its result could come from using today's index list."""
+    generated_at: str
+    idea_id: str
+    design_document: str
+    casualties: list[str]
+    n_universe: int
+    n_late_listed: int
+    rows: list[SurvivorshipRow]
+
+
+class StockSelectionResponse(BaseModel):
+    """
+    Stock-selection ideas (research/factor_ideas.py, FACTOR_IDEAS.md): three hypotheses registered together, each judged by the
+    same harness as every other strategy. Simulated only, places no orders. `is_stale` says the ledger has grown since.
+    """
+    generated_at: str
+    ledger_total_at_generation: int
+    ledger_total_now: Optional[int] = None
+    is_stale: bool
+    design_document: str = "FACTOR_IDEAS.md"
+    ideas: list[StockSelectionIdea]
+    survivorship: Optional[SurvivorshipCheck] = None
+
+
 class AdvisoryRule(BaseModel):
     vol_lookback_days: int
     rebalance_every_days: int

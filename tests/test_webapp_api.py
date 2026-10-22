@@ -945,3 +945,75 @@ def test_advisory_missing_is_a_helpful_404(client, tmp_path, monkeypatch):
     monkeypatch.setenv("WEBAPP_ADVISORY", str(tmp_path / "nope.json"))
     r = client.get("/api/advisory")
     assert r.status_code == 404 and "advisory.py" in r.json()["detail"]
+
+
+# --- stock-selection ideas (research/factor_ideas.py, FACTOR_IDEAS.md) -------------------------------------------------------
+
+def _window(start, end, sharpe, cagr, dd, percentile=62.5, turnover=28.0):
+    return {"start": start, "end": end, "n_obs": 1400, "n_eligible": 50, "blocked": [], "sharpe": sharpe, "cagr_pct": cagr,
+            "max_drawdown_pct": dd, "exposure_pct": 99.2, "avg_turnover_pct": turnover, "n_rebalances": 65, "avg_names_held": 10.0,
+            "universe_sharpe": 0.31, "universe_cagr_pct": 9.5, "universe_max_drawdown_pct": -31.0,
+            "zero_skill": {"n_sims": 200, "mean": 0.3, "percentile": percentile}}
+
+
+def _idea(name, status, universe="nifty50", top_n=10, **kw):
+    return {"in_sample": _window("2015-01-01", "2020-06-30", 0.49, 11.9, -25.4, **kw),
+            "out_of_sample": _window("2020-07-01", "2025-12-31", 0.99, 18.3, -17.8, **kw),
+            "name": name, "rationale": "A reason.", "universe": universe, "top_n": top_n, "harness_status": status,
+            "p_in_sample": 0.13, "p_out_of_sample": 0.0105, "bonferroni_bar": 0.05 / 215}
+
+
+def _factor_file(tmp_path, monkeypatch, with_survivorship=True, **kw):
+    ideas = {"lowvol_nifty50": _idea("Low volatility", "VALIDATED_FAILED", **kw),
+             "reversal1m_nifty50": _idea("One-month reversal", "OOS_ONLY_SIGNIFICANT"),
+             "momentum_midcap150": _idea("Momentum Midcap", "OOS_ONLY_SIGNIFICANT", universe="midcap150", top_n=30)}
+    path = tmp_path / "factor_ideas.json"
+    path.write_text(json.dumps({"ledger_total": 215, "registered": True, "ideas": ideas}))
+    monkeypatch.setenv("WEBAPP_FACTOR_IDEAS", str(path))
+    sv = tmp_path / "survivorship.json"
+    metric = lambda c, d: {"sharpe": 1.0, "cagr_pct": c, "max_drawdown_pct": d}
+    if not with_survivorship:
+        sv.unlink(missing_ok=True)                                              # a leftover file from an earlier call would still be served
+    else:
+        sv.write_text(json.dumps({"generated_at": "2026-10-22T16:00:00Z", "idea_id": "momentum_midcap150", "design_document": "FACTOR_IDEAS.md",
+                                  "casualties": ["JETAIRWAYS.NS"], "n_universe": 145, "n_late_listed": 50, "rows": [
+            {"window": "out_of_sample", "start": "2020-07-01", "end": "2025-12-31", "todays_list": metric(55.2, -23.2),
+             "with_casualties": metric(54.7, -23.6), "without_late_listed": metric(42.0, -25.0), "n_without_late_listed": 92,
+             "late_listed_share_of_universe_pct": 35.2, "late_listed_share_of_picks_pct": 20.8, "casualty_picks": 66}]}))
+    monkeypatch.setenv("WEBAPP_MIDCAP_SURVIVORSHIP", str(sv))
+
+
+def test_stock_selection_serves_three_ideas_each_sharpe_with_status_and_count_and_a_benchmark_that_is_not_a_hypothesis(client, tmp_path, monkeypatch):
+    _factor_file(tmp_path, monkeypatch)
+    d = client.get("/api/stockselection").json()
+    assert [i["id"] for i in d["ideas"]] == ["lowvol_nifty50", "reversal1m_nifty50", "momentum_midcap150"]
+    assert _find_bare_ratios(d) == []
+    low = d["ideas"][0]
+    assert low["strategy"]["out_of_sample"]["sharpe"]["status"] == "VALIDATED_FAILED" and low["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 215
+    assert low["strategy"]["out_of_sample"]["sharpe"]["clears_bar"] is False                       # p 0.0105 is far above 0.05/215
+    assert low["universe_benchmark"]["out_of_sample"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS"
+    assert low["universe_benchmark"]["out_of_sample"]["cagr_pct"] == 9.5 and low["universe_benchmark"]["in_sample"]["sharpe"]["value"] == 0.31
+    assert [w["window"] for w in low["windows"]] == ["in_sample", "out_of_sample"] and low["windows"][1]["zero_skill_percentile"] == 62.5
+    assert d["ledger_total_at_generation"] == 215 and isinstance(d["is_stale"], bool) and d["design_document"] == "FACTOR_IDEAS.md"
+
+
+def test_stock_selection_carries_the_survivorship_check_without_its_sharpe_and_works_without_it(client, tmp_path, monkeypatch):
+    _factor_file(tmp_path, monkeypatch)
+    sv = client.get("/api/stockselection").json()["survivorship"]
+    row = sv["rows"][0]
+    assert sv["idea_id"] == "momentum_midcap150" and row["without_late_listed"] == {"cagr_pct": 42.0, "max_drawdown_pct": -25.0}
+    assert "sharpe" not in row["todays_list"]                                 # a Sharpe may only be drawn through the ratio object
+    _factor_file(tmp_path, monkeypatch, with_survivorship=False)
+    assert client.get("/api/stockselection").json()["survivorship"] is None
+
+
+def test_a_nan_turnover_is_served_as_null_not_as_invalid_json(client, tmp_path, monkeypatch):
+    _factor_file(tmp_path, monkeypatch, turnover=float("nan"))
+    r = client.get("/api/stockselection")
+    assert r.status_code == 200 and r.json()["ideas"][0]["windows"][0]["avg_turnover_pct"] is None
+
+
+def test_missing_stock_selection_results_are_a_helpful_404_naming_the_command(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_FACTOR_IDEAS", str(tmp_path / "nope.json"))
+    r = client.get("/api/stockselection")
+    assert r.status_code == 404 and "factor_ideas.py --register" in r.json()["detail"]

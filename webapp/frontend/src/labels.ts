@@ -2,7 +2,7 @@
 // Display only: nothing here changes a value.
 
 const UNIVERSES: Record<string, string> = { nifty50: "Nifty 50", midcap150: "Midcap 150", smallcap250: "Smallcap 250" };
-const WORDS: Record<string, string> = { ma: "MA", rsi: "RSI", sma: "SMA", oos: "out-of-sample", dip: "Dip-buying" };
+const WORDS: Record<string, string> = { ma: "MA", rsi: "RSI", sma: "SMA", oos: "out-of-sample", dip: "Dip-buying", lowvol: "Low volatility", reversal1m: "One-month reversal" };
 
 /** "ma_crossover_nifty50" as "MA crossover · Nifty 50". */
 export function strategyLabel(id: string): string {
@@ -34,6 +34,7 @@ export function plain(text: string | null | undefined): string {
     .replace(/\s*From\s+[\w/]+\.py\s+\w+\.?/g, "")
     .replace(/\s*\((?:[\w/]+\.py)\)/g, "")
     .replace(/\s*;?\s*[A-Z][A-Z_]*\.md(?:,|;)?/g, "")
+    .replace(/\s*\((?:[\w/]+\.py),?\s*\)/g, "")
     .replace(/\bmarket_exposure_pct\b/g, "Market exposure")
     .replace(/those are null by design/g, "those do not apply")
     .replace(/harness-governed/g, "properly tested")

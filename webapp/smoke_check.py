@@ -287,6 +287,21 @@ def run_checks(base: str) -> None:
               f"{s['id']}: Sharpe carries its status and count, exposure never above 100%")
     check(fetch(base, "/api/multiasset?family=nope")[0] == 422, "an unknown rule family is refused")
 
+    print("[smoke] stock-selection ideas")
+    st, ss = fetch(base, "/api/stockselection")
+    check(st == 200 and [i["id"] for i in ss["ideas"]] == ["lowvol_nifty50", "reversal1m_nifty50", "momentum_midcap150"],
+          "stock selection responds with the three registered ideas")
+    check(bare_ratios(ss) == [] and ss["is_stale"] is False, "no bare ratio in stock selection, and its results are not stale against the ledger")
+    for i in ss["ideas"]:
+        o = i["strategy"]["out_of_sample"]["sharpe"]
+        check(o["status"] == i["harness_status"] and o["as_of_hypotheses"] == ss["ledger_total_at_generation"], f"{i['id']}: Sharpe carries its status and count")
+        check(i["universe_benchmark"]["out_of_sample"]["sharpe"]["status"] == "BENCHMARK_NOT_A_HYPOTHESIS", f"{i['id']}: the hold-everything benchmark is not a hypothesis")
+        check(all(0 <= w["exposure_pct"] <= 100.0001 and w["zero_skill_n_portfolios"] == 200 for w in i["windows"]),
+              f"{i['id']}: exposure within 0-100% and the frozen 200 random portfolios")
+        check(i["strategy"]["out_of_sample"]["max_drawdown_pct"] <= 0, f"{i['id']}: worst fall is not positive")
+    if ss["survivorship"]:
+        check(all("sharpe" not in r["todays_list"] for r in ss["survivorship"]["rows"]), "the survivorship table carries no bare Sharpe")
+
     print("[smoke] advisory forward paper tracking")
     st, af = fetch(base, "/api/advisory/forward")
     check(st == 200 and [p["id"] for p in af["profiles"]] == ["conservative", "moderate", "aggressive", "trend_equal_weight", "trend_risk_managed", "momentum_top2", "momentum_top3_risk_managed"],

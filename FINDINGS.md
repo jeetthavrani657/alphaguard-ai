@@ -38,6 +38,12 @@ produced.
 > (`MULTIASSET_MOMENTUM.md`, `research/multiasset_momentum.py`) were registered and judged once; both are `VALIDATED_FAILED`
 > (profitable in the backtest, about fifty times short of the bar). Bonferroni bar is now 0.05/212 = 0.000236. No result in this
 > document changed (Smallcap MA, p = 0.000231, still clears it).
+>
+> **Fifth ledger update (2026-10-22): 212 became 215.** Three stock-selection ideas (`FACTOR_IDEAS.md`,
+> `research/factor_ideas.py`) were registered and judged once: low volatility on the Nifty 50 (`VALIDATED_FAILED`), one-month
+> reversal on the Nifty 50 and 12-1 momentum on the Midcap 150 (both `OOS_ONLY_SIGNIFICANT`: they clear the bar in the later window
+> and not in the earlier one, so neither is validated). Bonferroni bar is now 0.05/215 = 0.0002326. Smallcap MA (p = 0.000231) still
+> clears it, by a hair. Full results and the survivorship check of the mid-cap idea are in `FACTOR_IDEAS.md`.
 
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a

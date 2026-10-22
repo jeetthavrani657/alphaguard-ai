@@ -29,6 +29,7 @@ export type LiveQuotesResponse = S["LiveQuotesResponse"];
 export type AdvisoryResponse = S["AdvisoryResponse"];
 export type AdvisoryProfile = S["AdvisoryProfile"];
 export type MultiassetResponse = S["MultiassetResponse"];
+export type StockSelectionResponse = S["StockSelectionResponse"];
 export type MultiassetStrategy = S["MultiassetStrategy"];
 export type StressEpisode = S["StressEpisode"];
 export type RebalanceResponse = S["RebalanceResponse"];

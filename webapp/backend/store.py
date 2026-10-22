@@ -27,6 +27,7 @@ of known ids; anything else is a 404.
 import csv
 import json
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 from . import schemas
@@ -96,6 +97,31 @@ def load_multiasset_raw(family: str = "trend") -> dict:
     if not os.path.exists(path):
         raise NotFound(f"No multi-asset {family} results yet. Generate them from the project root with: python {MULTIASSET_FAMILIES[family][2]}")
     return _read_json(path)
+
+
+def factor_ideas_path() -> str:
+    return os.environ.get("WEBAPP_FACTOR_IDEAS", os.path.join(ROOT, "reports", "output", "factor_ideas_latest.json"))
+
+
+def load_factor_ideas_raw() -> dict:
+    """research/factor_ideas.py's latest file, untouched apart from a generated_at taken from the file's own time when the writer left it out."""
+    path = factor_ideas_path()
+    if not os.path.exists(path):
+        raise NotFound("No stock-selection results yet. Generate them from the project root with: python research/factor_ideas.py --register")
+    raw = _read_json(path)
+    if "generated_at" not in raw:
+        raw["generated_at"] = datetime.fromtimestamp(os.path.getmtime(path), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return raw
+
+
+def survivorship_path() -> str:
+    return os.environ.get("WEBAPP_MIDCAP_SURVIVORSHIP", os.path.join(ROOT, "reports", "output", "midcap_survivorship_latest.json"))
+
+
+def load_survivorship_raw() -> Optional[dict]:
+    """research/midcap_survivorship_check.py's latest file, or None when it has not been run (the page then shows nothing extra)."""
+    path = survivorship_path()
+    return _read_json(path) if os.path.exists(path) else None
 
 
 def advisory_forward_path() -> str:

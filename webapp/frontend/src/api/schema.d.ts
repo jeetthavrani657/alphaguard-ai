@@ -225,6 +225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stockselection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stock-selection ideas (research/factor_ideas.py): three registered hypotheses against a no-selection benchmark and random picks. */
+        get: operations["stock_selection_api_stockselection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/advisory/forward": {
         parameters: {
             query?: never;
@@ -1563,6 +1580,89 @@ export interface components {
              */
             buy_hold_return_pct?: number | null;
         };
+        /** StockSelectionIdea */
+        StockSelectionIdea: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Rationale */
+            rationale: string;
+            /** Universe */
+            universe: string;
+            /** Top N */
+            top_n: number;
+            /**
+             * Harness Status
+             * @enum {string}
+             */
+            harness_status: "UNVALIDATED" | "VALIDATED_FAILED" | "OOS_ONLY_SIGNIFICANT" | "VALIDATED_CONFIRMED" | "BENCHMARK_NOT_A_HYPOTHESIS" | "SLICE_OF_POOLED_HYPOTHESIS";
+            strategy: components["schemas"]["AdvisoryWindows"];
+            /** @description Every stock in the universe, equal weight, same monthly rebalance and costs: no selection. */
+            universe_benchmark: components["schemas"]["AdvisoryWindows"];
+            /** Windows */
+            windows: components["schemas"]["StockSelectionWindow"][];
+        };
+        /**
+         * StockSelectionResponse
+         * @description Stock-selection ideas (research/factor_ideas.py, FACTOR_IDEAS.md): three hypotheses registered together, each judged by the
+         *     same harness as every other strategy. Simulated only, places no orders. `is_stale` says the ledger has grown since.
+         */
+        StockSelectionResponse: {
+            /** Generated At */
+            generated_at: string;
+            /** Ledger Total At Generation */
+            ledger_total_at_generation: number;
+            /** Ledger Total Now */
+            ledger_total_now?: number | null;
+            /** Is Stale */
+            is_stale: boolean;
+            /**
+             * Design Document
+             * @default FACTOR_IDEAS.md
+             */
+            design_document: string;
+            /** Ideas */
+            ideas: components["schemas"]["StockSelectionIdea"][];
+            survivorship?: components["schemas"]["SurvivorshipCheck"] | null;
+        };
+        /**
+         * StockSelectionWindow
+         * @description How one idea behaved in one window, beyond its return: how much of the time it was invested, how much it traded, and how it
+         *     compared with picking the same number of stocks by lot.
+         */
+        StockSelectionWindow: {
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "in_sample" | "out_of_sample";
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            /**
+             * N Eligible
+             * @description Stocks the rule could choose from (the price-jump gate removes some).
+             */
+            n_eligible: number;
+            /** Exposure Pct */
+            exposure_pct: number;
+            /**
+             * Avg Turnover Pct
+             * @description Average share of the portfolio traded at each monthly rebalance.
+             */
+            avg_turnover_pct?: number | null;
+            /** Avg Names Held */
+            avg_names_held: number;
+            /**
+             * Zero Skill Percentile
+             * @description Where the rule's Sharpe sits among portfolios that pick stocks by lot (100 = better than all).
+             */
+            zero_skill_percentile?: number | null;
+            /** Zero Skill N Portfolios */
+            zero_skill_n_portfolios: number;
+        };
         /** StrategyDetail */
         StrategyDetail: {
             /** Id */
@@ -1699,6 +1799,56 @@ export interface components {
             return_pct: number;
             /** Max Drawdown Pct */
             max_drawdown_pct: number;
+        };
+        /**
+         * SurvivorshipCheck
+         * @description A diagnostic of an already-registered idea (not a hypothesis): how much of its result could come from using today's index list.
+         */
+        SurvivorshipCheck: {
+            /** Generated At */
+            generated_at: string;
+            /** Idea Id */
+            idea_id: string;
+            /** Design Document */
+            design_document: string;
+            /** Casualties */
+            casualties: string[];
+            /** N Universe */
+            n_universe: number;
+            /** N Late Listed */
+            n_late_listed: number;
+            /** Rows */
+            rows: components["schemas"]["SurvivorshipRow"][];
+        };
+        /** SurvivorshipMetrics */
+        SurvivorshipMetrics: {
+            /** Cagr Pct */
+            cagr_pct: number;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number;
+        };
+        /** SurvivorshipRow */
+        SurvivorshipRow: {
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "in_sample" | "out_of_sample";
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            todays_list: components["schemas"]["SurvivorshipMetrics"];
+            with_casualties: components["schemas"]["SurvivorshipMetrics"];
+            without_late_listed: components["schemas"]["SurvivorshipMetrics"];
+            /** N Without Late Listed */
+            n_without_late_listed: number;
+            /** Late Listed Share Of Universe Pct */
+            late_listed_share_of_universe_pct: number;
+            /** Late Listed Share Of Picks Pct */
+            late_listed_share_of_picks_pct?: number | null;
+            /** Casualty Picks */
+            casualty_picks: number;
         };
         /** SymbolDetail */
         SymbolDetail: {
@@ -2283,6 +2433,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stock_selection_api_stockselection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSelectionResponse"];
                 };
             };
         };

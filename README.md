@@ -879,6 +879,8 @@ and the Nifty 50 ETF. Both are `VALIDATED_FAILED`: the filter lowered drawdowns 
 
 A second family, **dual momentum** (`MULTIASSET_MOMENTUM.md`, `research/multiasset_momentum.py`), holds the assets with the best twelve-month return and only if that return is positive. It was written down before it was run and counted as two more hypotheses (ledger 212). The rules made money in the backtest (the best-two rule about 34% a year out-of-sample) but both are `VALIDATED_FAILED`: their p-values are far above the bar, and selecting assets did not beat holding all six per unit of risk. Making money in a backtest and passing the multiple-testing bar are different things, and the project keeps them apart.
 
+Three **stock-selection ideas** (`FACTOR_IDEAS.md`, `research/factor_ideas.py`) were added the same way: written down before any result, run once, counted (ledger 215). Low volatility on the Nifty 50 is `VALIDATED_FAILED`; one-month reversal on the Nifty 50 and 12-1 momentum on the Midcap 150 clear the bar in the later window only, so neither is validated, and the mid-cap result is flattered by using today's index list (`research/midcap_survivorship_check.py` measures how much). They appear on the Research log page.
+
 ```
 python research/advisory.py              # regenerate reports/output/advisory_latest.json (no ledger change)
 ```

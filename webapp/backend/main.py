@@ -329,6 +329,11 @@ def forward_books():
                                         first_counted_day=raw["first_counted_day"], books=books)
 
 
+def _finite(x):
+    """None for a missing or NaN number (JSON cannot carry NaN), otherwise the number."""
+    return None if x is None or not math.isfinite(x) else x
+
+
 def _advisory_metrics(m: dict, window: str, status: str, total: int, p_value, bar) -> schemas.AdvisoryRiskMetrics:
     clears = None if p_value is None or bar is None else bool(p_value < bar)
     ratio = schemas.RiskAdjustedRatio(kind="sharpe", value=m.get("sharpe"), window=window, status=status, as_of_hypotheses=total,
@@ -392,6 +397,44 @@ def multiasset(family: Literal["trend", "momentum"] = Query("trend", description
         ledger_total_now=now, is_stale=(now is not None and now != total), disclaimer=raw["disclaimer"], family=family, trend_days=raw.get("trend_days"), lookback_days=raw.get("lookback_days"),
         design_document=raw["design_document"], rule=raw["rule"], strategies=strategies, static_benchmark=bench["static"],
         nifty_benchmark=bench["nifty"], signals_now=raw["signals_now"], stress=raw["stress"], assets=raw["assets"])
+
+
+@api.get("/stockselection", response_model=schemas.StockSelectionResponse,
+         summary="Stock-selection ideas (research/factor_ideas.py): three registered hypotheses against a no-selection benchmark and random picks.")
+def stock_selection():
+    raw = store.load_factor_ideas_raw()
+    total = int(raw["ledger_total"])
+    now = store.ledger_total_now()
+
+    def metrics(w: dict, status: str, p_value, bar, prefix: str = ""):
+        """One window's numbers in the shape the rest of the API uses (the writer calls the day count n_obs)."""
+        key = (lambda k: f"{prefix}{k}")
+        m = {"sharpe": w[key("sharpe")], "cagr_pct": w[key("cagr_pct")], "max_drawdown_pct": w[key("max_drawdown_pct")], "n_days": w["n_obs"]}
+        return m, status, p_value, bar
+
+    def windows(idea: dict, status: str, pv_is, pv_oos, bar, prefix: str = ""):
+        a = metrics(idea["in_sample"], status, pv_is, bar, prefix)
+        b = metrics(idea["out_of_sample"], status, pv_oos, bar, prefix)
+        return schemas.AdvisoryWindows(in_sample=_advisory_metrics(a[0], "in_sample", status, total, pv_is, bar),
+                                       out_of_sample=_advisory_metrics(b[0], "out_of_sample", status, total, pv_oos, bar))
+
+    ideas = []
+    for idea_id, idea in raw["ideas"].items():
+        detail = [schemas.StockSelectionWindow(
+            window=name, start=w["start"], end=w["end"], n_eligible=w["n_eligible"], exposure_pct=w["exposure_pct"],
+            avg_turnover_pct=_finite(w.get("avg_turnover_pct")), avg_names_held=w["avg_names_held"],
+            zero_skill_percentile=w["zero_skill"].get("percentile"), zero_skill_n_portfolios=int(w["zero_skill"]["n_sims"]))
+            for name, w in (("in_sample", idea["in_sample"]), ("out_of_sample", idea["out_of_sample"]))]
+        ideas.append(schemas.StockSelectionIdea(
+            id=idea_id, name=idea["name"], rationale=idea["rationale"], universe=idea["universe"], top_n=idea["top_n"],
+            harness_status=idea["harness_status"],
+            strategy=windows(idea, idea["harness_status"], idea["p_in_sample"], idea["p_out_of_sample"], idea["bonferroni_bar"]),
+            universe_benchmark=windows(idea, "BENCHMARK_NOT_A_HYPOTHESIS", None, None, None, prefix="universe_"), windows=detail))
+    survivorship = store.load_survivorship_raw()
+    return schemas.StockSelectionResponse(
+        generated_at=raw["generated_at"], ledger_total_at_generation=total, ledger_total_now=now,
+        is_stale=(now is not None and now != total), ideas=ideas,
+        survivorship=None if survivorship is None else schemas.SurvivorshipCheck(**survivorship))
 
 
 @api.get("/advisory/forward", response_model=schemas.AdvisoryForwardResponse,
