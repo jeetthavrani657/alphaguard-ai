@@ -60,3 +60,6 @@ reports/output/cost_sensitivity_latest.json
 reports/output/cost_sensitivity_run.log
 reports/output/overfit_checks_latest.json
 reports/output/overfit_checks_run.log
+
+# Intraday candles (data/intraday.py): research data cache, re-downloaded from Upstox on demand.
+data/intraday/

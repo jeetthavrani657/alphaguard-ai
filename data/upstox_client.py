@@ -256,3 +256,66 @@ def fetch_symbol_daily(symbol: str, start: str, end: str, instrument_map: dict |
     if symbol not in instrument_map:
         raise KeyError(f"{symbol} is not in Upstox's NSE equity list")
     return fetch_daily(instrument_map[symbol], start, end, token)
+
+
+# --- intraday candles (read-only, through the same gate: they live under the historical-candle prefix) ---------------
+
+INTRADAY_MAX_DAYS_SHORT = 28         # candles of 1 to 15 minutes: the API allows about a month per request; stay inside it
+INTRADAY_MAX_DAYS_LONG = 80          # candles longer than 15 minutes: about a quarter per request
+
+
+def intraday_windows(start: str, end: str, interval_minutes: int) -> list:
+    """[(from, to), ...] oldest first, each inside what one request may span, together covering start..end with no gap or overlap."""
+    max_days = INTRADAY_MAX_DAYS_SHORT if interval_minutes <= 15 else INTRADAY_MAX_DAYS_LONG
+    cursor, last = datetime.strptime(start, "%Y-%m-%d").date(), datetime.strptime(end, "%Y-%m-%d").date()
+    windows = []
+    while cursor <= last:
+        stop = min(cursor + timedelta(days=max_days - 1), last)
+        windows.append((cursor.isoformat(), stop.isoformat()))
+        cursor = stop + timedelta(days=1)
+    return windows
+
+
+def parse_intraday_candles(payload: dict) -> pd.DataFrame:
+    """
+    Like parse_candles, but keeps the time of day: a frame indexed by the exchange-local candle START time (no timezone), oldest first,
+    one row per timestamp, columns open, high, low, close, volume. Raises if the API did not report success.
+    """
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Upstox did not return success (status={payload.get('status')!r})")
+    candles = payload.get("data", {}).get("candles", [])
+    if not candles:
+        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"], index=pd.DatetimeIndex([], name="time"))
+    stamps = pd.to_datetime([c[0] for c in candles])
+    if stamps.tz is not None:
+        stamps = stamps.tz_localize(None)                      # the +05:30 is dropped; times stay exchange-local
+    frame = pd.DataFrame({"open": [c[1] for c in candles], "high": [c[2] for c in candles], "low": [c[3] for c in candles],
+                          "close": [c[4] for c in candles], "volume": [c[5] for c in candles]}, index=stamps).astype(float)
+    frame.index.name = "time"
+    return frame[~frame.index.duplicated(keep="last")].sort_index()
+
+
+def fetch_intraday(instrument_key: str, interval_minutes: int, start: str, end: str, token: str | None = None) -> pd.DataFrame:
+    """Intraday candles of `interval_minutes` for one instrument over start..end (YYYY-MM-DD), in the windows the API allows."""
+    token = token or get_credential("UPSTOX_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set (see CLAUDE.md rule 5: keys live in environment variables)")
+    if not 1 <= int(interval_minutes) <= 300:
+        raise ValueError("interval_minutes must be between 1 and 300")
+    key = urllib.parse.quote(instrument_key, safe="")
+    parts = []
+    for window_from, window_to in intraday_windows(start, end, int(interval_minutes)):
+        url = f"{HISTORICAL_PREFIX}{key}/minutes/{int(interval_minutes)}/{window_to}/{window_from}"
+        parts.append(parse_intraday_candles(json.loads(_http_get(url, token))))
+    frame = pd.concat(parts) if parts else parse_intraday_candles({"status": "success", "data": {"candles": []}})
+    return frame[~frame.index.duplicated(keep="last")].sort_index()
+
+
+def fetch_symbol_intraday(symbol: str, interval_minutes: int, start: str, end: str, instrument_map: dict | None = None,
+                          token: str | None = None) -> pd.DataFrame:
+    """Intraday candles by NSE symbol, e.g. 'RELIANCE' (a trailing '.NS' is accepted)."""
+    instrument_map = instrument_map or load_instrument_map()
+    symbol = symbol.removesuffix(".NS")
+    if symbol not in instrument_map:
+        raise KeyError(f"{symbol} is not in Upstox's NSE equity list")
+    return fetch_intraday(instrument_map[symbol], interval_minutes, start, end, token)
