@@ -63,3 +63,6 @@ reports/output/overfit_checks_run.log
 
 # Intraday candles (data/intraday.py): research data cache, re-downloaded from Upstox on demand.
 data/intraday/
+
+# F&O end-of-day data (data/fo_bhavcopy.py): published exchange files, re-downloadable.
+data/fo/
