@@ -66,3 +66,6 @@ data/intraday/
 
 # F&O end-of-day data (data/fo_bhavcopy.py): published exchange files, re-downloadable.
 data/fo/
+
+# Paper execution layer (execution/): its journal, account and tickets are local run state, not code.
+execution/state/

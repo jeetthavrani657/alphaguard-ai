@@ -20,6 +20,6 @@ import sys
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(PROJECT_ROOT, "data", "cache")
 
-for _sub in ("data", "strategies", "engine", "research", "fundamentals"):
+for _sub in ("data", "strategies", "engine", "research", "fundamentals", "execution"):
     sys.path.insert(0, os.path.join(PROJECT_ROOT, _sub))
 sys.path.insert(0, PROJECT_ROOT)  # for config.py
