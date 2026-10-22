@@ -56,3 +56,7 @@ reports/output/factor_ideas_latest.json
 reports/output/midcap_survivorship_latest.json
 reports/output/factor_ideas_run.log
 reports/output/regen_*.log
+reports/output/cost_sensitivity_latest.json
+reports/output/cost_sensitivity_run.log
+reports/output/overfit_checks_latest.json
+reports/output/overfit_checks_run.log

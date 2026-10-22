@@ -94,3 +94,32 @@ costs. "Beats random" is where the idea's Sharpe sits among 200 portfolios that 
 So the honest reading: one-month reversal and mid-cap momentum look good in the later window, do not pass in both, and the mid-cap result is
 flattered by survivorship. They are not added to the paper tests; if they were, they would need their own frozen note and a forward clock
 (`FORWARD_BOOKS.md`) and would count nothing new in the ledger.
+
+## Cost sensitivity (`research/cost_sensitivity.py`, 2026-10-23: a diagnostic, registers nothing)
+
+The engine's slippage is a flat 0.05% per side, a modelling assumption. The four monthly rules (the three above and the Nifty 50 12-1 momentum rule already in
+the ledger) were rerun at 0.05%, 0.10%, 0.20% and 0.30% per side, beside holding the whole universe at the same slippage. "Edge" is the rule's return a year minus the
+universe's, in percentage points.
+
+| Rule | Window | Edge at 0.05% | 0.10% | 0.20% | 0.30% |
+|---|---|---|---|---|---|
+| 12-1 momentum, Nifty 50 | in-sample | +1.2 | +0.9 | +0.5 | 0.0 |
+| | out-of-sample | +5.7 | +5.4 | +4.7 | +4.0 |
+| Low volatility, Nifty 50 | in-sample | +1.9 | +1.8 | +1.6 | +1.3 |
+| | out-of-sample | -12.0 | -12.1 | -12.4 | -12.6 |
+| One-month reversal, Nifty 50 | in-sample | -0.6 | -1.5 | -3.3 | -5.0 |
+| | out-of-sample | +5.5 | +4.2 | +1.7 | **-0.8** |
+| 12-1 momentum, Midcap 150 | in-sample | +4.1 | +4.0 | +3.5 | +3.2 |
+| | out-of-sample | +19.6 | +19.3 | +18.6 | +17.9 |
+
+* **One-month reversal does not survive realistic costs.** It replaces most of the portfolio each month (turnover about 150 to 165% per rebalance), so its later-window edge over
+  holding everything falls from +5.5 to -0.8 points as slippage goes from 0.05% to 0.30%, and its earlier-window edge is already negative at 0.05%. Its "clears the bar in the
+  later window" result was a result at the cheapest cost assumption.
+* **Nifty 50 momentum is the most cost-robust of the rules with an edge** (later window +5.7 to +4.0 points), but its earlier-window edge disappears at 0.30%.
+* **Mid-cap momentum barely reacts to slippage** (+19.6 to +17.9 points in the later window). Its weakness is not cost; it is survivorship and the 2020-25 mid-cap rally (see above).
+  Real slippage in mid caps is probably higher than in the Nifty 50, which is why a high level was tested.
+* **Low volatility** is insensitive to cost because it trades little, and it trails holding everything in the later window whatever the cost.
+* The "costs paid" figures in `reports/output/cost_sensitivity_latest.json` are measured against the STARTING capital of each window, so they overstate the burden in a window where the
+  portfolio grew several times; use the return columns for conclusions.
+
+This does not change any status. It narrows which results deserve trust: a rule whose edge turns negative at a plausible cost is not a candidate for a forward test.
