@@ -415,7 +415,7 @@ next steps are about collecting the one kind of evidence that can still change
 that: data that did not exist when a rule was frozen. Both run daily from the
 scheduled task (`run_forward_log.bat`), after the close. The run starts with
 `research/health_check.py`, which checks that the previous run really left its files (fresh logs, no
-crashed step, the task's last result) and shows **FORWARD TEST OK / WARN / FAIL** on the web app's status
+crashed step, the task's last result, and that the newest price bar is not a half-finished day) and shows **FORWARD TEST OK / WARN / FAIL** on the web app's status
 bar; if the checker itself stops, the bar says so. Read-only: it fetches nothing and judges no strategy.
 
 - **Forward paper books** (`FORWARD_BOOKS.md`, `research/forward_books.py`):

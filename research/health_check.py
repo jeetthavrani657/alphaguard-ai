@@ -97,6 +97,34 @@ def check_task(info: dict | None, today: date) -> dict:
     return _check("task", label, _grade(lag, 1, 2), f"last ran {info['last_run'].date().isoformat()}, {lag} weekday(s) ago, result 0")
 
 
+MIN_STOCKS_TO_JUDGE = 20               # fewer cached stocks than this is too few to say anything about the market's volume
+HALF_FINISHED_BELOW = 0.6              # the typical stock trading under 60% of its usual volume on the newest day
+
+
+def check_newest_bar_complete(rows: list | None) -> dict:
+    """
+    rows: (newest cached date, that day's volume / the stock's median volume of the 20 days before) for each cached stock.
+    A bar saved while the session was still running carries only part of the day's volume, so across the market the
+    typical ratio drops well under 1 (found 2026-10-22: a noon run cached half-finished bars and the evening run
+    trusted them). One quiet stock proves nothing; the MEDIAN across the stocks on the newest date does.
+    """
+    label = "Newest price bar looks complete (volume against the usual)"
+    if rows is None:
+        return _check("bar_complete", label, "WARN", "no price cache found to check")
+    if not rows:
+        return _check("bar_complete", label, "WARN", "the price cache holds no stock with enough history to check")
+    newest = max(d for d, _ in rows)
+    ratios = sorted(r for d, r in rows if d == newest)
+    if len(ratios) < MIN_STOCKS_TO_JUDGE:
+        return _check("bar_complete", label, "OK", f"only {len(ratios)} stock(s) reach {newest.isoformat()}, too few to judge")
+    median = ratios[len(ratios) // 2] if len(ratios) % 2 else (ratios[len(ratios) // 2 - 1] + ratios[len(ratios) // 2]) / 2
+    if median < HALF_FINISHED_BELOW:
+        return _check("bar_complete", label, "WARN",
+                      f"{newest.isoformat()} looks half-finished: the typical stock traded {median:.0%} of its usual volume. "
+                      "Re-run after 16:00 India time (a quiet day, such as a holiday eve, can also cause this)")
+    return _check("bar_complete", label, "OK", f"{newest.isoformat()}: the typical stock traded {median:.0%} of its usual volume")
+
+
 # --- reading the real files ---------------------------------------------------------------------------------------------
 
 def _newest_csv_date(path: str, column: str) -> date | None:
@@ -118,6 +146,28 @@ def _read_text(path: str) -> str | None:
         return None
     with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
+
+
+def _newest_bar_ratios(cache_dir: str) -> list | None:
+    """(newest date, newest volume / median volume of the 20 days before) for every cached stock with 21+ rows; None if no folder."""
+    if not os.path.isdir(cache_dir):
+        return None
+    rows = []
+    for name in os.listdir(cache_dir):
+        if not name.endswith(".csv"):
+            continue
+        try:
+            with open(os.path.join(cache_dir, name), newline="", encoding="utf-8") as f:
+                tail = list(csv.reader(f))[-21:]
+            if len(tail) < 21 or tail[0][0] == "date":
+                continue
+            volumes = [float(r[5]) for r in tail]
+            usual = float(np.median(volumes[:-1]))
+            if usual > 0:
+                rows.append((datetime.strptime(tail[-1][0][:10], "%Y-%m-%d").date(), volumes[-1] / usual))
+        except (OSError, ValueError, IndexError):
+            continue                       # a damaged cache file must not stop the health check
+    return rows
 
 
 def read_task_info(task_name: str = TASK_NAME) -> dict | None:
@@ -165,6 +215,7 @@ def run_checks(today: date, root: str = PROJECT_ROOT, task_info=read_task_info) 
                          ok_max=1, warn_max=3),
         check_weekly("fundamentals", "Fundamentals archive (weekly)", fund_date, today),
     ]
+    checks.append(check_newest_bar_complete(_newest_bar_ratios(os.path.join(root, "data", "cache"))))
     for cid, label, log in (("log_books", "Paper books run", "forward_books_last_run.log"),
                             ("log_advisory", "Advisory forward run", "advisory_forward_last_run.log"),
                             ("log_news", "News logger run", "news_last_run.log"),

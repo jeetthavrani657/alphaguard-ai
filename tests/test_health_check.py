@@ -78,6 +78,14 @@ def test_the_windows_task_result_is_read_correctly():
 
 # --- the whole thing on a real folder -------------------------------------------------------------------------------
 
+def _write_cache(path, last_volume, rows=25, last_day="2026-10-19"):
+    """A price file in the loader's layout: `rows` weekdays ending on last_day, volume 1,000 except the newest day."""
+    days = [d.date().isoformat() for d in __import__("pandas").bdate_range(end=last_day, periods=rows)]
+    lines = ["date,open,high,low,close,volume"]
+    lines += [f"{d},10,11,9,10,{last_volume if d == days[-1] else 1000}" for d in days]
+    path.write_text("\n".join(lines) + "\n")
+
+
 def _project(tmp_path, books_through="2026-10-19", run_date="2026-10-19", news="2026-10-19T14:00:00Z"):
     out = tmp_path / "reports" / "output"
     out.mkdir(parents=True)
@@ -89,6 +97,10 @@ def _project(tmp_path, books_through="2026-10-19", run_date="2026-10-19", news="
     (out / "forward_books_latest.json").write_text(json.dumps({"books": [{"data_through": books_through}]}))
     (tmp_path / "data" / "news" / "news_log.csv").write_text(f"symbol,first_seen_utc\nTCS,{news}\n")
     (tmp_path / "data" / "fundamentals" / "yf_last_run.txt").write_text("2026-10-16T10:28:29Z")
+    cache = tmp_path / "data" / "cache"
+    cache.mkdir(parents=True)
+    for i in range(25):                                    # a healthy market: the newest day trades the usual volume
+        _write_cache(cache / f"S{i}.csv", last_volume=1_000)
     for log in ("forward_books_last_run.log", "advisory_forward_last_run.log", "news_last_run.log", "fundamentals_last_run.log", "forward_last_run.log"):
         (out / log).write_text("all good\n")
     return tmp_path
@@ -100,7 +112,7 @@ def _task_ok():
 
 def test_a_healthy_project_passes_every_check(tmp_path):
     checks = hc.run_checks(MON, str(_project(tmp_path)), lambda: _task_ok())
-    assert [c["status"] for c in checks] == ["OK"] * 12 and hc.overall(checks) == "OK"
+    assert [c["status"] for c in checks] == ["OK"] * 13 and hc.overall(checks) == "OK"
 
 
 def test_each_kind_of_silent_failure_is_caught(tmp_path):
@@ -136,3 +148,40 @@ def test_the_payload_is_written_atomically_and_carries_the_overall_status(tmp_pa
     hc.write_latest(payload, path)
     assert json.load(open(path)) == payload and not os.path.exists(path + ".tmp")
     assert payload["overall"] == "WARN" and payload["generated_at"] == "2026-10-19T13:30:00Z"
+
+
+# --- a half-finished newest bar ------------------------------------------------------------------------------------------
+
+def _ratios(n, ratio, day=date(2026, 10, 22)):
+    return [(day, ratio)] * n
+
+
+def test_a_market_that_traded_about_half_its_usual_volume_is_flagged_as_half_finished():
+    c = hc.check_newest_bar_complete(_ratios(30, 0.45))
+    assert c["status"] == "WARN" and "half-finished" in c["detail"] and "16:00" in c["detail"]
+
+
+def test_a_normal_day_passes_and_one_quiet_stock_does_not_trip_it():
+    assert hc.check_newest_bar_complete(_ratios(30, 1.0))["status"] == "OK"
+    mixed = _ratios(25, 1.1) + _ratios(5, 0.2)                    # a few illiquid names are quiet every day
+    assert hc.check_newest_bar_complete(mixed)["status"] == "OK"
+
+
+def test_only_stocks_on_the_newest_date_are_judged_and_too_few_is_not_judged():
+    older = _ratios(30, 0.3, day=date(2026, 10, 21))              # yesterday's low ratios must not matter
+    assert hc.check_newest_bar_complete(older + _ratios(25, 1.0))["status"] == "OK"
+    assert "too few" in hc.check_newest_bar_complete(_ratios(5, 0.1))["detail"]
+
+
+def test_a_missing_or_empty_cache_is_a_warning_not_a_pass():
+    assert hc.check_newest_bar_complete(None)["status"] == "WARN"
+    assert hc.check_newest_bar_complete([])["status"] == "WARN"
+
+
+def test_the_real_reader_finds_a_half_finished_bar_in_cache_files(tmp_path):
+    for i in range(25):
+        _write_cache(tmp_path / f"S{i}.csv", last_volume=400)      # newest day: 40% of the usual 1,000
+    (tmp_path / "BAD.csv").write_text("not,a,price,file\n")         # a damaged file is skipped
+    rows = hc._newest_bar_ratios(str(tmp_path))
+    assert len(rows) == 25 and hc.check_newest_bar_complete(rows)["status"] == "WARN"
+    assert hc._newest_bar_ratios(str(tmp_path / "nothing")) is None
