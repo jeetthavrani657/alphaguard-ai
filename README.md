@@ -872,7 +872,7 @@ the Methodology page explains how every result was produced. None of this adds a
 
 The interface is built to be learned by using it: the home page starts from what you want to do (build a portfolio, see what a rule would have done, watch the paper tests, look up a stock), every technical word (Sharpe ratio, drawdown, Bonferroni bar...) explains itself on hover or tap from one glossary (`webapp/frontend/src/glossary.ts`, listed on the How it works page), pages load on demand with placeholders, the Portfolio advisor remembers your risk profile (in the address) and your amount, and the browser tab names each page.
 
-The daily books run can take the newest sessions from the read-only Upstox client when Yahoo has not priced them yet (`data/upstox_tail.py`; needs the daily-regenerated token, falls back to Yahoo alone without it).
+The daily books run can take the newest sessions from the read-only Upstox client when Yahoo has not priced them yet (`data/upstox_tail.py`; needs no token: the candle addresses answered with none and with a made-up one on 2026-10-24, so the daily run no longer depends on the daily-regenerated token. Only the Live prices panel's last-price quote needs it).
 
 `python research/project_facts.py` writes one markdown file of every headline number (strategies, advisory, stress test, multi-asset rules, paper tests) straight from the app's own data service, so a write-up such as the college report is built from current facts instead of memory.
 

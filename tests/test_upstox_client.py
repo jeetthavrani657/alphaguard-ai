@@ -76,11 +76,22 @@ def test_the_token_never_appears_in_an_error(monkeypatch):
     assert e.value.__cause__ is None                                         # no chained exception carrying request details
 
 
-def test_a_missing_token_is_a_clear_error_not_a_bad_request(monkeypatch):
-    _no_network(monkeypatch)
+def test_daily_and_intraday_candles_are_requested_with_no_token_when_none_is_set(monkeypatch):
+    """Checked against the real service 2026-10-24: the candle addresses answer without a token. The daily run must not depend on one."""
+    seen = []
     monkeypatch.setattr(uc, "get_credential", lambda name: None)
-    with pytest.raises(RuntimeError, match="UPSTOX_ACCESS_TOKEN is not set"):
-        uc.fetch_daily("NSE_EQ|INE002A01018", "2026-01-01", "2026-01-31")
+    monkeypatch.setattr(uc, "_http_get", lambda url, token=None, retries=3: seen.append(token) or json.dumps(_payload([])).encode())
+    uc.fetch_daily("NSE_EQ|INE002A01018", "2026-01-01", "2026-01-31")
+    uc.fetch_intraday("NSE_EQ|INE002A01018", 15, "2026-01-01", "2026-01-10")
+    assert seen == [None, None]
+
+
+def test_a_token_in_the_environment_is_still_sent_when_there_is_one(monkeypatch):
+    seen = []
+    monkeypatch.setattr(uc, "get_credential", lambda name: "ENV-TOKEN")
+    monkeypatch.setattr(uc, "_http_get", lambda url, token=None, retries=3: seen.append(token) or json.dumps(_payload([])).encode())
+    uc.fetch_daily("NSE_EQ|INE002A01018", "2026-01-01", "2026-01-31")
+    assert seen == ["ENV-TOKEN"]
 
 
 def test_a_descriptive_user_agent_is_sent_because_cloudflare_blocks_the_default_python_one(monkeypatch):
@@ -288,11 +299,11 @@ def test_before_the_open_there_is_simply_no_row(monkeypatch):
     assert uc.fetch_today_daily("TCS", IMAP, token="tok").empty
 
 
-def test_todays_candle_needs_a_token_and_a_listed_symbol(monkeypatch):
-    _no_network(monkeypatch)
+def test_todays_candle_needs_a_listed_symbol_and_asks_for_no_token_when_none_is_set(monkeypatch):
     monkeypatch.setattr(uc, "get_credential", lambda name: None)
-    with pytest.raises(RuntimeError, match="UPSTOX_ACCESS_TOKEN is not set"):
-        uc.fetch_today_daily("TCS", IMAP)
+    seen = []
+    monkeypatch.setattr(uc, "_http_get", lambda url, token=None, retries=3: seen.append(token) or json.dumps(_payload([])).encode())
+    assert uc.fetch_today_daily("TCS", IMAP).empty and seen == [None]
     with pytest.raises(KeyError, match="NOPE"):
         uc.fetch_today_daily("NOPE", IMAP, token="tok")
 

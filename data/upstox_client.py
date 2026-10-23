@@ -11,6 +11,8 @@ read-only price client, and this file enforces that in code, not just in a comme
     position, holdings, funds or profile URL is rejected BEFORE any network call is made.
   * The API key, secret and access token live only in Windows environment variables. Nothing here
     prints, logs or stores them, and error messages never contain them.
+  * Only the last-traded-price quote needs an access token. The historical and intraday candles answered with no
+    token and with a made-up one (checked 2026-10-24), so the daily run does not depend on the daily token.
 
 The fetched prices are NOT trusted blindly: they are compared with the yfinance cache and go through
 the same validator as every other source before any research uses them (see
@@ -187,10 +189,8 @@ def parse_candles(payload: dict) -> pd.DataFrame:
 
 
 def fetch_daily(instrument_key: str, start: str, end: str, token: str | None = None) -> pd.DataFrame:
-    """Daily candles for one instrument over start..end (YYYY-MM-DD), fetched in windows the API allows."""
-    token = token or get_credential("UPSTOX_ACCESS_TOKEN")
-    if not token:
-        raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set (see CLAUDE.md rule 5: keys live in environment variables)")
+    """Daily candles for one instrument over start..end (YYYY-MM-DD), fetched in windows the API allows. Needs no token (see below)."""
+    token = token or get_credential("UPSTOX_ACCESS_TOKEN")    # used if there is one; checked 2026-10-24: the address answers with none, and with a made-up one
     key = urllib.parse.quote(instrument_key, safe="")          # the '|' in NSE_EQ|INE... must be percent-encoded
     parts = []
     for window_from, window_to in date_windows(start, end):
@@ -206,10 +206,9 @@ def fetch_today_daily(symbol: str, instrument_map: dict | None = None, token: st
     daily endpoint (fetch_daily) stops at the last COMPLETED day, even after the close, so the current day has to
     come from the intraday endpoint (found when checking the first forward day, 2026-10-19). Empty before the open
     and on non-trading days. Same address prefix as the historical candles, so the same gate applies.
+    No token needed for the empty answer of a Saturday (checked 2026-10-24); whether a trading-day candle also needs none is checked on a weekday.
     """
     token = token or get_credential("UPSTOX_ACCESS_TOKEN")
-    if not token:
-        raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set (see CLAUDE.md rule 5: keys live in environment variables)")
     instrument_map = instrument_map or load_instrument_map()
     symbol = symbol.removesuffix(".NS")
     if symbol not in instrument_map:
@@ -303,10 +302,8 @@ def parse_intraday_candles(payload: dict) -> pd.DataFrame:
 
 
 def fetch_intraday(instrument_key: str, interval_minutes: int, start: str, end: str, token: str | None = None) -> pd.DataFrame:
-    """Intraday candles of `interval_minutes` for one instrument over start..end (YYYY-MM-DD), in the windows the API allows."""
+    """Intraday candles of `interval_minutes` for one instrument over start..end (YYYY-MM-DD), in the windows the API allows. Needs no token."""
     token = token or get_credential("UPSTOX_ACCESS_TOKEN")
-    if not token:
-        raise RuntimeError("UPSTOX_ACCESS_TOKEN is not set (see CLAUDE.md rule 5: keys live in environment variables)")
     if not 1 <= int(interval_minutes) <= 300:
         raise ValueError("interval_minutes must be between 1 and 300")
     key = urllib.parse.quote(instrument_key, safe="")

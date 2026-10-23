@@ -353,7 +353,7 @@ def write_latest(reports: list, path: str = LATEST_PATH) -> None:
 def _use_upstox_for_the_newest_sessions() -> None:
     """
     Let the loader take sessions Yahoo has not priced yet from the read-only Upstox client (data/upstox_tail.py), so a day
-    Yahoo publishes late does not hold the books back. A no-op without a token; on a normal evening it makes no request.
+    Yahoo publishes late does not hold the books back. The candle endpoints need no token; on a normal evening it makes no request.
     """
     import loader
     import upstox_tail
@@ -361,7 +361,7 @@ def _use_upstox_for_the_newest_sessions() -> None:
         loader.set_tail_source(upstox_tail.UpstoxTail())
         print("[books] Upstox is on for sessions Yahoo has not priced yet (read-only market data)")
     else:
-        print("[books] no Upstox token: using Yahoo alone")
+        print("[books] Upstox is off: using Yahoo alone")
 
 
 def main() -> int:

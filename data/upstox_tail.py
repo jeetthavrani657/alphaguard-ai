@@ -107,5 +107,8 @@ class UpstoxTail:
 
 
 def available() -> bool:
-    """True when an Upstox access token is configured. Without one the daily run simply uses yfinance alone."""
-    return bool(upstox_client.get_credential("UPSTOX_ACCESS_TOKEN"))
+    """
+    True: the candle endpoints this source uses need no access token (checked 2026-10-24), so the daily run no longer depends on
+    the token being regenerated each day. If Upstox ever starts requiring one, the 401 branch above falls back to Yahoo and says so.
+    """
+    return True
