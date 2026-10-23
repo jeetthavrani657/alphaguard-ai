@@ -44,4 +44,9 @@ rem script gates itself to once every 7 days, so calling it daily costs nothing.
 rem reports\output\fundamentals_last_run.log.
 "C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\fundamentals_snapshot.py > "reports\output\fundamentals_last_run.log" 2>&1
 
+rem Phone alerts (research\alerts.py). LAST on purpose: it only reads the files the steps above wrote and sends a short Telegram message to the owner's
+rem own bot, and only if ALPHAGUARD_TELEGRAM_TOKEN and ALPHAGUARD_TELEGRAM_CHAT_ID are set as Windows environment variables. Without them it sends nothing and
+rem writes what it would have sent to reports\output\alerts_log.txt. It never changes FORWARD_RESULT. Output overwrites reports\output\alerts_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\alerts.py > "reports\output\alerts_last_run.log" 2>&1
+
 exit /b %FORWARD_RESULT%
