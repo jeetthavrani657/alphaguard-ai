@@ -44,6 +44,10 @@ produced.
 > reversal on the Nifty 50 and 12-1 momentum on the Midcap 150 (both `OOS_ONLY_SIGNIFICANT`: they clear the bar in the later window
 > and not in the earlier one, so neither is validated). Bonferroni bar is now 0.05/215 = 0.0002326. Smallcap MA (p = 0.000231) still
 > clears it, by a hair. Full results and the survivorship check of the mid-cap idea are in `FACTOR_IDEAS.md`.
+>
+> **Sixth ledger update (2026-10-23): 215 became 217.** Two Nifty iron-condor rules, monthly and weekly (`OPTIONS_IDEAS.md`, `research/options_condors.py`), were registered and judged once; both are
+> `VALIDATED_FAILED` (p out-of-sample 0.371 and 0.501). The weekly rule lost money before costs; the monthly rule won about 83% of its trades and one loss took back most of the gain. Bonferroni bar is now
+> 0.05/217 = 0.000230. Smallcap MA (p = 0.000231) now FAILS it, by a hair: it is `OOS_ONLY_SIGNIFICANT` no longer and becomes `VALIDATED_FAILED` at 217.
 
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a

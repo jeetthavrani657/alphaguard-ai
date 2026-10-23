@@ -418,6 +418,11 @@ scheduled task (`run_forward_log.bat`), after the close. The run starts with
 crashed step, the task's last result, and that the newest price bar is not a half-finished day) and shows **FORWARD TEST OK / WARN / FAIL** on the web app's status
 bar; if the checker itself stops, the bar says so. Read-only: it fetches nothing and judges no strategy.
 
+**Phone alerts** (`research/alerts.py`, the last step of the daily run) read those same files and send a short Telegram message to your own bot: a problem alert when the
+health check is not OK, when the Upstox token was rejected, or when the paper execution layer is halted (repeated once a day while it lasts, with a note when it clears), and one digest a day
+of how each paper book stands. It needs two Windows environment variables, `ALPHAGUARD_TELEGRAM_TOKEN` and `ALPHAGUARD_TELEGRAM_CHAT_ID` (never in a file or the repository); without them it sends
+nothing and writes what it would have sent to `reports/output/alerts_log.txt`. `python research/alerts.py --test` sends one test message and `--dry-run` shows what would go out.
+
 - **Forward paper books** (`FORWARD_BOOKS.md`, `research/forward_books.py`):
   the momentum and Smallcap MA crossover configurations, frozen on 2026-10-16
   and recomputed from raw prices with the same engine, costs and benchmark as
@@ -880,6 +885,14 @@ and the Nifty 50 ETF. Both are `VALIDATED_FAILED`: the filter lowered drawdowns 
 A second family, **dual momentum** (`MULTIASSET_MOMENTUM.md`, `research/multiasset_momentum.py`), holds the assets with the best twelve-month return and only if that return is positive. It was written down before it was run and counted as two more hypotheses (ledger 212). The rules made money in the backtest (the best-two rule about 34% a year out-of-sample) but both are `VALIDATED_FAILED`: their p-values are far above the bar, and selecting assets did not beat holding all six per unit of risk. Making money in a backtest and passing the multiple-testing bar are different things, and the project keeps them apart.
 
 Three **stock-selection ideas** (`FACTOR_IDEAS.md`, `research/factor_ideas.py`) were added the same way: written down before any result, run once, counted (ledger 215). Low volatility on the Nifty 50 is `VALIDATED_FAILED`; one-month reversal on the Nifty 50 and 12-1 momentum on the Midcap 150 clear the bar in the later window only, so neither is validated, and the mid-cap result is flattered by using today's index list (`research/midcap_survivorship_check.py` measures how much). They appear on the Research log page.
+
+More recent work, in the order it was built (each piece has its own tests; nothing here places an order):
+
+- **Data beyond daily prices.** `data/intraday.py` caches 1 to 300 minute candles from the read-only Upstox client (complete sessions only, one price basis, a validation report); `data/fo_bhavcopy.py` reads the exchange's published end-of-day futures and options files in both of their formats into one table, and `research/backfill_fo.py` downloads them (2022 to today is about 130 MB, git-ignored). `data/loader.py` now drops today's half-finished bar before 16:00 India time and stops asking Yahoo after five empty answers in a row when the index itself does not answer.
+- **Diagnostics of the registered rules** (they count nothing): `research/cost_sensitivity.py` (the monthly stock rules at 0.05% to 0.30% slippage), `research/overfit_checks.py` (Deflated Sharpe and the Probability of Backtest Overfitting; `OVERFIT_CHECKS.md`), `research/midcap_survivorship_check.py`.
+- **Nifty options** (`OPTIONS_IDEAS.md`): Black-76 pricing and implied volatility (`research/options_math.py`), the cost model (`research/options_costs.py`), option chains and condor strikes by delta (`research/options_chain.py`), the iron-condor engine (`research/options_backtest.py`), a description of the variance risk premium (`research/options_vol.py`) and the two registered rules (`research/options_condors.py`, ledger 217). Both are `VALIDATED_FAILED`. The engine's tests include ones against the real stored files, because a first version was confirmed correct by synthetic tests and wrong on the real data.
+- **A local paper execution layer** (`execution/`, `EXECUTION_DESIGN.md`): order tickets with limits, a kill switch that fails closed, a hash-chained journal, a simulated broker and reconciliation, with a person approving each batch. It cannot reach a network or a broker; a test scans the folder for that.
+- **Phone alerts** (`research/alerts.py`) and the Windows task now wakes the laptop on mains power and may run for two hours.
 
 ```
 python research/advisory.py              # regenerate reports/output/advisory_latest.json (no ledger change)
