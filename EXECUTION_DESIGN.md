@@ -1,6 +1,8 @@
-# Order Execution: A Design for Later (Not Built)
+# Order Execution: A Design, and a Local Paper Layer
 
-**Status: a design only. No order code exists in this project, and `CLAUDE.md` rule 5 forbids writing any.**
+**Status: the design below, plus a LOCAL, SIMULATED paper layer in `execution/` (built 2026-10-23). No real order path exists.** Nothing in this project can place,
+modify or cancel an order with a broker, or read an account, a position or funds: `CLAUDE.md` rule 5 stands, and a test (`tests/test_paper_oms.py`) fails if any file in `execution/`
+imports a network library or names a broker address (checked against deliberately inserted violations). The paper layer rehearses the plumbing around orders with real prices and no money.
 This file exists because order execution is the intended next stage of the work, and writing down the gates and the safety
 design *before* any code means the decision to build it is made on rules, not on enthusiasm for a good-looking result.
 
@@ -66,3 +68,30 @@ Sources: SEBI circular SEBI/HO/MIRSD/MIRSD-PoD/P/CIR/2025/0000013, "Safer partic
 single-app account separates data access from order access, whether an own-account algo below 10 orders per second needs any registration or tagging, and which
 instruments and order types an API app may use; (3) decide how a static IP will be provided; (4) tax treatment of algorithmic trading profits (business or capital gains, STT, GST on charges) with an accountant, because it changes what a rule must earn to be worth running.
 None of this builds anything: it only decides whether a build is possible at all.
+
+## The paper layer, as built (2026-10-23)
+
+Files: `execution/paper_oms.py` (tickets, limits, kill switch, journal), `execution/sim_broker.py` (a simulated account and fills, reconciliation) and
+`execution/run_paper.py` (the command-line steps). Tests: `tests/test_paper_oms.py`, `tests/test_sim_broker.py`, `tests/test_run_paper.py`.
+
+The steps are separate so a person stands between the rule and the account: `propose` (tickets from a paper book's target list, run through the limits, nothing sent),
+`approve` (the human step: a written note is required, the limits run again), `submit`, `fill` (after the next session's prices are on disk), `reconcile`, `status`, `kill`, `release`, `clear-halt`.
+
+| Gate 3 concern | What the layer does |
+|---|---|
+| Separation | Reads the frozen rule's target list (`forward_books_latest.json`); computes no signal; imports no strategy code; the web app is untouched. |
+| Credentials | None exist in this layer: it has no broker to talk to. |
+| Human in the loop | `approve` needs a written note and names the tickets; only approved tickets can be sent; the limits run again at approval and at submission. |
+| Hard limits | Per-order value (15% of the account), position weight (20%), orders per day (60), daily turnover (150%), limit within 3% of the last close, LIMIT orders only, symbol whitelist, no short selling. Each has a test that makes it bite. |
+| Kill switch | A `KILL` file, or a reconciliation `HALT`, or an unreadable state folder, stops everything. It fails closed. A halt clears only with a written note. |
+| Idempotency | A decision always has the same client id (a hash of rule, formation date, symbol, side, quantity); a second submission is refused. |
+| Reconciliation | Account shares and cash are compared with what the fills explain. A difference no order explains halts everything. A limit order that did not fill is reported as unfilled, not as an error. |
+| Costs and slippage | Every fill pays the engine's Indian cost model including 0.05% slippage. Comparing real fills with that assumption is for a real account and does not exist yet. |
+| Paper first | This is the paper stage; no real account is involved. |
+| Audit | An append-only, hash-chained journal (`execution/state/journal.jsonl`, git-ignored). It shows tampering; it does not prevent it. |
+
+Fill rules (deliberately conservative): an order can fill only in the first session AFTER the day it was sent, at that session's open, and only if the open is within the limit; otherwise it is
+cancelled unfilled, even though a real resting order might have filled later in the day.
+
+What it is not: it does not model partial fills, a halted stock, circuit limits, or the exchange's price bands; it uses daily opens, not intraday prices; and it keeps ONE account, so two rules
+that hold the same stock would be netted together. Use one state folder per rule if both are ever rehearsed. Passing the paper layer proves the plumbing, not that any rule makes money (the gates above stand).

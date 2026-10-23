@@ -44,7 +44,12 @@ def kill_switch_engaged(state_dir: str | None = None) -> tuple:
     if KILL_FILE in names:
         return True, "the kill switch is engaged"
     if HALT_FILE in names:
-        return True, "halted after a reconciliation difference; a person must look and clear it"
+        try:                                                        # say WHAT was found, so whoever looks does not have to dig for it
+            with open(os.path.join(folder, HALT_FILE), encoding="utf-8") as f:
+                detail = f.read().strip()
+        except OSError:
+            detail = "(the reason could not be read)"
+        return True, f"halted after a reconciliation difference; a person must look and clear it: {detail}"
     return False, ""
 
 
