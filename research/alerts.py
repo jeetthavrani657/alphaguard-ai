@@ -81,6 +81,10 @@ def collect_alerts(root: str, now: datetime, state_dir: str | None = None) -> li
         alerts.append({"key": "upstox:token", "level": "PROBLEM",
                        "text": "The Upstox token was rejected in the last run, which fell back to Yahoo alone. Regenerate the token if you want the newest day without waiting for Yahoo."})
 
+    if "blocked this address" in _read_text(os.path.join(out, "forward_books_last_run.log")):
+        alerts.append({"key": "upstox:blocked", "level": "PROBLEM",
+                       "text": "Upstox's network (Cloudflare) blocked this computer's address in the last run, which fell back to Yahoo alone. A new token will not fix this; it usually clears by itself."})
+
     folder = state_dir or os.path.join(root, "execution", "state")
     for name, text in (("HALT_RECON", "Paper execution is HALTED after a reconciliation difference"), ("KILL", "The paper execution kill switch is engaged")):
         path = os.path.join(folder, name)

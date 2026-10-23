@@ -85,7 +85,14 @@ def _pause() -> None:
 def _api_error_summary(error: urllib.error.HTTPError, token: str | None) -> str:
     """The server's own error code/message when it sent JSON ('' otherwise), with the token scrubbed out."""
     try:
-        body = json.loads(error.read().decode("utf-8", errors="replace"))
+        raw = error.read().decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+    try:
+        body = json.loads(raw)
+    except Exception:                                          # not JSON: a Cloudflare page means the ADDRESS was blocked, which has nothing to do with the token
+        return " [Cloudflare blocked this address]" if "cloudflare" in raw.lower() else ""
+    try:
         first = (body.get("errors") or [{}])[0] if isinstance(body.get("errors"), list) else {}
         text = first.get("errorCode", body.get("error_name", "")) + " " + str(first.get("message", body.get("title", "")))
     except Exception:                                          # no body, not JSON, a closed stream: say nothing extra

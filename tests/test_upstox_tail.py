@@ -149,3 +149,17 @@ def test_a_rejected_token_costs_one_request_not_hundreds():
     other._map = {"ABC": "x"}
     with pytest.raises(RuntimeError):                                            # any other failure still propagates (the loader reports it per symbol)
         other("ABC", pd.Timestamp("2026-10-19"), pd.Timestamp("2026-10-20"))
+
+
+def test_a_blocked_address_is_reported_as_that_not_as_a_rejected_token_and_still_costs_one_request(capsys):
+    calls = []
+
+    def blocked(symbol, start, end, imap):
+        calls.append(symbol)
+        raise RuntimeError("Upstox returned HTTP 403 [Cloudflare blocked this address] (request path: /v3/historical-candle/x)")
+
+    t = ut.UpstoxTail(now=lambda: utc(2026, 10, 20, 13, 0), fetch_range=blocked, fetch_today=lambda s, m: pd.DataFrame(), log_path=None)
+    t._map = {"ABC": "x", "DEF": "y"}
+    assert t("ABC", pd.Timestamp("2026-10-19"), pd.Timestamp("2026-10-20")).empty and t("DEF", pd.Timestamp("2026-10-19"), pd.Timestamp("2026-10-20")).empty
+    out = capsys.readouterr().out
+    assert calls == ["ABC"] and "blocked this address" in out and "not a token problem" in out and "token was rejected" not in out

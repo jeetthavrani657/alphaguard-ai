@@ -186,3 +186,10 @@ def test_credentials_come_only_when_both_variables_are_set(monkeypatch):
     assert alerts.get_credentials() is None
     values["ALPHAGUARD_TELEGRAM_CHAT_ID"] = "c"
     assert alerts.get_credentials() == ("t", "c")
+
+
+def test_a_blocked_upstox_address_is_reported_without_telling_the_owner_to_regenerate_the_token(root):
+    open_path(root, "forward_books_last_run.log").write_text("[upstox-tail] Upstox blocked this address (Cloudflare); the newest sessions will come from Yahoo alone this run.\n")
+    found = {a["key"]: a for a in alerts.collect_alerts(root, NOW)}
+    assert "upstox:blocked" in found and "upstox:token" not in found
+    assert "token will not fix" in found["upstox:blocked"]["text"] and "Regenerate" not in found["upstox:blocked"]["text"]

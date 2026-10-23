@@ -295,3 +295,16 @@ def test_todays_candle_needs_a_token_and_a_listed_symbol(monkeypatch):
         uc.fetch_today_daily("TCS", IMAP)
     with pytest.raises(KeyError, match="NOPE"):
         uc.fetch_today_daily("NOPE", IMAP, token="tok")
+
+
+def test_a_cloudflare_block_page_is_named_as_an_address_block_and_the_token_is_not_blamed(monkeypatch):
+    import io
+
+    def blocked(req, timeout=None):
+        html = b"<!DOCTYPE html><html><head><title>Attention Required! | Cloudflare</title></head><body><h2>You are unable to access upstox.com</h2></body></html>"
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(html))
+    monkeypatch.setattr(uc.urllib.request, "urlopen", blocked)
+    monkeypatch.setattr(uc.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError) as err:
+        uc._http_get(uc.INSTRUMENTS_URL, token="tok-SECRET-1")
+    assert "HTTP 403" in str(err.value) and "Cloudflare blocked this address" in str(err.value) and "tok-SECRET-1" not in str(err.value)
