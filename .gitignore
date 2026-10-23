@@ -69,3 +69,15 @@ data/fo/
 
 # Paper execution layer (execution/): its journal, account and tickets are local run state, not code.
 execution/state/
+reports/output/alerts_state.json
+reports/output/alerts_log.txt
+reports/output/alerts_last_run.log
+
+# Options research outputs (research/options_*.py, research/backfill_fo.py): reproducible results and run logs.
+reports/output/options_condors_latest.json
+reports/output/options_condors_*.log
+reports/output/options_vol_latest.csv
+reports/output/options_vol_run.log
+reports/output/backfill_fo_run*.log
+reports/output/mutate_ob.log
+reports/output/regen_status.log

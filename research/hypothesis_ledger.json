@@ -103,7 +103,15 @@
       "n_hypotheses_this_run": 3,
       "cumulative_hypotheses_before_run": 212,
       "cumulative_hypotheses_after_run": 215
+    },
+    {
+      "run_id": "run_20261022T215457Z_13",
+      "timestamp": "2026-10-22T21:54:57.362350+00:00",
+      "context": "Nifty iron condors, monthly and weekly: 2 hypotheses (research/options_condors.py, OPTIONS_IDEAS.md), registered once",
+      "n_hypotheses_this_run": 2,
+      "cumulative_hypotheses_before_run": 215,
+      "cumulative_hypotheses_after_run": 217
     }
   ],
-  "cumulative_hypotheses": 215
+  "cumulative_hypotheses": 217
 }

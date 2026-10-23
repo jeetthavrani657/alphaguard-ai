@@ -122,3 +122,21 @@ def test_a_stock_that_stopped_trading_can_no_longer_be_ranked_by_momentum():
     assert sv.live_momentum_score(dead, live_day) == pytest.approx(_momentum_score(dead, live_day))   # same as the registered score
     assert np.isnan(sv.live_momentum_score(dead, pd.Timestamp("2020-06-30")))                          # six months on: not rankable
     assert not np.isnan(_momentum_score(dead, pd.Timestamp("2020-06-30")))                             # the registered one would be frozen, not NaN
+
+
+# --- re-judging the stored results at a later ledger count ----------------------------------------------------------------------------
+
+def test_rejudging_changes_only_the_status_and_the_bar_and_runs_nothing(tmp_path, monkeypatch):
+    import json
+    import harness
+    window = lambda sh: {"sharpe": sh, "n_obs": 1400, "start": "a", "end": "b"}
+    data = {"ledger_total": 215, "ideas": {i["id"]: {"in_sample": window(0.5), "out_of_sample": window(1.2), "name": i["name"], "harness_status": "OLD", "p_in_sample": 1,
+                                                       "p_out_of_sample": 1, "bonferroni_bar": 1} for i in fi.IDEAS}}
+    path = tmp_path / "factor.json"
+    path.write_text(json.dumps(data))
+    monkeypatch.setattr(harness, "cumulative_hypotheses", lambda: 1000)
+    out = fi.rejudge(str(path))
+    assert out["ledger_total"] == 1000 and json.loads(path.read_text())["ledger_total"] == 1000
+    for idea in out["ideas"].values():
+        assert idea["harness_status"] != "OLD" and idea["bonferroni_bar"] == pytest.approx(0.05 / 1000)
+        assert idea["in_sample"] == window(0.5) and idea["out_of_sample"] == window(1.2)                       # the stored numbers are untouched

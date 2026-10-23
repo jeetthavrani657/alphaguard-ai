@@ -14,6 +14,7 @@ removed BEFORE ranking, and the same in-sample / out-of-sample windows. Only the
     python research/factor_ideas.py              # run and print; counts nothing in the ledger
     python research/factor_ideas.py --register   # ONCE: counts the 3 hypotheses (ledger 212 -> 215)
     python research/factor_ideas.py --sims 20    # fewer random portfolios, for a quick look (never used to register)
+    python research/factor_ideas.py --rejudge    # re-judge the stored results at today's ledger count; runs nothing and counts nothing
 """
 
 import argparse
@@ -157,11 +158,38 @@ def run_window(universe_data: dict, idea: dict, start: str, end: str, n_sims: in
     }
 
 
+def rejudge(path: str = OUTPUT_PATH) -> dict:
+    """
+    The registered results judged again at the CURRENT ledger count (the bar tightens as ideas are added), from the Sharpe ratios already stored: nothing is run, nothing is
+    counted, and no number but the status, the bar and the ledger count changes.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    results = [harness.evaluate_strategy(i["name"], i["rationale"], data["ideas"][i["id"]]["in_sample"]["sharpe"], data["ideas"][i["id"]]["in_sample"]["n_obs"],
+                                         data["ideas"][i["id"]]["out_of_sample"]["sharpe"], data["ideas"][i["id"]]["out_of_sample"]["n_obs"]) for i in IDEAS]
+    total = harness.cumulative_hypotheses()
+    harness.classify_results(results, total)
+    for i, res in zip(IDEAS, results):
+        data["ideas"][i["id"]].update({"harness_status": str(getattr(res, "status", None) or "UNVALIDATED"), "p_in_sample": getattr(res, "in_sample_p_value", None),
+                                       "p_out_of_sample": getattr(res, "out_of_sample_p_value", None), "bonferroni_bar": getattr(res, "bonferroni_alpha", None)})
+    data["ledger_total"] = total
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=1, default=str)
+    os.replace(tmp, path)
+    return data
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--register", action="store_true", help="count the 3 hypotheses in the ledger (do this ONCE)")
     ap.add_argument("--sims", type=int, default=200, help="random zero-skill portfolios per window (200 is the frozen number)")
+    ap.add_argument("--rejudge", action="store_true", help="judge the stored results again at the current ledger count; runs nothing")
     args = ap.parse_args()
+    if args.rejudge:
+        d = rejudge()
+        print(f"[factor] re-judged at {d['ledger_total']}: " + ", ".join(f"{k} {v['harness_status']}" for k, v in d["ideas"].items()))
+        return 0
     if args.register and args.sims != 200:
         raise SystemExit("Register only with the frozen 200 random portfolios (FACTOR_IDEAS.md).")
 
