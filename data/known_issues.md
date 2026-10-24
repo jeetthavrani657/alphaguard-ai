@@ -438,3 +438,23 @@ come back empty; after five in a row it asks for the Nifty 50 index. If the inde
 if not, it stops asking for five minutes and serves the cache as it is, then probes again. The prices are then older, which the health check's
 price-data age and the web app's status strip show; nothing is invented, and the next run catches up. The daily task also now wakes the laptop
 (on mains power) and may run for two hours. Tests: `tests/test_loader_breaker.py`.
+
+## 15-minute candles against Yahoo's daily bars (checked 2026-10-24 on the first 23 Nifty 50 symbols; `research/intraday_quality.py`)
+
+The candles (Upstox, January 2022 on) and Yahoo's daily bars agree on traded volume (median ratio 1.00) and on the shape of the day (high and low relative to the close, 97% to
+100% of days). They do **not** agree exactly on the close, and the reason is a definition, not an error: the exchange's official close, which Yahoo holds, is a volume-weighted
+price over the last 30 minutes, while the daily bar built from the candles closes at the last trade (the 15:15 candle). Typical gap: a median 0.12% to 0.23% a day across the 23 symbols. It is large on days
+with a violent last half hour: ETERNAL on 2025-01-20 fell from 252.8 to 230.7 in the last 30 minutes on 6.1 crore shares; the last 30 minutes' VWAP was about 239 and Yahoo's close is 239.75,
+the candle close 230.70 (3.9% apart). Measured on ETERNAL from June 2024, the VWAP of the last two candles is within 1% of Yahoo's close on 99.8% of days, the last candle's close on 98.1%.
+**The candle price is the one that could actually be traded; an intraday rule exiting at the close uses it, not the official close.**
+
+What the check also found, and what each turned out to be:
+* Weekend special sessions (4 in 2024 to 2026, for example the Budget Sunday 2026-02-01): in the candles, not in Yahoo. Real.
+* The Diwali Muhurat evenings (2022-10-24, 2024-11-01): in Yahoo, not in the candles (the loader drops candles outside 09:15 to 15:30). Real.
+* 2025-03-18: in the candles, not in Yahoo. The known Yahoo artifact above; the candles have a normal day.
+* COALINDIA 2022-11-15: the two returns differ by 6.2%. Real: its Rs 15 interim dividend went ex that day (candle close 231.65 to 217.25), and Yahoo's earlier prices are adjusted for it.
+* Not looked into: BAJAJ-AUTO 2024-01-15 and a few ETERNAL weekdays present in the candles but not in Yahoo's file.
+
+The first full download was cut off after 11 symbols when the laptop went to sleep (a background task killed with no error), and the second was blocked by Upstox's network (Cloudflare) after
+23 symbols, at about 30 requests a minute. The block is not bypassed. The long download now runs at half that speed (`research/backfill_intraday.py`, 4 seconds a request), restarts where it stopped,
+and stops at once on a block.

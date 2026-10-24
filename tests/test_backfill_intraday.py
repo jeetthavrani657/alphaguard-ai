@@ -45,6 +45,17 @@ def test_a_cloudflare_block_stops_the_run_at_once():
     assert calls == ["A"] and out["blocked"] and out["done"] == {}
 
 
+def test_the_long_download_runs_slower_than_the_clients_default_and_never_faster(monkeypatch):
+    import upstox_client
+    monkeypatch.setattr(bf, "backfill", lambda *a, **k: {"done": {}, "failed": {}, "blocked": False})
+    monkeypatch.setattr(upstox_client, "MIN_SECONDS_BETWEEN_CALLS", 2.0)
+    bf.main(["2026-10-01", "15", "TCS"])
+    assert upstox_client.MIN_SECONDS_BETWEEN_CALLS == bf.PACE_SECONDS > 2.0
+    monkeypatch.setattr(upstox_client, "MIN_SECONDS_BETWEEN_CALLS", 9.0)                 # a slower setting already in place is kept
+    bf.main(["2026-10-01", "15", "TCS"])
+    assert upstox_client.MIN_SECONDS_BETWEEN_CALLS == 9.0
+
+
 def test_the_default_list_is_the_nifty_50():
     import config
     assert len(config.UNIVERSE) == 50
