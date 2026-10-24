@@ -97,26 +97,43 @@ def collect_alerts(root: str, now: datetime, state_dir: str | None = None) -> li
     return alerts
 
 
+DEFAULT_MIN_DAYS = 252                   # trading days a verdict needs, when the result file does not say
+
+
+def _line(name: str, days, needed: int, summary, benchmark_label: str) -> str:
+    """One book or profile: its return, the benchmark's, how far ahead (+) or behind (-) in percentage points, and how far into the test it is."""
+    ret = summary.get("return_pct") if summary else None
+    if ret is None:
+        return f"- {name}: not started"
+    bench = summary.get("benchmark_return_pct")
+    gap = f" ({ret - bench:+.2f} pts)" if bench is not None else ""
+    return f"- {name}: {_pct(ret)} vs {benchmark_label} {_pct(bench)}{gap}, day {days or 0} of {needed}"
+
+
 def _digest(out_dir: str) -> dict | None:
     books = _read_json(os.path.join(out_dir, "forward_books_latest.json"))
     adv = _read_json(os.path.join(out_dir, "advisory_forward_latest.json"))
-    lines, dates = [], []
+    needed = int((books or {}).get("min_days_for_sharpe") or (adv or {}).get("min_days_for_sharpe") or DEFAULT_MIN_DAYS)
+    dates, sections = [], []
+    stock_lines = []
     for b in (books or {}).get("books", []):
-        s = b.get("summary")
         dates.append(b.get("data_through"))
-        lines.append(f"- {b['name']}: day {b.get('n_trading_days', 0)}, {_pct(s['return_pct']) if s else 'not started'}"
-                     + (f" vs {_pct(s['benchmark_return_pct'])} holding" if s else ""))
+        stock_lines.append(_line(b["name"], b.get("n_trading_days"), needed, b.get("summary"), "buy-and-hold"))
+    if stock_lines:
+        sections.append("Stock books (return so far, against buy-and-hold of the same stocks):\n" + "\n".join(stock_lines))
+    profile_lines = []
     for p in (adv or {}).get("profiles", []):
-        s = p.get("summary")
         dates.append(p.get("data_through"))
-        lines.append(f"- {p['name']}: day {p.get('n_trading_days', 0)}, {_pct(s.get('return_pct')) if s and s.get('return_pct') is not None else 'not started'}"
-                     + (f" vs {_pct(s['benchmark_return_pct'])} Nifty ETF" if s and s.get('return_pct') is not None else ""))
+        profile_lines.append(_line(p["name"], p.get("n_trading_days"), needed, p.get("summary"), "Nifty ETF"))
+    if profile_lines:
+        sections.append("Advisory profiles and trend rules (against the Nifty ETF):\n" + "\n".join(profile_lines))
     dates = [d for d in dates if d]
-    if not lines or not dates:
+    if not sections or not dates:
         return None
     day = max(dates)
     return {"key": f"digest:{day}", "level": "INFO",
-            "text": f"Paper tests through {day}\n" + "\n".join(lines) + "\nThese are daily moves, not evidence: a verdict needs 252 trading days."}
+            "text": f"Paper tests through {day}\n\n" + "\n\n".join(sections)
+                    + f"\n\nThese are daily moves, not evidence: a verdict needs {needed} trading days."}
 
 
 # ---- not repeating itself -------------------------------------------------------------------------------------------------------------------

@@ -47,8 +47,25 @@ def test_a_healthy_day_gives_just_the_digest_with_every_book_and_the_reminder(ro
     found = alerts.collect_alerts(root, NOW)
     assert [a["key"] for a in found] == ["digest:2026-10-22"] and found[0]["level"] == "INFO"
     text = found[0]["text"]
-    assert "Momentum: day 3, -2.00% vs -1.75% holding" in text and "Not started: day 0, not started" in text and "Conservative: day 2, -0.99% vs -0.86% Nifty ETF" in text
+    assert "Momentum: -2.00% vs buy-and-hold -1.75% (-0.25 pts), day 3 of 252" in text and "Not started: not started" in text
+    assert "Conservative: -0.99% vs Nifty ETF -0.86% (-0.13 pts), day 2 of 252" in text
+    assert "Stock books" in text and "Advisory profiles" in text and text.index("Stock books") < text.index("Advisory profiles")
     assert "not evidence" in text and "252" in text
+
+
+def test_the_digest_shows_ahead_as_plus_behind_as_minus_and_reads_the_days_needed_from_the_file(root):
+    write(open_path(root, "forward_books_latest.json"), {"min_days_for_sharpe": 200, "books": [
+        {"id": "a", "name": "Ahead", "data_through": "2026-10-22", "n_trading_days": 5, "summary": {"return_pct": 1.5, "benchmark_return_pct": 0.5}},
+        {"id": "b", "name": "No benchmark", "data_through": "2026-10-22", "n_trading_days": 5, "summary": {"return_pct": 1.5, "benchmark_return_pct": None}}]})
+    text = alerts.collect_alerts(root, NOW)[0]["text"]
+    assert "Ahead: +1.50% vs buy-and-hold +0.50% (+1.00 pts), day 5 of 200" in text
+    assert "No benchmark: +1.50% vs buy-and-hold n/a, day 5 of 200" in text and "a verdict needs 200 trading days" in text
+
+
+def test_a_digest_with_only_one_kind_of_result_still_reads_cleanly(root):
+    os.remove(open_path(root, "advisory_forward_latest.json"))
+    text = alerts.collect_alerts(root, NOW)[0]["text"]
+    assert "Stock books" in text and "Advisory profiles" not in text and "Conservative" not in text
 
 
 def test_a_health_problem_names_every_check_that_is_not_ok(root):
