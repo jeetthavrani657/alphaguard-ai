@@ -229,6 +229,23 @@ def load_screener() -> schemas.ScreenerResponse:
     return schemas.ScreenerResponse.model_validate(_read_json(path))
 
 
+def load_latest_prices() -> Optional[dict]:
+    """webapp/snapshots/latest_prices.json (written by latest_prices.py): {"as_of", "prices": {SYMBOL: {...}}}, or None when it does not exist. Display only."""
+    path = os.path.join(snapshot_dir(), "latest_prices.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        return _read_json(path)
+    except ValueError:                                               # a half-written or damaged file must never take the stock pages down
+        return None
+
+
+def latest_for(symbol: str) -> Optional[schemas.LatestPrice]:
+    data = load_latest_prices()
+    entry = (data or {}).get("prices", {}).get(symbol)
+    return schemas.LatestPrice(**entry) if entry else None
+
+
 def known_symbol(symbol: str) -> schemas.ScreenerRow:
     """
     The symbol guard, same idea as the strategy-id guard: a symbol is only

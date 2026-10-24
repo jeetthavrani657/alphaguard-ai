@@ -14,13 +14,18 @@ import { Term } from "./Term";
  *      file reads a ratio's `.value` directly.
  *
  * A status is only true "as of" a hypothesis count, so that is shown too.
- * Styling never hides any of the three parts: value, status chip, "as of N".
+ * Styling never hides any of the three parts: value, status chip, "as of N". `compact` is for rows of a table where every row would otherwise repeat the same red
+ * "below the bar" line: that line moves into a tooltip (the chip already says the rule failed), and a row that CLEARS the bar still says so in green.
  */
-export function Ratio({ ratio }: { ratio: RiskAdjustedRatio }) {
+export function Ratio({ ratio, compact = false }: { ratio: RiskAdjustedRatio; compact?: boolean }) {
   const value = ratio.value === null ? "n/a" : ratio.value.toFixed(3);
   const isSlice = ratio.status === "SLICE_OF_POOLED_HYPOTHESIS";
   return (
-    <span className="ratio" title={isSlice ? "One stock's slice of a pooled test, not an independent hypothesis." : undefined}>
+    <span
+      className={`ratio${compact ? " compact" : ""}`}
+      title={isSlice ? "One stock's slice of a pooled test, not an independent hypothesis."
+        : compact && ratio.clears_bar === false ? `Below the Bonferroni bar after ${ratio.as_of_hypotheses} ideas tried.` : undefined}
+    >
       {ratio.kind === "sortino" && <span className="asof">Sortino</span>}
       <span className="v">{value}</span>
       <StatusChip status={ratio.status} />
@@ -31,7 +36,7 @@ export function Ratio({ ratio }: { ratio: RiskAdjustedRatio }) {
         </span>
       )}
       {ratio.clears_bar === true && <span className="bar pos">clears <Term k="bonferroni">Bonferroni bar</Term></span>}
-      {ratio.clears_bar === false && <span className="bar neg">below <Term k="bonferroni">Bonferroni bar</Term></span>}
+      {ratio.clears_bar === false && !compact && <span className="bar neg">below <Term k="bonferroni">Bonferroni bar</Term></span>}
     </span>
   );
 }

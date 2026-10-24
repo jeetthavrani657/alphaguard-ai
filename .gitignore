@@ -88,3 +88,6 @@ reports/output/regen_status.log
 # Go-live gate check (research/golive_gates.py): reproducible from the daily result files.
 reports/output/golive_gates_latest.json
 reports/output/golive_gates_last_run.log
+
+# Latest closes for the web app (webapp/backend/latest_prices.py): run log; the JSON itself sits in the ignored webapp/snapshots/.
+reports/output/latest_prices_last_run.log

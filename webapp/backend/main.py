@@ -120,6 +120,7 @@ def health():
         detail="ok" if snapshot and ledger else
         "Run `python -m webapp.backend.snapshot` to generate results." if not snapshot else "Ledger file missing.",
         data_through=prov.data_through if prov else None,
+        latest_prices_through=(store.load_latest_prices() or {}).get("as_of"),
         snapshot_generated_at=prov.generated_at if prov else None,
         git_commit=prov.git_commit if prov else None, git_dirty=prov.git_dirty if prov else None,
         ledger_total_now=now, snapshot_ledger_total=prov.ledger_total_at_snapshot if prov else None,
@@ -209,7 +210,10 @@ def screener(
         rows = [r for r in rows if r.sector == sector]
     if flagged_only:
         rows = [r for r in rows if (not r.usable) or r.has_unresolved_discontinuity]
-    return data.model_copy(update={"rows": rows})
+    latest = store.load_latest_prices() or {}
+    prices = latest.get("prices", {})
+    rows = [r.model_copy(update={"latest": schemas.LatestPrice(**prices[r.symbol]) if r.symbol in prices else None}) for r in rows]
+    return data.model_copy(update={"rows": rows, "latest_prices_through": latest.get("as_of")})
 
 
 @api.get("/symbols/{symbol}", response_model=schemas.SymbolDetail,
@@ -253,7 +257,7 @@ def symbol_detail(symbol: str):
                 for t in sf.data[w].closed_trades if t.symbol == symbol]
     return schemas.SymbolDetail(
         symbol=symbol, universe=row.universe, sector=row.sector, usable=row.usable, first_date=row.first_date,
-        last_date=row.last_date, last_close=row.last_close, quality=quality, results=results, markers=markers,
+        last_date=row.last_date, last_close=row.last_close, latest=store.latest_for(symbol), quality=quality, results=results, markers=markers,
         executions=executions)
 
 

@@ -305,6 +305,19 @@ class DataQualityResponse(BaseModel):
 
 # --- per-stock views (screener, cockpit) ----------------------------------------------
 
+class LatestPrice(BaseModel):
+    """
+    The newest close the daily run holds for a stock, for DISPLAY only (webapp/backend/latest_prices.py). It is read from the price cache without the research
+    data's validation and belongs to no backtest: `suspect` marks a one-day move beyond 25%, `stale` a newest bar more than a week behind the freshest stock.
+    """
+    date: str
+    close: float
+    prev_close: Optional[float] = None
+    change_pct: Optional[float] = Field(None, description="The day's change in %, from the previous close in the cache.")
+    suspect: bool = False
+    stale: bool = False
+
+
 class ScreenerRow(BaseModel):
     """
     One stock in the screener / heatmap. Returns are the buy-and-hold total
@@ -325,6 +338,7 @@ class ScreenerRow(BaseModel):
     buy_hold_return_in_sample_pct: Optional[float]
     buy_hold_return_out_of_sample_pct: Optional[float]
     buy_hold_max_drawdown_out_of_sample_pct: Optional[float]
+    latest: Optional[LatestPrice] = Field(None, description="The newest close for display; null when no latest-prices file exists or the stock is not in it.")
 
 
 class ScreenerResponse(BaseModel):
@@ -332,6 +346,7 @@ class ScreenerResponse(BaseModel):
     data_through: str
     in_sample: str
     out_of_sample: str
+    latest_prices_through: Optional[str] = Field(None, description="The freshest date in the latest-prices file; null when there is none.")
     rows: list[ScreenerRow]
 
 
@@ -413,6 +428,7 @@ class SymbolDetail(BaseModel):
     first_date: str
     last_date: str
     last_close: float
+    latest: Optional[LatestPrice] = None
     quality: Optional[SymbolQuality]
     results: list[SymbolStrategyResult]
     markers: list[SymbolMarker]
@@ -1076,6 +1092,7 @@ class Health(BaseModel):
     # Provenance for the UI's status strip. All read from the snapshot manifest and the ledger file,
     # null when absent. `snapshot_stale` is an integer comparison, nothing more.
     data_through: Optional[str] = None
+    latest_prices_through: Optional[str] = None
     snapshot_generated_at: Optional[str] = None
     git_commit: Optional[str] = None
     git_dirty: Optional[bool] = None

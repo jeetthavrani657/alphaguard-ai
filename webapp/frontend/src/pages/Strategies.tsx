@@ -26,7 +26,7 @@ export function Strategies() {
             </p>
             <Panel title="Registered strategies" flush>
               <div className="tablewrap">
-                <table>
+                <table className="stack">
                   <thead>
                     <tr>
                       <th>Strategy</th><th>Universe</th><th>Status</th><th><Term k="in_sample">In-sample</Term> <Term k="sharpe">Sharpe</Term></th>
@@ -37,11 +37,11 @@ export function Strategies() {
                     {d.strategies.map((s) => (
                       <tr key={s.id}>
                         <td><Link to={`/strategies/${s.id}`}>{s.name}</Link></td>
-                        <td>{s.universe}</td>
-                        <td><StatusChip status={s.status} /> <span className="muted">as of {s.as_of_hypotheses}</span></td>
-                        <td><Ratio ratio={s.in_sample_sharpe} /></td>
-                        <td><Ratio ratio={s.out_of_sample_sharpe} /></td>
-                        <td>{s.stale ? <span className="chip stale">STALE: ledger has grown</span> : <span className="muted">current</span>}</td>
+                        <td data-label="Universe">{s.universe}</td>
+                        <td data-label="Status"><StatusChip status={s.status} /> <span className="muted">as of {s.as_of_hypotheses}</span></td>
+                        <td data-label="In-sample Sharpe"><Ratio ratio={s.in_sample_sharpe} compact /></td>
+                        <td data-label="Out-of-sample Sharpe"><Ratio ratio={s.out_of_sample_sharpe} compact /></td>
+                        <td data-label="Up to date?">{s.stale ? <span className="chip stale">STALE: ledger has grown</span> : <span className="muted">current</span>}</td>
                       </tr>
                     ))}
                   </tbody>

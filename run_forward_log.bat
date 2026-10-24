@@ -29,6 +29,10 @@ rem data that did not exist when they were frozen. Research only; places no orde
 rem the steps around it. Output overwrites reports\output\forward_books_last_run.log.
 "C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\forward_books.py > "reports\output\forward_books_last_run.log" 2>&1
 
+rem Latest closes for the web app's stock pages (webapp\backend\latest_prices.py): reads the price cache the step above just updated and writes
+rem webapp\snapshots\latest_prices.json, for DISPLAY only (no result reads it). A few seconds; it never changes FORWARD_RESULT. Output overwrites reports\output\latest_prices_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" -m webapp.backend.latest_prices > "reports\output\latest_prices_last_run.log" 2>&1
+
 rem Forward paper tracking of the three multi-asset advisory profiles (ADVISORY.md; research\advisory_forward.py).
 rem --refresh downloads fresh ETF and Bitcoin prices first. Research only; places no orders. Independent of the
 rem steps around it. Output overwrites reports\output\advisory_forward_last_run.log.

@@ -18,17 +18,17 @@ function MetricsTable({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
   const row = (label: ReactNode, f: (m: WindowMetrics) => string, sign?: (m: WindowMetrics) => number | null) => (
     <tr>
       <td>{label}</td>
-      <td className={`num ${sign ? signClass(sign(s)) : ""}`}>{f(s)}</td>
-      <td className={`num ${sign ? signClass(sign(b)) : ""}`}>{f(b)}</td>
+      <td className={`num ${sign ? signClass(sign(s)) : ""}`} data-label="Strategy">{f(s)}</td>
+      <td className={`num ${sign ? signClass(sign(b)) : ""}`} data-label="Buy & hold">{f(b)}</td>
     </tr>
   );
   return (
     <div className="tablewrap">
-      <table>
+      <table className="stack">
         <thead><tr><th></th><th className="num">Strategy</th><th className="num">Buy &amp; hold (same stocks) <Term k="benchmark">?</Term></th></tr></thead>
         <tbody>
-          <tr><td><Term k="sharpe">Sharpe</Term></td><td className="num"><Ratio ratio={s.sharpe} /></td><td className="num"><Ratio ratio={b.sharpe} /></td></tr>
-          <tr><td><Term k="sortino">Sortino</Term></td><td className="num"><Ratio ratio={s.sortino} /></td><td className="num"><Ratio ratio={b.sortino} /></td></tr>
+          <tr><td><Term k="sharpe">Sharpe</Term></td><td className="num" data-label="Strategy"><Ratio ratio={s.sharpe} /></td><td className="num" data-label="Buy & hold"><Ratio ratio={b.sharpe} /></td></tr>
+          <tr><td><Term k="sortino">Sortino</Term></td><td className="num" data-label="Strategy"><Ratio ratio={s.sortino} /></td><td className="num" data-label="Buy & hold"><Ratio ratio={b.sortino} /></td></tr>
           {row("Total return", (m) => pct(m.total_return_pct), (m) => m.total_return_pct)}
           {row(<Term k="cagr">CAGR</Term>, (m) => pct(m.cagr_pct), (m) => m.cagr_pct)}
           {row(<Term k="drawdown">Max drawdown</Term>, (m) => pct(m.max_drawdown_pct))}

@@ -1095,6 +1095,47 @@ def test_other_rules_report_the_smallest_ledger_count_any_file_was_judged_at(cli
     assert d["rules"][0]["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 217 and d["rules"][2]["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 220
 
 
+# --- latest prices (webapp/backend/latest_prices.py): display only, kept apart from every result ----------------------------------
+
+def _latest_file(prices, as_of="2026-10-23", raw=None):
+    import os
+    path = os.path.join(os.environ["WEBAPP_SNAPSHOT_DIR"], "latest_prices.json")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(raw if raw is not None else json.dumps({"as_of": as_of, "generated_at": "2026-10-24T20:00:00Z", "prices": prices}))
+
+
+def test_the_screener_carries_the_latest_close_for_stocks_that_have_one_and_null_for_the_rest(client):
+    _latest_file({"AAA": {"date": "2026-10-23", "close": 1190.0, "prev_close": 1184.5, "change_pct": 0.46, "suspect": False, "stale": False}})
+    d = client.get("/api/screener").json()
+    rows = {r["symbol"]: r for r in d["rows"]}
+    assert d["latest_prices_through"] == "2026-10-23"
+    assert rows["AAA"]["latest"] == {"date": "2026-10-23", "close": 1190.0, "prev_close": 1184.5, "change_pct": 0.46, "suspect": False, "stale": False}
+    assert rows["BBB"]["latest"] is None                                                   # not in the file: nothing is invented
+    assert rows["AAA"]["last_close"] == 104.0                                              # the backtest-window close is untouched
+
+
+def test_without_a_latest_prices_file_everything_still_works_and_nothing_is_shown_as_latest(client):
+    d = client.get("/api/screener").json()
+    assert d["latest_prices_through"] is None and all(r["latest"] is None for r in d["rows"])
+    assert client.get("/api/symbols/AAA").json()["latest"] is None
+    assert client.get("/api/health").json()["latest_prices_through"] is None
+
+
+def test_a_damaged_latest_prices_file_never_takes_the_stock_pages_down(client):
+    _latest_file(None, raw="{ this is not json")
+    assert client.get("/api/screener").status_code == 200 and client.get("/api/symbols/AAA").status_code == 200
+    assert client.get("/api/symbols/AAA").json()["latest"] is None and client.get("/api/health").json()["latest_prices_through"] is None
+
+
+def test_the_stock_page_and_the_status_strip_show_the_latest_close_and_its_warnings(client):
+    _latest_file({"AAA": {"date": "2026-10-23", "close": 133.0, "prev_close": 100.0, "change_pct": 33.0, "suspect": True, "stale": False},
+                  "BBB": {"date": "2026-10-14", "close": 50.0, "prev_close": 50.0, "change_pct": 0.0, "suspect": False, "stale": True}})
+    a, b = client.get("/api/symbols/AAA").json(), client.get("/api/symbols/BBB").json()
+    assert a["latest"]["close"] == 133.0 and a["latest"]["suspect"] is True and b["latest"]["stale"] is True and b["latest"]["date"] == "2026-10-14"
+    assert client.get("/api/health").json()["latest_prices_through"] == "2026-10-23"
+    assert a["last_close"] == 104.0 and a["last_date"] == "2020-01-07"                     # the research window's own figures are unchanged
+
+
 # --- go-live gates (research/golive_gates.py, GO_LIVE_GATES.md) -------------------------------------------------------------------
 
 def _golive_file(tmp_path, monkeypatch, amendment_status="NOT_MET", with_amendment_gate=True, eligible=False):

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { ApiError } from "./client";
 
 export type AsyncState<T> =
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; code?: number }   // code: the HTTP status when the service answered with one (404 = not found), absent when it could not be reached
   | { status: "ready"; data: T };
 
 /**
@@ -24,7 +25,7 @@ export function useApi<T>(load: () => Promise<T>, deps: unknown[]): AsyncState<T
     load()
       .then((data) => { if (!cancelled) setState({ status: "ready", data }); })
       .catch((e: unknown) => {
-        if (!cancelled) setState({ status: "error", message: e instanceof Error ? e.message : String(e) });
+        if (!cancelled) setState({ status: "error", message: e instanceof Error ? e.message : String(e), code: e instanceof ApiError ? e.status : undefined });
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,7 +50,7 @@ export function usePolling<T>(load: () => Promise<T>, everyMs: number): AsyncSta
       load()
         .then((data) => { if (!cancelled) setState({ status: "ready", data }); })
         .catch((e: unknown) => {
-          if (!cancelled) setState({ status: "error", message: e instanceof Error ? e.message : String(e) });
+          if (!cancelled) setState({ status: "error", message: e instanceof Error ? e.message : String(e), code: e instanceof ApiError ? e.status : undefined });
         });
     };
     run();

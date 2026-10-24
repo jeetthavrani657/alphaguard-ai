@@ -172,6 +172,11 @@ def run_checks(base: str) -> None:
     check(st == 200 and len(rows) > 0, f"screener has rows ({len(rows)})")
     check(len({r['symbol'] for r in rows}) == len(rows), "screener symbols are unique")
     check(not any("sharpe" in k for r in rows for k in r), "screener exposes no Sharpe")
+    with_latest = [r for r in rows if r.get("latest")]
+    check(len(with_latest) > 0 and sc.get("latest_prices_through"), "the screener carries latest closes (run `python -m webapp.backend.latest_prices` if this fails)")
+    check(all(r["latest"]["close"] > 0 and r["latest"]["date"] >= r["last_date"] or r["latest"]["stale"] for r in with_latest), "a latest close is never older than the research window unless it is marked stale")
+    st, hl = fetch(base, "/api/health")
+    check(st == 200 and hl.get("latest_prices_through") == sc.get("latest_prices_through"), "the status strip and the screener agree on the latest-prices date")
 
     def one(sym):
         out = []

@@ -92,7 +92,7 @@ export function Overview() {
           <span className="stat-note">The Bonferroni bar: 0.05 divided by the hypothesis count. It only gets harder.</span>
         </div>
         <div className="stat">
-          <span className="stat-label">Backtest prices through</span>
+          <span className="stat-label">Backtests judged through</span>
           <Async state={health}>{(h) => <span className="stat-value">{day(h.data_through)}</span>}</Async>
           <span className="stat-note">Adjusted for splits and dividends. The paper tests run on newer days.</span>
         </div>
@@ -102,7 +102,7 @@ export function Overview() {
         <Async state={strategies}>
           {(d) => (
             <div className="tablewrap">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr>
                     <th>Strategy</th><th>Universe</th><th><Term k="out_of_sample">Out-of-sample</Term> <Term k="sharpe">Sharpe</Term>, with its status</th>
@@ -112,8 +112,8 @@ export function Overview() {
                   {d.strategies.map((s) => (
                     <tr key={s.id}>
                       <td><Link to={`/strategies/${s.id}`}>{s.name}</Link></td>
-                      <td>{s.universe}</td>
-                      <td><Ratio ratio={s.out_of_sample_sharpe} /></td>
+                      <td data-label="Universe">{s.universe}</td>
+                      <td data-label="Out-of-sample Sharpe"><Ratio ratio={s.out_of_sample_sharpe} compact /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -127,7 +127,7 @@ export function Overview() {
         <Async state={advisory}>
           {(a) => (
             <div className="tablewrap">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr>
                     <th>Profile</th><th className="num"><Term k="volatility">Target volatility</Term></th><th className="num">Worst fall, out-of-sample</th>
@@ -140,10 +140,10 @@ export function Overview() {
                     return (
                       <tr key={p.id}>
                         <td><Link to="/advisory">{p.name}</Link></td>
-                        <td className="num">{pct(p.target_volatility_pct, 0)}</td>
-                        <td className="num">{pct(p.strategy.out_of_sample.max_drawdown_pct, 1)} <span className="muted">(Nifty 50 ETF {pct(p.benchmark.out_of_sample.max_drawdown_pct, 1)})</span></td>
-                        <td><Ratio ratio={p.strategy.out_of_sample.sharpe} /></td>
-                        <td>
+                        <td className="num" data-label="Target volatility">{pct(p.target_volatility_pct, 0)}</td>
+                        <td className="num" data-label="Worst fall, out-of-sample">{pct(p.strategy.out_of_sample.max_drawdown_pct, 1)} <span className="muted">(Nifty 50 ETF {pct(p.benchmark.out_of_sample.max_drawdown_pct, 1)})</span></td>
+                        <td data-label="Out-of-sample Sharpe"><Ratio ratio={p.strategy.out_of_sample.sharpe} compact /></td>
+                        <td data-label="Forward paper test">
                           {f?.summary ? (
                             <span>day {f.n_trading_days}: <b className={signClass(f.summary.return_pct)}>{pct(f.summary.return_pct, 2)}</b> <span className="muted">vs {pct(f.summary.benchmark_return_pct, 2)}</span></span>
                           ) : f ? <StatusChip status={f.status} /> : <span className="muted">…</span>}
@@ -162,7 +162,7 @@ export function Overview() {
         <Async state={multi}>
           {(m) => (
             <div className="tablewrap">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr><th>Rule</th><th><Term k="out_of_sample">Out-of-sample</Term> <Term k="sharpe">Sharpe</Term>, with its status</th><th className="num">Worst fall, out-of-sample</th></tr>
                 </thead>
@@ -170,21 +170,21 @@ export function Overview() {
                   {m.strategies.map((s) => (
                     <tr key={s.id}>
                       <td><Link to="/multiasset">{s.name}</Link></td>
-                      <td><Ratio ratio={s.metrics.out_of_sample.sharpe} /></td>
-                      <td className="num">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
+                      <td data-label="Out-of-sample Sharpe"><Ratio ratio={s.metrics.out_of_sample.sharpe} compact /></td>
+                      <td className="num" data-label="Worst fall, out-of-sample">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
                     </tr>
                   ))}
                   {momentum.status === "ready" && momentum.data.strategies.map((s) => (
                     <tr key={s.id}>
                       <td><Link to="/multiasset?family=momentum">{s.name}</Link></td>
-                      <td><Ratio ratio={s.metrics.out_of_sample.sharpe} /></td>
-                      <td className="num">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
+                      <td data-label="Out-of-sample Sharpe"><Ratio ratio={s.metrics.out_of_sample.sharpe} compact /></td>
+                      <td className="num" data-label="Worst fall, out-of-sample">{pct(s.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
                     </tr>
                   ))}
                   <tr>
                     <td>{m.static_benchmark.name} <span className="muted">(comparison)</span></td>
-                    <td><Ratio ratio={m.static_benchmark.metrics.out_of_sample.sharpe} /></td>
-                    <td className="num">{pct(m.static_benchmark.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
+                    <td data-label="Out-of-sample Sharpe"><Ratio ratio={m.static_benchmark.metrics.out_of_sample.sharpe} compact /></td>
+                    <td className="num" data-label="Worst fall, out-of-sample">{pct(m.static_benchmark.metrics.out_of_sample.max_drawdown_pct, 1)}</td>
                   </tr>
                 </tbody>
               </table>

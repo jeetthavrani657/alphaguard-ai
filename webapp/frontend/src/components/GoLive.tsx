@@ -46,9 +46,9 @@ function RuleRow({ r }: { r: GoLiveRule }) {
         <b>{r.name}</b>
         <div className="muted">{r.kind === "book" ? "Trades stocks" : "Holds weights, no trades"}</div>
       </td>
-      <td><Progress value={r.days} max={r.gate_days} label="forward days toward the verdict" /></td>
-      <td>{r.kind === "allocation" ? <span className="muted">no trades to count</span> : <Progress value={r.n_trades} max={r.min_trades} label="trades toward the minimum" />}</td>
-      <td className="wrap gl-verdict">
+      <td data-label="Forward days"><Progress value={r.days} max={r.gate_days} label="forward days toward the verdict" /></td>
+      <td data-label="Trades">{r.kind === "allocation" ? <span className="muted">no trades to count</span> : <Progress value={r.n_trades} max={r.min_trades} label="trades toward the minimum" />}</td>
+      <td className="wrap gl-verdict" data-label="Verdict">
         <span className={`chip ${r.eligible ? "g-MET" : "g-NOT_MET"}`}>{r.eligible ? "eligible for you to consider" : "not eligible"}</span>
         <details className="gl-details">
           <summary>Every gate</summary>
@@ -84,7 +84,7 @@ export function GoLive() {
               </p>
             </div>
             <div className="tablewrap scroll">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr>
                     <th>Rule</th>

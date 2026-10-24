@@ -25,14 +25,15 @@ export function StatusBar() {
       <span className={good ? "ok" : "warn"} title={good ? "Data, results and the daily paper test are all up to date." : problems.join(" ")}>
         ● {good ? "All up to date" : "Needs attention"}
       </span>
-      <span>Backtest prices through <b>{day(h.data_through)}</b></span>
+      <span title="Every backtest result was judged on prices up to this date.">Backtests to <b>{day(h.data_through)}</b></span>
+      {h.latest_prices_through && <span title="The newest close the daily run holds. It is shown for reference and belongs to no backtest.">Latest prices <b>{day(h.latest_prices_through)}</b></span>}
       <span><b>{h.ledger_total_now ?? "—"}</b> ideas tested so far</span>
       {problems.map((p) => <span className="warn" key={p}>⚠ {p}</span>)}
       <details className="tech">
         <summary>Details</summary>
         <div>
           <p>Results generated <b>{when(h.snapshot_generated_at)}</b></p>
-          <p>Research prices are adjusted for splits and dividends and run to the date above. Live prices are on the Paper trading page.</p>
+          <p>Backtests use prices adjusted for splits and dividends up to the first date shown; the latest prices are the daily run's newest closes, shown for reference only. Live prices are on the Paper trading page.</p>
         </div>
       </details>
     </div>

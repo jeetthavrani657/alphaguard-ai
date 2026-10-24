@@ -388,6 +388,7 @@ it. The brief's five rules, and what enforces each:
   `/api/ledger`, `/api/forward-test`, `/api/forward-books`, `/api/health`, and
   `/api/otherrules` (the Nifty options and same-day rules, shown on the Research log page),
   and `/api/golive` (each paper rule against the go-live gates, shown on the Paper trading page; execution stays locked).
+  Stock pages and the Stocks list also show the latest close (`python -m webapp.backend.latest_prices`, run each evening by `run_forward_log.bat`): for display only, kept apart from every result.
 - **Charts** use TradingView's open-source `lightweight-charts`. The wheel
   scrolls the page, not the chart; drag to pan and use the range buttons.
 

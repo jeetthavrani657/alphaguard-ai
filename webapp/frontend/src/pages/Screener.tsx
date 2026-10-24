@@ -5,7 +5,7 @@ import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Heatmap } from "../components/Heatmap";
 import { Panel } from "../components/Panel";
-import { num, pct, signClass } from "../fmt";
+import { day, num, pct, signClass } from "../fmt";
 import type { ScreenerRow } from "../api/types";
 
 type SortKey = "symbol" | "buy_hold_return_in_sample_pct" | "buy_hold_return_out_of_sample_pct";
@@ -92,11 +92,11 @@ export function Screener() {
                   <Heatmap rows={data.rows} window={win} />
                 ) : (
                   <div className="tablewrap scroll">
-                    <table>
+                    <table className="stack">
                       <thead>
                         <tr>
-                          <th>Symbol</th><th>Universe</th><th>Sector</th><th className="num">Last close (adj.)</th>
-                          <th>Last date</th><th className="num">Buy&amp;hold in-sample</th>
+                          <th>Symbol</th><th>Universe</th><th>Sector</th><th className="num">Latest close</th>
+                          <th className="num">Day</th><th>As of</th><th className="num">Buy&amp;hold in-sample</th>
                           <th className="num">Buy&amp;hold out-of-sample</th><th className="num">OOS max drawdown</th>
                           <th>Flags</th>
                         </tr>
@@ -107,14 +107,19 @@ export function Screener() {
                           return (
                             <tr key={r.symbol} className={flagged ? "flagged" : ""}>
                               <td><Link to={`/stock/${encodeURIComponent(r.symbol)}`}>{r.symbol}</Link></td>
-                              <td>{r.universe}</td>
-                              <td>{r.sector ?? "—"}</td>
-                              <td className="num">{num(r.last_close)}</td>
-                              <td>{r.last_date}</td>
-                              <td className={`num ${signClass(r.buy_hold_return_in_sample_pct)}`}>{pct(r.buy_hold_return_in_sample_pct)}</td>
-                              <td className={`num ${signClass(r.buy_hold_return_out_of_sample_pct)}`}>{pct(r.buy_hold_return_out_of_sample_pct)}</td>
-                              <td className="num">{pct(r.buy_hold_max_drawdown_out_of_sample_pct)}</td>
-                              <td>
+                              <td data-label="Universe">{r.universe}</td>
+                              <td data-label="Sector">{r.sector ?? "—"}</td>
+                              <td className="num" data-label="Latest close">{r.latest ? num(r.latest.close) : <span className="muted" title="No latest price yet: this is the close at the end of the research window.">{num(r.last_close)}</span>}</td>
+                              <td className={`num ${signClass(r.latest?.change_pct)}`} data-label="Day">{r.latest ? pct(r.latest.change_pct) : "—"}</td>
+                              <td data-label="As of">
+                                {r.latest ? day(r.latest.date) : <span className="muted">{day(r.last_date)}</span>}
+                                {r.latest?.stale && <> <span className="chip flag" title="This stock's newest price is more than a week older than the freshest stock's: it is not being updated every day.">STALE</span></>}
+                                {r.latest?.suspect && <> <span className="chip flag" title="A one-day move above 25%: check it before trusting it.">CHECK</span></>}
+                              </td>
+                              <td className={`num ${signClass(r.buy_hold_return_in_sample_pct)}`} data-label="Buy&hold in-sample">{pct(r.buy_hold_return_in_sample_pct)}</td>
+                              <td className={`num ${signClass(r.buy_hold_return_out_of_sample_pct)}`} data-label="Buy&hold out-of-sample">{pct(r.buy_hold_return_out_of_sample_pct)}</td>
+                              <td className="num" data-label="OOS max drawdown">{pct(r.buy_hold_max_drawdown_out_of_sample_pct)}</td>
+                              <td data-label="Flags">
                                 {!r.usable && <span className="chip flag">UNUSABLE</span>}{" "}
                                 {r.has_unresolved_discontinuity && <span className="chip flag">DATA FLAG</span>}
                               </td>

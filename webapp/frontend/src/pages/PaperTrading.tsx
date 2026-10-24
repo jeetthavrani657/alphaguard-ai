@@ -5,6 +5,7 @@ import { useApi, usePolling } from "../api/useApi";
 import { Async } from "../components/Async";
 import { GoLive } from "../components/GoLive";
 import { Panel } from "../components/Panel";
+import { Disclaimer } from "../components/ReadFirst";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { Tabs } from "../components/Tabs";
@@ -320,7 +321,7 @@ function Scoreboard() {
     <Panel title="Where every paper test stands" flush>
       {rows.length === 0 ? <div style={{ padding: 14 }}><Async state={books}>{() => null}</Async></div> : (
         <div className="tablewrap">
-          <table>
+          <table className="stack">
             <thead>
               <tr><th>Test</th><th>Status</th><th className="num">Days so far</th><th className="num">Return since start</th><th className="num">Holding the same instead</th></tr>
             </thead>
@@ -328,10 +329,10 @@ function Scoreboard() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td><a href={r.to}>{r.name}</a></td>
-                  <td><StatusChip status={r.status} /></td>
-                  <td className="num">{r.days} of {r.need}</td>
-                  <td className={`num ${signClass(r.ret)}`}>{r.ret === null || r.ret === undefined ? "—" : pct(r.ret, 2)}</td>
-                  <td className={`num ${signClass(r.bench)}`}>{r.bench === null || r.bench === undefined ? "—" : pct(r.bench, 2)}</td>
+                  <td data-label="Status"><StatusChip status={r.status} /></td>
+                  <td className="num" data-label="Days so far">{r.days} of {r.need}</td>
+                  <td className={`num ${signClass(r.ret)}`} data-label="Return since start">{r.ret === null || r.ret === undefined ? "—" : pct(r.ret, 2)}</td>
+                  <td className={`num ${signClass(r.bench)}`} data-label="Holding the same instead">{r.bench === null || r.bench === undefined ? "—" : pct(r.bench, 2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -355,10 +356,10 @@ export function PaperTrading() {
       <Async state={state}>
         {(d) => (
           <>
-            <p className="note info">
-              {d.disclaimer} What counts as a pass was written down before the first day. The dip-buying rule has its own forward test on the <Link to="/research">Research log</Link> page.
-              A <Term k="paper">paper test</Term> places no order.
-            </p>
+            <Disclaimer
+              text={d.disclaimer}
+              extra={<p>What counts as a pass was written down before the first day. The dip-buying rule has its own forward test on the <Link to="/research">Research log</Link> page. A <Term k="paper">paper test</Term> places no order.</p>}
+            />
             <Scoreboard />
             <GoLive />
             {d.books.map((b) => <div id={`book-${b.id}`} key={b.id}><BookCard book={b} /></div>)}

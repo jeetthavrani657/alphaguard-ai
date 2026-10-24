@@ -1164,6 +1164,8 @@ export interface components {
             detail: string;
             /** Data Through */
             data_through?: string | null;
+            /** Latest Prices Through */
+            latest_prices_through?: string | null;
             /** Snapshot Generated At */
             snapshot_generated_at?: string | null;
             /** Git Commit */
@@ -1221,6 +1223,34 @@ export interface components {
             bar_pct?: number | null;
             /** Win Rate Pct */
             win_rate_pct?: number | null;
+        };
+        /**
+         * LatestPrice
+         * @description The newest close the daily run holds for a stock, for DISPLAY only (webapp/backend/latest_prices.py). It is read from the price cache without the research
+         *     data's validation and belongs to no backtest: `suspect` marks a one-day move beyond 25%, `stale` a newest bar more than a week behind the freshest stock.
+         */
+        LatestPrice: {
+            /** Date */
+            date: string;
+            /** Close */
+            close: number;
+            /** Prev Close */
+            prev_close?: number | null;
+            /**
+             * Change Pct
+             * @description The day's change in %, from the previous close in the cache.
+             */
+            change_pct?: number | null;
+            /**
+             * Suspect
+             * @default false
+             */
+            suspect: boolean;
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
         };
         /** LedgerResponse */
         LedgerResponse: {
@@ -1734,6 +1764,11 @@ export interface components {
             in_sample: string;
             /** Out Of Sample */
             out_of_sample: string;
+            /**
+             * Latest Prices Through
+             * @description The freshest date in the latest-prices file; null when there is none.
+             */
+            latest_prices_through?: string | null;
             /** Rows */
             rows: components["schemas"]["ScreenerRow"][];
         };
@@ -1776,6 +1811,8 @@ export interface components {
             buy_hold_return_out_of_sample_pct: number | null;
             /** Buy Hold Max Drawdown Out Of Sample Pct */
             buy_hold_max_drawdown_out_of_sample_pct: number | null;
+            /** @description The newest close for display; null when no latest-prices file exists or the stock is not in it. */
+            latest?: components["schemas"]["LatestPrice"] | null;
         };
         /**
          * SliceMetrics
@@ -2087,6 +2124,7 @@ export interface components {
             last_date: string;
             /** Last Close */
             last_close: number;
+            latest?: components["schemas"]["LatestPrice"] | null;
             quality: components["schemas"]["SymbolQuality"] | null;
             /** Results */
             results: components["schemas"]["SymbolStrategyResult"][];

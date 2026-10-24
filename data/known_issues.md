@@ -471,3 +471,16 @@ by 2025-12-31 (the out-of-sample window of the equity rules) are unaffected. A r
 The same comparison shows ITC's volume 4% below Yahoo's before 2025 (ratio 0.96, then 1.00): consistent with an adjustment Upstox applies for ITC's hotel demerger, which matters only for volume, not for the intraday rules.
 Two more of the six symbols the quality table flagged are dividends: ONGC on 2022-11-21 (the price fell 4.8%, Yahoo's earlier prices were lowered 5.1%) and TATASTEEL on 2022-06-15 (a Rs 51 pre-split dividend is Rs 5.1 on
 a price of about Rs 96, 5.3%, against a gap of 5.2%). MAXHEALTH's day high and low differ from Yahoo's on 23 days in 2022 to 2024 (none since): not looked into.
+
+## The web app showed prices ten months old, and the Midcap 150 is not refreshed by the daily run (found and handled 2026-10-25)
+
+The research snapshot loads prices only to the end of the backtest window (2025-12-31), so a stock's page and the Stocks list said its price was from 31 Dec 2025 while the daily run held last week's
+(RELIANCE's 23 Oct 2026 close, 1,190.00, +0.46%, matched Screener.in's own figure for that day). `webapp/backend/latest_prices.py` now writes `webapp/snapshots/latest_prices.json` from the price cache
+(`run_forward_log.bat` does it each evening, a few seconds); the app shows the latest close, its date and the day's change beside the research figures, and the status strip names both dates. The file is
+for display only: no backtest, status or strategy reads it, it is not validated like the research data, a one-day move above 25% is marked CHECK, and a stock whose newest bar is more than a week behind
+the freshest one is marked STALE.
+
+What this exposed: **all 145 Midcap 150 stocks have a newest bar of 2026-10-14**, because the daily run loads only the Nifty 50 and the Smallcap 250 (the books it feeds). They show as STALE. Nothing a result
+depends on is affected (the midcap idea was judged on its own window), but anything shown "latest" for a midcap stock is nine days old until its cache is refreshed. Four ETFs and one smallcap are stale for the
+ordinary reason that they are no longer updated. The fix (refreshing the midcap cache each evening, which costs several minutes, or taking its daily bars from the read-only broker feed) is a decision, not
+done here. The research chart on a stock page still ends on 2025-12-31 with a note saying so; extending it would show unvalidated bars next to validated ones and is left for a later step.

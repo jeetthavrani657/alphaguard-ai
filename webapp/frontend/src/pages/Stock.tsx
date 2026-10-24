@@ -1,4 +1,5 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
+import { StockSearch } from "../components/StockSearch";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
@@ -7,7 +8,7 @@ import { checkLabel, strategyLabel } from "../labels";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { PriceChart } from "../components/charts/PriceChart";
-import { int, num, pct, signClass } from "../fmt";
+import { day, int, num, pct, signClass } from "../fmt";
 import type { SliceMetrics, SymbolStrategyResult } from "../api/types";
 
 function SliceRow({ label, m, excluded }: { label: string; m: SliceMetrics | null | undefined; excluded?: string | null }) {
@@ -67,6 +68,18 @@ export function Stock() {
   const { symbol = "" } = useParams();
   const detail = useApi(() => api.symbol(symbol), [symbol]);
   const prices = useApi(() => api.prices(symbol), [symbol]);
+  if (/\.(NS|BO)$/i.test(symbol)) return <Navigate to={`/stock/${encodeURIComponent(symbol.replace(/\.(NS|BO)$/i, ""))}`} replace />;   // people type RELIANCE.NS: the app's own names have no suffix
+  if (detail.status === "error" && detail.code === 404) {
+    return (
+      <div>
+        <Link to="/screener" className="back">← All stocks</Link>
+        <div className="note info" role="status">
+          <b>We don't have a stock called "{symbol}".</b> The app covers the Nifty 50, the Midcap 150 and the Smallcap 250. Search for the symbol below.
+        </div>
+        <div style={{ maxWidth: 420, marginTop: 12 }}><StockSearch /></div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -75,19 +88,35 @@ export function Stock() {
         {(d) => (
           <div className="pagehead">
             <h1>{symbol}</h1>
-            <span className="price" title="Split/dividend-adjusted close on the last day of the research window">
-              ₹{num(d.last_close)}
+            <span className="price" title={d.latest ? "The newest close the daily run holds, shown for reference." : "Split/dividend-adjusted close on the last day of the research window"}>
+              ₹{num(d.latest?.close ?? d.last_close)}
             </span>
-            <span className="muted">adj. close · {d.last_date}</span>
+            {d.latest ? (
+              <>
+                <span className={signClass(d.latest.change_pct)}>{pct(d.latest.change_pct, 2)}</span>
+                <span className="muted">close · {day(d.latest.date)}</span>
+                {d.latest.stale && <span className="chip flag" title="This stock's newest price is more than a week older than the freshest stock's: it is not being updated every day.">STALE PRICE</span>}
+                {d.latest.suspect && <span className="chip flag" title="A one-day move above 25%: check it before trusting it.">CHECK THIS MOVE</span>}
+              </>
+            ) : (
+              <span className="muted">adj. close · {d.last_date}</span>
+            )}
             <span className="chip">{d.universe}</span>
             {d.sector && <span className="chip">{d.sector}</span>}
             {!d.usable && <span className="chip flag" title="Its price data has a problem, so no strategy was tested on it.">DATA PROBLEM: NOT TESTED</span>}
             {d.quality?.discontinuities.some((x) => x.status !== "GENUINE") && (
               <span className="chip flag" title="A large one-day price move that could not be explained as a real move.">UNEXPLAINED PRICE JUMP</span>
             )}
-            <span className="muted">{d.first_date} → {d.last_date}</span>
+            <span className="muted">research data {d.first_date} → {d.last_date}</span>
           </div>
         )}
+      </Async>
+      <Async state={detail}>
+        {(d) => d.latest && d.latest.date > d.last_date ? (
+          <p className="muted" style={{ margin: "0 0 10px" }}>
+            The chart and every strategy on this page belong to the research window, which ends {day(d.last_date)}. The latest close above is the daily run's newest price, shown for reference only.
+          </p>
+        ) : null}
       </Async>
 
       <Panel title="Price chart, with the trades each strategy made">

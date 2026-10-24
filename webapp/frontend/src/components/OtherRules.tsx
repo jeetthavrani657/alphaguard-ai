@@ -49,7 +49,7 @@ export function OtherRules() {
               </p>
             </div>
             <div className="tablewrap scroll">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr>
                     <th>Idea</th>
@@ -67,11 +67,11 @@ export function OtherRules() {
                         <b>{plain(r.name)}</b>
                         <div className="muted">{r.family === "options" ? "Nifty options" : "Same-day stock trades"}</div>
                       </td>
-                      <td><Ratio ratio={r.strategy.in_sample.sharpe} /></td>
-                      <td><Ratio ratio={r.strategy.out_of_sample.sharpe} /></td>
-                      <td className={`num ${signClass(r.strategy.out_of_sample.cagr_pct)}`}>{pct(r.strategy.out_of_sample.cagr_pct)}</td>
-                      <td className="num neg">{pct(r.strategy.out_of_sample.max_drawdown_pct)}</td>
-                      <td className="wrap">{unseenTrades(r)}</td>
+                      <td data-label="Practice period"><Ratio ratio={r.strategy.in_sample.sharpe} compact /></td>
+                      <td data-label="Unseen period"><Ratio ratio={r.strategy.out_of_sample.sharpe} compact /></td>
+                      <td className={`num ${signClass(r.strategy.out_of_sample.cagr_pct)}`} data-label="Unseen return a year">{pct(r.strategy.out_of_sample.cagr_pct)}</td>
+                      <td className="num neg" data-label="Unseen worst fall">{pct(r.strategy.out_of_sample.max_drawdown_pct)}</td>
+                      <td className="wrap" data-label="Trades (unseen period)">{unseenTrades(r)}</td>
                     </tr>
                   ))}
                 </tbody>

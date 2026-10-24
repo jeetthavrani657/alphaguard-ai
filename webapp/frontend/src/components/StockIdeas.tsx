@@ -27,7 +27,7 @@ export function StockIdeas() {
               </p>
             </div>
             <div className="tablewrap scroll">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr>
                     <th>Idea</th>
@@ -45,12 +45,12 @@ export function StockIdeas() {
                     return (
                       <tr key={i.id}>
                         <td className="wrap"><b>{strategyLabel(i.id)}</b><div className="muted">{i.name}</div></td>
-                        <td><Ratio ratio={i.strategy.in_sample.sharpe} /></td>
-                        <td><Ratio ratio={i.strategy.out_of_sample.sharpe} /></td>
-                        <td className={`num ${signClass(i.strategy.out_of_sample.cagr_pct)}`}>{pct(i.strategy.out_of_sample.cagr_pct)}</td>
-                        <td className={`num ${signClass(i.universe_benchmark.out_of_sample.cagr_pct)}`}>{pct(i.universe_benchmark.out_of_sample.cagr_pct)}</td>
-                        <td className="num neg">{pct(i.strategy.out_of_sample.max_drawdown_pct)}</td>
-                        <td className="wrap">
+                        <td data-label="Practice period"><Ratio ratio={i.strategy.in_sample.sharpe} compact /></td>
+                        <td data-label="Unseen period"><Ratio ratio={i.strategy.out_of_sample.sharpe} compact /></td>
+                        <td className={`num ${signClass(i.strategy.out_of_sample.cagr_pct)}`} data-label="Unseen return a year">{pct(i.strategy.out_of_sample.cagr_pct)}</td>
+                        <td className={`num ${signClass(i.universe_benchmark.out_of_sample.cagr_pct)}`} data-label="Holding all stocks">{pct(i.universe_benchmark.out_of_sample.cagr_pct)}</td>
+                        <td className="num neg" data-label="Unseen worst fall">{pct(i.strategy.out_of_sample.max_drawdown_pct)}</td>
+                        <td className="wrap" data-label="Against random picks (unseen)">
                           {unseen?.zero_skill_percentile == null ? "n/a" : <>Better than <b>{num(unseen.zero_skill_percentile, 0)}%</b> of {int(unseen.zero_skill_n_portfolios)} random portfolios</>}
                         </td>
                       </tr>

@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
+import { Disclaimer, ReadFirst } from "../components/ReadFirst";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { Tabs } from "../components/Tabs";
@@ -27,7 +28,7 @@ function ResultsTable({ d }: { d: MultiassetResponse }) {
   ];
   return (
     <div className="tablewrap">
-      <table>
+      <table className="stack">
         <thead>
           <tr>
             <th>Rule</th><th><Term k="sharpe">Sharpe</Term> <Term k="in_sample">in-sample</Term>, with its status</th><th><Term k="sharpe">Sharpe</Term> <Term k="out_of_sample">out-of-sample</Term>, with its status</th>
@@ -38,12 +39,12 @@ function ResultsTable({ d }: { d: MultiassetResponse }) {
           {rows.map((r) => (
             <tr key={r.key}>
               <td>{r.name}{r.status === null && <span className="muted"> (comparison, not a hypothesis)</span>}</td>
-              <td><Ratio ratio={r.w.in_sample.sharpe} /></td>
-              <td><Ratio ratio={r.w.out_of_sample.sharpe} /></td>
-              <td className={`num ${signClass(r.w.out_of_sample.cagr_pct)}`}>{pct(r.w.out_of_sample.cagr_pct, 1)}</td>
-              <td className="num">{pct(r.w.out_of_sample.volatility_pct, 1)}</td>
-              <td className="num">{pct(r.w.out_of_sample.max_drawdown_pct, 1)}</td>
-              <td className="num">{num(r.w.out_of_sample.calmar, 2)}</td>
+              <td data-label="Sharpe in-sample"><Ratio ratio={r.w.in_sample.sharpe} compact /></td>
+              <td data-label="Sharpe out-of-sample"><Ratio ratio={r.w.out_of_sample.sharpe} compact /></td>
+              <td className={`num ${signClass(r.w.out_of_sample.cagr_pct)}`} data-label="Return a year (out-of-sample)">{pct(r.w.out_of_sample.cagr_pct, 1)}</td>
+              <td className="num" data-label="Volatility">{pct(r.w.out_of_sample.volatility_pct, 1)}</td>
+              <td className="num" data-label="Worst fall">{pct(r.w.out_of_sample.max_drawdown_pct, 1)}</td>
+              <td className="num" data-label="Calmar">{num(r.w.out_of_sample.calmar, 2)}</td>
             </tr>
           ))}
         </tbody>
@@ -116,23 +117,23 @@ function Rules({ family }: { family: Family }) {
           const name = (id: string) => (d.assets.find((a) => a.id === id)?.name ?? (id === "cash" ? "Cash" : id)).split(" (")[0];
           return (
             <>
-              <p className="note">{d.disclaimer}</p>
+              <Disclaimer text={d.disclaimer} />
               {d.is_stale && (
                 <p className="note warn">These results were worked out when {d.ledger_total_at_generation} ideas had been tried; {d.ledger_total_now} have been tried since. The statuses shown may be a little out of date.</p>
               )}
               {family === "trend" ? (
-                <p className="note info">
+                <ReadFirst summary="How this rule works (read first)">
                   A <b>trend filter</b> across six assets: Nifty 50, Nifty Midcap 150, Nasdaq-100, gold, government bonds and Bitcoin. An asset is held while its close is above its own{" "}
                   {d.trend_days}-day trend line (its mean price over that time) and replaced by cash otherwise; decisions are made every {d.rule.rebalance_every_days} trading days and carried out one day later, with {pct(d.rule.cost_pct_per_side, 2)} cost each way.
                   The rules were written down in full before any result was looked at. Two variants were registered as hypotheses; the comparison that matters for a
                   timing rule is the same six assets held <b>without</b> timing. See <Link to="/methodology">How it works</Link>.
-                </p>
+                </ReadFirst>
               ) : (
-                <p className="note info">
+                <ReadFirst summary="How this rule works (read first)">
                   <b>Dual momentum</b> across the same six assets. Every {d.rule.rebalance_every_days} trading days, rank the assets by their return over the last {d.lookback_days} trading days (twelve months) and hold the best ones, but only
                   those whose own return is positive; anything else sits in cash. Decisions are carried out one day later, with {pct(d.rule.cost_pct_per_side, 2)} cost each way. The rules were written down in full before any result was looked at,
                   and two variants were registered as hypotheses. The comparison that matters is the same six assets held <b>without</b> any selection. See <Link to="/methodology">How it works</Link>.
-                </p>
+                </ReadFirst>
               )}
 
               <Panel title={`1. Results, simulated from ${d.simulation_start}`}>

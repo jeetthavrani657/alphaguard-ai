@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
+import { Disclaimer } from "../components/ReadFirst";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { Tabs } from "../components/Tabs";
@@ -328,8 +329,8 @@ function Metrics({ p }: { p: AdvisoryProfile }) {
           ))}
           <tr>
             <td><Term k="sharpe">Sharpe ratio</Term>, with its status</td>
-            <td className="num"><Ratio ratio={p.strategy.in_sample.sharpe} /></td><td className="num"><Ratio ratio={p.benchmark.in_sample.sharpe} /></td>
-            <td className="num"><Ratio ratio={p.strategy.out_of_sample.sharpe} /></td><td className="num"><Ratio ratio={p.benchmark.out_of_sample.sharpe} /></td>
+            <td className="num"><Ratio ratio={p.strategy.in_sample.sharpe} compact /></td><td className="num"><Ratio ratio={p.benchmark.in_sample.sharpe} compact /></td>
+            <td className="num"><Ratio ratio={p.strategy.out_of_sample.sharpe} compact /></td><td className="num"><Ratio ratio={p.benchmark.out_of_sample.sharpe} compact /></td>
           </tr>
         </tbody>
       </table>
@@ -354,7 +355,7 @@ export function Advisory() {
           const p = d.profiles.find((x) => x.id === chosen) ?? d.profiles[0];
           return (
             <>
-              <p className="note">{d.disclaimer}</p>
+              <Disclaimer text={d.disclaimer} />
               {d.is_stale && (
                 <p className="note warn">These results were worked out when {d.ledger_total_at_generation} ideas had been tried; {d.ledger_total_now} have been tried since. The statuses shown may be a little out of date.</p>
               )}
