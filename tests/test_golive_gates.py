@@ -143,6 +143,9 @@ def test_run_reads_the_result_files_marks_allocation_profiles_and_stays_locked(t
     assert [x["kind"] for x in r["rules"]] == ["book", "allocation"] and all(x["eligible"] is False for x in r["rules"])
     assert status(r["rules"][0]["gates"], "Win rate") == g.CANNOT_MEASURE and "Owner's written amendment of rule 5" in r["rules"][0]["unmet"]
     assert "cannot unlock" in r["note"]
+    m = r["rules"][0]
+    assert (m["days"], m["gate_days"], m["n_trades"], m["min_trades"]) == (4, 252, None, 100)          # what a screen needs to draw how far along a rule is
+    assert r["rules"][1]["gate_days"] == 252 and r["rules"][1]["days"] == 3
 
 
 def test_a_missing_claude_md_means_the_prohibition_is_assumed_to_stand(tmp_path):

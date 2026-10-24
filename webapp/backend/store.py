@@ -146,6 +146,18 @@ def load_other_rules_raw() -> dict:
     return out
 
 
+def golive_gates_path() -> str:
+    return os.environ.get("WEBAPP_GOLIVE_GATES", os.path.join(ROOT, "reports", "output", "golive_gates_latest.json"))
+
+
+def load_golive_raw() -> dict:
+    """research/golive_gates.py's latest file: every paper rule against the go-live gates. The app only displays it; it never evaluates a gate itself."""
+    path = golive_gates_path()
+    if not os.path.exists(path):
+        raise NotFound("No go-live gate results yet. Generate them from the project root with: python research/golive_gates.py")
+    return _read_json(path)
+
+
 def advisory_forward_path() -> str:
     return os.environ.get("WEBAPP_ADVISORY_FORWARD", os.path.join(ROOT, "reports", "output", "advisory_forward_latest.json"))
 

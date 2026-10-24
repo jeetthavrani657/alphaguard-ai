@@ -137,6 +137,16 @@ tr.flagged td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .chip.s-BENCHMARK_NOT_A_HYPOTHESIS { color: var(--bench); border-color: var(--bench); }
 .chip.s-SLICE_OF_POOLED_HYPOTHESIS { color: var(--slice); border-color: var(--slice); border-style: dashed; }
 .chip.flag { color: var(--warn); border-color: var(--warn); }
+/* go-live gate statuses: the words are always shown, so colour is never the only signal */
+.chip.g-MET { color: var(--pos); border-color: var(--pos); }
+.chip.g-NOT_YET { color: var(--warn); border-color: var(--warn); }
+.chip.g-NOT_MET { color: var(--neg); border-color: var(--neg); }
+.chip.g-CANNOT_MEASURE { color: var(--muted); border-style: dashed; }
+.gl-progress { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+.gl-gates { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 8px; }
+.gl-row td { vertical-align: top; }
+.gl-row td.gl-verdict { min-width: 380px; }
+.gl-details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 6px; }
 .chip.stale { color: var(--warn); border-color: var(--warn); }
 .ratio { display: inline-flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .ratio .v { font: 600 14px var(--mono); }

@@ -42,15 +42,19 @@ And two gates that belong to the project, not to a rule:
 
 A rule is "eligible for the owner to consider" only when all of these are met, and even then the owner decides. Thresholds are changed in one place (`THRESHOLDS` in `research/golive_gates.py`), with this file updated beside it.
 
-## What the check says today (2026-10-25)
+## What the check says now (2026-10-25, after the paper books began to produce trade statistics)
 
-Every rule is "not eligible", and the honest reasons are: every forward clock is at 3 or 4 of 252 days (504 for quality + value), and the paper books do not yet produce trade statistics (win rate, average win and loss, profit factor, worst loss), so
-those gates read `CANNOT_MEASURE`. Allocation profiles (the advisor and the trend rules) hold weights, not trades, so under a win-rate gate they cannot unlock; if the owner wants them considered, a separate gate has to be agreed.
+Every rule is still "not eligible", for the plain reason that every forward clock is at 3 or 4 of 252 days (504 for quality + value). The statistics themselves are read as all-in (closed trades plus open positions marked at the last close with the cost of selling them deducted):
+the momentum book has 10 positions and none is above its cost; the smallcap MA book has 8 closed and 132 open trades, 5.7% of them ahead (a falling small-cap market; a trend rule also tends to win under half its trades even when it works, so the 85% bar is very unlikely to suit it);
+quality + value has 10 positions, 2 of them ahead.
+
+**A limit of the luck guard:** the 95% range of a win rate assumes the trades are independent. The trades of one book are not: a falling market hits all of its open positions together, and the smallcap book counts 140 trades after four days only because 132 stocks were bought at once. So the range shown is tighter than the truth, and "at least 100 trades" is a weaker test than it sounds
+for a book like that. The forward-test length (gate 1) is what really protects against this, which is why it is a gate of its own and is never replaced by a trade count.
 
 ## What comes next (one at a time)
 
-1. Produce trade statistics in the paper books (per-stock book: from its closed trades; portfolio books: from the round trip of each position), so gates 3 to 6 can be measured.
-2. A read-only "Go-live" panel in the web app: each rule against each gate, with a meter of how much evidence is still missing.
+1. Done: trade statistics in the paper books (per-stock book from its closed trades and open positions; one-account books from the round trip of each position).
+2. Done: a read-only "Go-live gates" panel on the web app's Paper trading page: each rule against each gate, with meters for forward days and trades, and a banner that says execution is locked. It is refreshed by the daily run (`run_forward_log.bat`).
 3. Risk-first design for the day it is ever needed: a maximum loss per trade, a drawdown breaker that stops everything, and a very small first amount. The numbers there are the owner's to state.
 
 ## The honest timeline

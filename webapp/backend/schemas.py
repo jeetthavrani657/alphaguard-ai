@@ -896,6 +896,41 @@ class OtherRulesResponse(BaseModel):
     rules: list[OtherRule]
 
 
+GateStatus = Literal["MET", "NOT_MET", "NOT_YET", "CANNOT_MEASURE"]
+
+
+class GoLiveGate(BaseModel):
+    gate: str
+    status: GateStatus
+    detail: str
+
+
+class GoLiveRule(BaseModel):
+    id: str
+    name: str
+    kind: Literal["book", "allocation"] = Field(description="A book trades stocks; an allocation holds weights and has no trades, so a win-rate gate cannot apply to it.")
+    days: int = Field(description="Forward trading days so far.")
+    gate_days: int = Field(description="Forward trading days its pre-registered test needs.")
+    n_trades: Optional[int] = Field(None, description="Trades so far, open ones counted at their current mark; None when the book does not produce trade figures.")
+    min_trades: int
+    eligible: bool = Field(description="Every gate met. Even then nothing is unlocked: that needs the owner's written amendment of rule 5.")
+    unmet: list[str]
+    gates: list[GoLiveGate]
+
+
+class GoLiveResponse(BaseModel):
+    """
+    Each paper-traded rule against the go-live gates (GO_LIVE_GATES.md), as research/golive_gates.py wrote them. Display only: nothing here places an order or unlocks
+    execution. `execution_locked` is true until the owner's written amendment of rule 5 exists.
+    """
+    generated_at: str
+    execution_locked: bool
+    thresholds: dict[str, float]
+    project_gates: list[GoLiveGate]
+    rules: list[GoLiveRule]
+    note: str
+
+
 class StockSelectionResponse(BaseModel):
     """
     Stock-selection ideas (research/factor_ideas.py, FACTOR_IDEAS.md): three hypotheses registered together, each judged by the

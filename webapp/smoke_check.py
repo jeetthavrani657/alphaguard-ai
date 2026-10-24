@@ -300,6 +300,15 @@ def run_checks(base: str) -> None:
             w = [x for x in r["intraday_windows"] if x["window"] == "out_of_sample"][0]
             check(w["bar_pct"] == 0.2 and w["mean_net_pct"] is not None and w["mean_net_pct"] < w["mean_gross_pct"], f"{r['id']}: costs are subtracted and the 0.2% bar is shown")
 
+    print("[smoke] go-live gates")
+    st, gl = fetch(base, "/api/golive")
+    check(st == 200 and len(gl["rules"]) >= 3, "go-live gates respond with every paper rule")
+    check(gl["execution_locked"] is True, "execution is shown as locked while rule 5 still forbids order placement")
+    for r in gl["rules"]:
+        check(r["days"] >= 0 and r["gate_days"] in (252, 504) and len(r["gates"]) == 7, f"{r['id']}: forward days and all seven gates are present")
+        check(r["kind"] != "allocation" or r["n_trades"] is None, f"{r['id']}: an allocation has no trade count")
+    check("Owner's written amendment of rule 5" in [g["gate"] for g in gl["project_gates"]], "the owner's amendment is a gate of its own")
+
     print("[smoke] stock-selection ideas")
     st, ss = fetch(base, "/api/stockselection")
     check(st == 200 and [i["id"] for i in ss["ideas"]] == ["lowvol_nifty50", "reversal1m_nifty50", "momentum_midcap150"],

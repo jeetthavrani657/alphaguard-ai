@@ -87,3 +87,4 @@ reports/output/regen_status.log
 
 # Go-live gate check (research/golive_gates.py): reproducible from the daily result files.
 reports/output/golive_gates_latest.json
+reports/output/golive_gates_last_run.log

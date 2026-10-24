@@ -474,6 +474,17 @@ def other_rules():
                                       is_stale=(now is not None and any(t != now for t in totals)), rules=rules)
 
 
+@api.get("/golive", response_model=schemas.GoLiveResponse,
+         summary="Each paper-traded rule against the go-live gates (research/golive_gates.py). Display only: it unlocks nothing and places no order.")
+def golive():
+    raw = store.load_golive_raw()
+    amendment = [g for g in raw["project_gates"] if g["gate"].startswith("Owner's written amendment")]
+    locked = not (len(amendment) == 1 and amendment[0]["status"] == "MET")             # anything but a clear MET keeps it locked (fails closed)
+    return schemas.GoLiveResponse(generated_at=raw["generated_at"], execution_locked=locked, thresholds=raw["thresholds"], project_gates=raw["project_gates"],
+                                  rules=[schemas.GoLiveRule(**{k: r[k] for k in ("id", "name", "kind", "days", "gate_days", "n_trades", "min_trades", "eligible", "unmet", "gates")})
+                                         for r in raw["rules"]], note=raw["note"])
+
+
 @api.get("/advisory/forward", response_model=schemas.AdvisoryForwardResponse,
          summary="The three advisory profiles run forward on paper (research/advisory_forward.py): return against the Nifty 50 ETF, no early verdict.")
 def advisory_forward():

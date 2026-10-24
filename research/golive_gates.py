@@ -167,12 +167,14 @@ def run(root: str = PROJECT_ROOT) -> dict:
         claude_md = "Never write live order placement code"            # unreadable: assume the prohibition stands (fail closed)
     shared = project_gates(claude_md)
     rules = []
-    for b in books:
-        g = evaluate(int(b.get("n_trading_days") or 0), int(b.get("verdict_gate_days") or 252), b.get("summary"))
-        rules.append({"id": b["id"], "name": b["name"], "kind": "book", "gates": g, **verdict(g, shared)})
-    for p in profiles:
-        g = evaluate(int(p.get("n_trading_days") or 0), 252, p.get("summary"))
-        rules.append({"id": p["id"], "name": p["name"], "kind": "allocation", "gates": g, **verdict(g, shared)})
+    for kind, items, default_gate_days in (("book", books, 252), ("allocation", profiles, 252)):
+        for x in items:
+            days, gate_days = int(x.get("n_trading_days") or 0), int(x.get("verdict_gate_days") or default_gate_days)
+            g = evaluate(days, gate_days, x.get("summary"))
+            n_trades = _flat(x.get("summary")).get("n_trades")
+            # days / gate_days / n_trades / min_trades let a screen draw how far along each rule is without parsing the sentences above
+            rules.append({"id": x["id"], "name": x["name"], "kind": kind, "days": days, "gate_days": gate_days, "n_trades": n_trades,
+                          "min_trades": THRESHOLDS["min_closed_trades"], "gates": g, **verdict(g, shared)})
     return {"generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "thresholds": THRESHOLDS, "project_gates": shared, "rules": rules,
             "note": "Allocation profiles hold weights, not trades: under a win-rate gate they cannot unlock. They would need a separate gate the owner agrees."}
 

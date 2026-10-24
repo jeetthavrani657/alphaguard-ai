@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/golive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Each paper-traded rule against the go-live gates (research/golive_gates.py). Display only: it unlocks nothing and places no order. */
+        get: operations["golive_api_golive_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/advisory/forward": {
         parameters: {
             query?: never;
@@ -1057,6 +1074,78 @@ export interface components {
             pooled_return_pct: number | null;
             /** Buy Hold Return Pct */
             buy_hold_return_pct: number | null;
+        };
+        /** GoLiveGate */
+        GoLiveGate: {
+            /** Gate */
+            gate: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "MET" | "NOT_MET" | "NOT_YET" | "CANNOT_MEASURE";
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * GoLiveResponse
+         * @description Each paper-traded rule against the go-live gates (GO_LIVE_GATES.md), as research/golive_gates.py wrote them. Display only: nothing here places an order or unlocks
+         *     execution. `execution_locked` is true until the owner's written amendment of rule 5 exists.
+         */
+        GoLiveResponse: {
+            /** Generated At */
+            generated_at: string;
+            /** Execution Locked */
+            execution_locked: boolean;
+            /** Thresholds */
+            thresholds: {
+                [key: string]: number;
+            };
+            /** Project Gates */
+            project_gates: components["schemas"]["GoLiveGate"][];
+            /** Rules */
+            rules: components["schemas"]["GoLiveRule"][];
+            /** Note */
+            note: string;
+        };
+        /** GoLiveRule */
+        GoLiveRule: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @description A book trades stocks; an allocation holds weights and has no trades, so a win-rate gate cannot apply to it.
+             * @enum {string}
+             */
+            kind: "book" | "allocation";
+            /**
+             * Days
+             * @description Forward trading days so far.
+             */
+            days: number;
+            /**
+             * Gate Days
+             * @description Forward trading days its pre-registered test needs.
+             */
+            gate_days: number;
+            /**
+             * N Trades
+             * @description Trades so far, open ones counted at their current mark; None when the book does not produce trade figures.
+             */
+            n_trades?: number | null;
+            /** Min Trades */
+            min_trades: number;
+            /**
+             * Eligible
+             * @description Every gate met. Even then nothing is unlocked: that needs the owner's written amendment of rule 5.
+             */
+            eligible: boolean;
+            /** Unmet */
+            unmet: string[];
+            /** Gates */
+            gates: components["schemas"]["GoLiveGate"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2605,6 +2694,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OtherRulesResponse"];
+                };
+            };
+        };
+    };
+    golive_api_golive_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoLiveResponse"];
                 };
             };
         };

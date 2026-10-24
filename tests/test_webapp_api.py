@@ -1093,3 +1093,55 @@ def test_other_rules_report_the_smallest_ledger_count_any_file_was_judged_at(cli
     d = client.get("/api/otherrules").json()
     assert d["ledger_total_at_generation"] == 217
     assert d["rules"][0]["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 217 and d["rules"][2]["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 220
+
+
+# --- go-live gates (research/golive_gates.py, GO_LIVE_GATES.md) -------------------------------------------------------------------
+
+def _golive_file(tmp_path, monkeypatch, amendment_status="NOT_MET", with_amendment_gate=True, eligible=False):
+    gate = lambda name, status, detail="d": {"gate": name, "status": status, "detail": detail}
+    project = [gate("Paper layer: weeks of clean reconciliation", "NOT_YET")]
+    if with_amendment_gate:
+        project.append(gate("Owner's written amendment of rule 5", amendment_status, "CLAUDE.md rule 5 still forbids order placement"))
+    path = tmp_path / "golive.json"
+    path.write_text(json.dumps({
+        "generated_at": "2026-10-24T20:56:33Z", "thresholds": {"win_rate_min_pct": 85.0, "min_closed_trades": 100, "max_drawdown_pct": 10.0},
+        "project_gates": project, "note": "Allocation profiles hold weights, not trades: under a win-rate gate they cannot unlock.",
+        "rules": [
+            {"id": "m", "name": "Momentum", "kind": "book", "days": 4, "gate_days": 252, "n_trades": 10, "min_trades": 100, "eligible": eligible, "unmet": ["Forward test complete"],
+             "gates": [gate("Forward test complete", "NOT_YET", "4 of 252 trading days"), gate("Worst single loss within 2.0% of the account", "MET", "-0.91%")]},
+            {"id": "c", "name": "Conservative", "kind": "allocation", "days": 3, "gate_days": 252, "n_trades": None, "min_trades": 100, "eligible": False, "unmet": ["Win rate"],
+             "gates": [gate("Win rate at least 85%", "CANNOT_MEASURE", "no trade statistics")]}]}))
+    monkeypatch.setenv("WEBAPP_GOLIVE_GATES", str(path))
+
+
+def test_golive_serves_every_rule_with_its_gates_progress_and_the_locked_flag(client, tmp_path, monkeypatch):
+    _golive_file(tmp_path, monkeypatch)
+    d = client.get("/api/golive").json()
+    assert [r["id"] for r in d["rules"]] == ["m", "c"] and d["execution_locked"] is True and d["generated_at"] == "2026-10-24T20:56:33Z"
+    m = d["rules"][0]
+    assert (m["days"], m["gate_days"], m["n_trades"], m["min_trades"], m["kind"]) == (4, 252, 10, 100, "book") and m["eligible"] is False
+    assert [g["status"] for g in m["gates"]] == ["NOT_YET", "MET"] and m["gates"][0]["detail"] == "4 of 252 trading days" and m["unmet"] == ["Forward test complete"]
+    assert d["rules"][1]["kind"] == "allocation" and d["rules"][1]["n_trades"] is None and d["rules"][1]["gates"][0]["status"] == "CANNOT_MEASURE"
+    assert d["thresholds"]["win_rate_min_pct"] == 85.0 and "cannot unlock" in d["note"]
+    assert [g["gate"] for g in d["project_gates"]][-1] == "Owner's written amendment of rule 5"
+
+
+def test_execution_is_locked_unless_the_amendment_gate_is_clearly_met_and_it_fails_closed(client, tmp_path, monkeypatch):
+    _golive_file(tmp_path, monkeypatch, amendment_status="MET")
+    assert client.get("/api/golive").json()["execution_locked"] is False
+    _golive_file(tmp_path, monkeypatch, amendment_status="NOT_YET")
+    assert client.get("/api/golive").json()["execution_locked"] is True
+    _golive_file(tmp_path, monkeypatch, with_amendment_gate=False)                          # no such gate in the file: locked, not open
+    assert client.get("/api/golive").json()["execution_locked"] is True
+
+
+def test_the_app_shows_the_eligible_flag_the_file_gives_and_never_decides_it_itself(client, tmp_path, monkeypatch):
+    _golive_file(tmp_path, monkeypatch, amendment_status="MET", eligible=True)
+    d = client.get("/api/golive").json()
+    assert d["rules"][0]["eligible"] is True and d["execution_locked"] is False             # both come from the file; neither is worked out here
+
+
+def test_missing_golive_results_are_a_helpful_404_naming_the_command(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_GOLIVE_GATES", str(tmp_path / "nope.json"))
+    r = client.get("/api/golive")
+    assert r.status_code == 404 and "golive_gates.py" in r.json()["detail"]

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi, usePolling } from "../api/useApi";
 import { Async } from "../components/Async";
+import { GoLive } from "../components/GoLive";
 import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
@@ -359,6 +360,7 @@ export function PaperTrading() {
               A <Term k="paper">paper test</Term> places no order.
             </p>
             <Scoreboard />
+            <GoLive />
             {d.books.map((b) => <div id={`book-${b.id}`} key={b.id}><BookCard book={b} /></div>)}
             <AdvisoryForward />
             <details className="liveprices" onToggle={(e) => setShowLive((e.currentTarget as HTMLDetailsElement).open)}>

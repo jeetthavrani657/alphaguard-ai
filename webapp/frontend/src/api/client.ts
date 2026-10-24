@@ -6,7 +6,7 @@
 
 import type {
   AdvisoryForwardResponse, AdvisoryResponse, BasketResponse, MultiassetResponse, RebalanceResponse, DataQualityResponse, EquityResponse, ForwardBooksResponse, ForwardResponse, Health, LedgerResponse, LiveQuotesResponse, PriceSeries,
-  OtherRulesResponse, ScreenerResponse, StockSelectionResponse, StrategyDetail, StrategyList, SymbolDetail, TradePage, Window,
+  GoLiveResponse, OtherRulesResponse, ScreenerResponse, StockSelectionResponse, StrategyDetail, StrategyList, SymbolDetail, TradePage, Window,
 } from "./types";
 
 export class ApiError extends Error {
@@ -60,6 +60,7 @@ export const api = {
   multiasset: (family: "trend" | "momentum" = "trend") => get<MultiassetResponse>("/multiasset", { family }),
   stockSelection: () => get<StockSelectionResponse>("/stockselection"),
   otherRules: () => get<OtherRulesResponse>("/otherrules"),
+  golive: () => get<GoLiveResponse>("/golive"),
   advisoryForward: () => get<AdvisoryForwardResponse>("/advisory/forward"),
   rebalance: (profile: string, holdings: string) => get<RebalanceResponse>("/advisory/rebalance", { profile, holdings }),
   basket: (profile: string, amount: number) => get<BasketResponse>("/advisory/basket", { profile, amount }),
