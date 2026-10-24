@@ -385,7 +385,8 @@ it. The brief's five rules, and what enforces each:
 - **API reference:** interactive docs at `http://127.0.0.1:8000/docs`.
   Routes: `/api/strategies`, `/api/strategies/{id}` (+ `/equity`, `/trades`),
   `/api/screener`, `/api/symbols/{symbol}` (+ `/prices`), `/api/data-quality`,
-  `/api/ledger`, `/api/forward-test`, `/api/forward-books`, `/api/health`.
+  `/api/ledger`, `/api/forward-test`, `/api/forward-books`, `/api/health`, and
+  `/api/otherrules` (the Nifty options and same-day rules, shown on the Research log page).
 - **Charts** use TradingView's open-source `lightweight-charts`. The wheel
   scrolls the page, not the chart; drag to pan and use the range buttons.
 

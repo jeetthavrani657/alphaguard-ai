@@ -850,6 +850,52 @@ class SurvivorshipCheck(BaseModel):
     rows: list[SurvivorshipRow]
 
 
+class OptionsRuleWindow(BaseModel):
+    """What the trades of an options rule looked like in one window. Money is in rupees on a Rs 10,00,000 account."""
+    window: Window
+    n_trades: int = Field(description="Trades (one per expiry cycle).")
+    win_rate_pct: Optional[float] = None
+    total_net_profit: Optional[float] = Field(None, description="Total profit or loss after costs.")
+    worst_trade: Optional[float] = None
+    total_net_profit_without_worst_trade: Optional[float] = None
+    costs_paid: Optional[float] = None
+
+
+class IntradayRuleWindow(BaseModel):
+    """What the trades of an intraday rule looked like in one window, with the gain per trade set against the cost of a same-day round trip."""
+    window: Window
+    n_trades: int
+    trades_per_day: Optional[float] = None
+    mean_gross_pct: Optional[float] = Field(None, description="Average gain per trade BEFORE costs, in % of the trade's value.")
+    mean_cost_pct: Optional[float] = None
+    mean_net_pct: Optional[float] = Field(None, description="Average gain per trade after costs.")
+    bar_pct: Optional[float] = Field(None, description="The average gain per trade needed just to break even on costs.")
+    win_rate_pct: Optional[float] = None
+
+
+class OtherRule(BaseModel):
+    id: str
+    name: str
+    family: Literal["options", "intraday"]
+    harness_status: Status
+    strategy: AdvisoryWindows
+    options_windows: list[OptionsRuleWindow] = []
+    intraday_windows: list[IntradayRuleWindow] = []
+
+
+class OtherRulesResponse(BaseModel):
+    """
+    The Nifty options rules (OPTIONS_IDEAS.md) and the intraday rules (INTRADAY_IDEAS.md): each frozen in writing before any result existed,
+    run once and counted in the ledger, judged by the same harness as every other strategy. Simulated only, places no orders. A family
+    that has not been run is absent from `rules`. `is_stale` says the ledger has grown since the oldest of the files was written.
+    """
+    generated_at: str = Field(description="When the OLDEST of the result files was written.")
+    ledger_total_at_generation: int = Field(description="The smallest ledger count any of the files was judged at.")
+    ledger_total_now: Optional[int] = None
+    is_stale: bool
+    rules: list[OtherRule]
+
+
 class StockSelectionResponse(BaseModel):
     """
     Stock-selection ideas (research/factor_ideas.py, FACTOR_IDEAS.md): three hypotheses registered together, each judged by the

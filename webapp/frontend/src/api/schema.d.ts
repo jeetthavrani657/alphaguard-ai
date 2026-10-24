@@ -242,6 +242,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/otherrules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Nifty options rules (research/options_condors.py) and the intraday rules (research/intraday_rules.py): each registered, counted and judged like every other strategy. */
+        get: operations["other_rules_api_otherrules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/advisory/forward": {
         parameters: {
             query?: never;
@@ -1082,6 +1099,40 @@ export interface components {
              */
             forward_health_problems: string[];
         };
+        /**
+         * IntradayRuleWindow
+         * @description What the trades of an intraday rule looked like in one window, with the gain per trade set against the cost of a same-day round trip.
+         */
+        IntradayRuleWindow: {
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "in_sample" | "out_of_sample";
+            /** N Trades */
+            n_trades: number;
+            /** Trades Per Day */
+            trades_per_day?: number | null;
+            /**
+             * Mean Gross Pct
+             * @description Average gain per trade BEFORE costs, in % of the trade's value.
+             */
+            mean_gross_pct?: number | null;
+            /** Mean Cost Pct */
+            mean_cost_pct?: number | null;
+            /**
+             * Mean Net Pct
+             * @description Average gain per trade after costs.
+             */
+            mean_net_pct?: number | null;
+            /**
+             * Bar Pct
+             * @description The average gain per trade needed just to break even on costs.
+             */
+            bar_pct?: number | null;
+            /** Win Rate Pct */
+            win_rate_pct?: number | null;
+        };
         /** LedgerResponse */
         LedgerResponse: {
             /** Cumulative Hypotheses */
@@ -1293,6 +1344,87 @@ export interface components {
             held_now: components["schemas"]["AdvisoryWeight"][];
             /** Held Decided On */
             held_decided_on: string;
+        };
+        /**
+         * OptionsRuleWindow
+         * @description What the trades of an options rule looked like in one window. Money is in rupees on a Rs 10,00,000 account.
+         */
+        OptionsRuleWindow: {
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "in_sample" | "out_of_sample";
+            /**
+             * N Trades
+             * @description Trades (one per expiry cycle).
+             */
+            n_trades: number;
+            /** Win Rate Pct */
+            win_rate_pct?: number | null;
+            /**
+             * Total Net Profit
+             * @description Total profit or loss after costs.
+             */
+            total_net_profit?: number | null;
+            /** Worst Trade */
+            worst_trade?: number | null;
+            /** Total Net Profit Without Worst Trade */
+            total_net_profit_without_worst_trade?: number | null;
+            /** Costs Paid */
+            costs_paid?: number | null;
+        };
+        /** OtherRule */
+        OtherRule: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Family
+             * @enum {string}
+             */
+            family: "options" | "intraday";
+            /**
+             * Harness Status
+             * @enum {string}
+             */
+            harness_status: "UNVALIDATED" | "VALIDATED_FAILED" | "OOS_ONLY_SIGNIFICANT" | "VALIDATED_CONFIRMED" | "BENCHMARK_NOT_A_HYPOTHESIS" | "SLICE_OF_POOLED_HYPOTHESIS";
+            strategy: components["schemas"]["AdvisoryWindows"];
+            /**
+             * Options Windows
+             * @default []
+             */
+            options_windows: components["schemas"]["OptionsRuleWindow"][];
+            /**
+             * Intraday Windows
+             * @default []
+             */
+            intraday_windows: components["schemas"]["IntradayRuleWindow"][];
+        };
+        /**
+         * OtherRulesResponse
+         * @description The Nifty options rules (OPTIONS_IDEAS.md) and the intraday rules (INTRADAY_IDEAS.md): each frozen in writing before any result existed,
+         *     run once and counted in the ledger, judged by the same harness as every other strategy. Simulated only, places no orders. A family
+         *     that has not been run is absent from `rules`. `is_stale` says the ledger has grown since the oldest of the files was written.
+         */
+        OtherRulesResponse: {
+            /**
+             * Generated At
+             * @description When the OLDEST of the result files was written.
+             */
+            generated_at: string;
+            /**
+             * Ledger Total At Generation
+             * @description The smallest ledger count any of the files was judged at.
+             */
+            ledger_total_at_generation: number;
+            /** Ledger Total Now */
+            ledger_total_now?: number | null;
+            /** Is Stale */
+            is_stale: boolean;
+            /** Rules */
+            rules: components["schemas"]["OtherRule"][];
         };
         /**
          * PriceSeries
@@ -2453,6 +2585,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockSelectionResponse"];
+                };
+            };
+        };
+    };
+    other_rules_api_otherrules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtherRulesResponse"];
                 };
             };
         };

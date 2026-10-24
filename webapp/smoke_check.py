@@ -287,6 +287,19 @@ def run_checks(base: str) -> None:
               f"{s['id']}: Sharpe carries its status and count, exposure never above 100%")
     check(fetch(base, "/api/multiasset?family=nope")[0] == 422, "an unknown rule family is refused")
 
+    print("[smoke] options and same-day ideas")
+    st, orr = fetch(base, "/api/otherrules")
+    check(st == 200 and [r["id"] for r in orr["rules"]] == ["condor_monthly", "condor_weekly", "orb_30", "gap_fade", "late_momentum"],
+          "options and same-day ideas respond with the five registered rules")
+    check(bare_ratios(orr) == [] and orr["is_stale"] is False, "no bare ratio in options and same-day ideas, and their results are not stale against the ledger")
+    for r in orr["rules"]:
+        o = r["strategy"]["out_of_sample"]["sharpe"]
+        check(o["status"] == r["harness_status"] and o["as_of_hypotheses"] == orr["ledger_total_at_generation"], f"{r['id']}: Sharpe carries its status and count")
+        check(r["strategy"]["out_of_sample"]["max_drawdown_pct"] <= 0, f"{r['id']}: worst fall is not positive")
+        if r["family"] == "intraday":
+            w = [x for x in r["intraday_windows"] if x["window"] == "out_of_sample"][0]
+            check(w["bar_pct"] == 0.2 and w["mean_net_pct"] is not None and w["mean_net_pct"] < w["mean_gross_pct"], f"{r['id']}: costs are subtracted and the 0.2% bar is shown")
+
     print("[smoke] stock-selection ideas")
     st, ss = fetch(base, "/api/stockselection")
     check(st == 200 and [i["id"] for i in ss["ideas"]] == ["lowvol_nifty50", "reversal1m_nifty50", "momentum_midcap150"],

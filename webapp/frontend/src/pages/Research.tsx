@@ -7,6 +7,7 @@ import { StatusChip } from "../components/StatusChip";
 import { plain } from "../labels";
 import { Term } from "../components/Term";
 import { StockIdeas } from "../components/StockIdeas";
+import { OtherRules } from "../components/OtherRules";
 import { int, pct, signClass } from "../fmt";
 
 export function Research() {
@@ -55,6 +56,8 @@ export function Research() {
       </Panel>
 
       <StockIdeas />
+
+      <OtherRules />
 
       <div className="grid2">
         <Panel title="The dip-buying forward test (frozen in advance)" flush>

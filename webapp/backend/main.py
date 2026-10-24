@@ -437,6 +437,43 @@ def stock_selection():
         survivorship=None if survivorship is None else schemas.SurvivorshipCheck(**survivorship))
 
 
+@api.get("/otherrules", response_model=schemas.OtherRulesResponse,
+         summary="The Nifty options rules (research/options_condors.py) and the intraday rules (research/intraday_rules.py): each registered, counted and judged like every other strategy.")
+def other_rules():
+    raw = store.load_other_rules_raw()
+    now = store.ledger_total_now()
+    rules, totals, stamps = [], [], []
+    for family, file in raw.items():
+        if file is None:
+            continue
+        total = int(file["ledger_total"])
+        totals.append(total)
+        stamps.append(file["generated_at"])
+        for rule_id, r in file["rules"].items():
+            status, p_is, p_oos, bar = r["harness_status"], r["p_in_sample"], r["p_out_of_sample"], r["bonferroni_bar"]
+            strategy = schemas.AdvisoryWindows(
+                in_sample=_advisory_metrics(r["metrics"]["in_sample"], "in_sample", status, total, p_is, bar),
+                out_of_sample=_advisory_metrics(r["metrics"]["out_of_sample"], "out_of_sample", status, total, p_oos, bar))
+            options_windows, intraday_windows = [], []
+            for window, key in (("in_sample", "in_sample"), ("out_of_sample", "out_of_sample")):
+                if family == "options":
+                    c = r[f"cycles_{key}"]
+                    options_windows.append(schemas.OptionsRuleWindow(
+                        window=window, n_trades=int(c.get("n_cycles", 0)), win_rate_pct=_finite(c.get("win_rate_pct")), total_net_profit=_finite(c.get("total_net_pnl")),
+                        worst_trade=_finite(c.get("worst_cycle")), total_net_profit_without_worst_trade=_finite(c.get("total_net_pnl_without_worst_cycle")),
+                        costs_paid=_finite(c.get("costs_paid"))))
+                else:
+                    t = r[f"trades_{key}"]
+                    intraday_windows.append(schemas.IntradayRuleWindow(
+                        window=window, n_trades=int(t.get("n_trades", 0)), trades_per_day=_finite(t.get("trades_per_day")), mean_gross_pct=_finite(t.get("mean_gross_pct")),
+                        mean_cost_pct=_finite(t.get("mean_cost_pct")), mean_net_pct=_finite(t.get("mean_net_pct")), bar_pct=_finite(t.get("bar_pct")),
+                        win_rate_pct=_finite(t.get("win_rate_pct"))))
+            rules.append(schemas.OtherRule(id=rule_id, name=r["name"], family=family, harness_status=status, strategy=strategy,
+                                           options_windows=options_windows, intraday_windows=intraday_windows))
+    return schemas.OtherRulesResponse(generated_at=min(stamps), ledger_total_at_generation=min(totals), ledger_total_now=now,
+                                      is_stale=(now is not None and any(t != now for t in totals)), rules=rules)
+
+
 @api.get("/advisory/forward", response_model=schemas.AdvisoryForwardResponse,
          summary="The three advisory profiles run forward on paper (research/advisory_forward.py): return against the Nifty 50 ETF, no early verdict.")
 def advisory_forward():

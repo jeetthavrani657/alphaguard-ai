@@ -1017,3 +1017,79 @@ def test_missing_stock_selection_results_are_a_helpful_404_naming_the_command(cl
     monkeypatch.setenv("WEBAPP_FACTOR_IDEAS", str(tmp_path / "nope.json"))
     r = client.get("/api/stockselection")
     assert r.status_code == 404 and "factor_ideas.py --register" in r.json()["detail"]
+
+
+# --- options and intraday rules (research/options_condors.py, research/intraday_rules.py) ----------------------------------------
+
+def _metrics_block(sharpe_is, sharpe_oos):
+    m = lambda s: {"sharpe": s, "cagr_pct": -5.0, "max_drawdown_pct": -20.0, "volatility_pct": 10.0, "var95_pct": -1.0, "cvar95_pct": -1.5,
+                   "worst_month_pct": -8.0, "calmar": -0.2, "n_days": 500}
+    return {"in_sample": m(sharpe_is), "out_of_sample": m(sharpe_oos)}
+
+
+def _other_files(tmp_path, monkeypatch, options=True, intraday=True, ledger=220, nan=False, intraday_ledger=None):
+    judged = {"harness_status": "VALIDATED_FAILED", "p_in_sample": 0.4, "p_out_of_sample": 0.5, "bonferroni_bar": 0.05 / ledger}
+    intraday_ledger = ledger if intraday_ledger is None else intraday_ledger
+    cycles = lambda n, win: ({"n_cycles": 0} if n == 0 else {"n_cycles": n, "win_rate_pct": win, "total_net_pnl": 37061.5, "worst_cycle": -139773.2,
+                                                           "total_net_pnl_without_worst_cycle": 176834.7, "costs_paid": 9145.0, "gross_pnl": 46206.5, "mean_net_pnl": 1158.0, "best_cycle": 46158.6})
+    trades = lambda g, c, n: {"n_trades": 100, "n_days_traded": 10, "trades_per_day": 10.0, "mean_gross_pct": g, "mean_net_pct": g - c, "bar_pct": 0.2,
+                              "gross_minus_bar_pct": g - 0.2, "mean_cost_pct": c, "win_rate_pct": n, "long_share_pct": 50.0, "mean_net_pct_without_best_5pct": -0.3}
+    o = tmp_path / "options.json"
+    i = tmp_path / "intraday.json"
+    o.unlink(missing_ok=True)
+    i.unlink(missing_ok=True)
+    if options:
+        o.write_text(json.dumps({"generated_at": "2026-10-22T21:54:57Z", "ledger_total": ledger, "registered": True, "rules": {
+            "condor_monthly": {"name": "Nifty monthly iron condor", "metrics": _metrics_block(0.5, 0.6), "cycles_in_sample": cycles(22, 81.8),
+                               "cycles_out_of_sample": cycles(32, float("nan") if nan else 84.4), **judged},
+            "condor_weekly": {"name": "Nifty weekly iron condor", "metrics": _metrics_block(-0.2, -0.1), "cycles_in_sample": cycles(0, 0),
+                              "cycles_out_of_sample": cycles(0, 0), **judged}}, "benchmarks": {}}))
+    if intraday:
+        i.write_text(json.dumps({"generated_at": "2026-10-24T18:30:00Z", "ledger_total": intraday_ledger, "registered": True, "rules": {
+            "orb_30": {"name": "Opening-range breakout", "metrics": _metrics_block(-9.6, -12.7), "trades_in_sample": trades(0.034, 0.207, 39.6),
+                       "trades_out_of_sample": trades(-0.002, 0.207, 38.7), **judged}}, "benchmarks": {}}))
+    monkeypatch.setenv("WEBAPP_OPTIONS_CONDORS", str(o))
+    monkeypatch.setenv("WEBAPP_INTRADAY_RULES", str(i))
+
+
+def test_other_rules_serve_options_and_intraday_each_sharpe_with_status_and_count_and_the_gain_per_trade_against_the_bar(client, tmp_path, monkeypatch):
+    _other_files(tmp_path, monkeypatch)
+    d = client.get("/api/otherrules").json()
+    assert [r["id"] for r in d["rules"]] == ["condor_monthly", "condor_weekly", "orb_30"] and [r["family"] for r in d["rules"]] == ["options", "options", "intraday"]
+    assert _find_bare_ratios(d) == []
+    m = d["rules"][0]
+    assert m["harness_status"] == "VALIDATED_FAILED" and m["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 220
+    assert m["strategy"]["out_of_sample"]["sharpe"]["clears_bar"] is False and m["strategy"]["out_of_sample"]["sharpe"]["status"] == "VALIDATED_FAILED"
+    w = m["options_windows"][1]
+    assert w["window"] == "out_of_sample" and w["n_trades"] == 32 and w["win_rate_pct"] == 84.4 and w["total_net_profit"] == 37061.5 and w["worst_trade"] == -139773.2
+    assert w["total_net_profit_without_worst_trade"] == 176834.7 and m["intraday_windows"] == []
+    o = d["rules"][2]
+    iw = o["intraday_windows"][1]
+    assert o["options_windows"] == [] and iw["window"] == "out_of_sample" and iw["mean_gross_pct"] == -0.002 and iw["bar_pct"] == 0.2 and iw["mean_cost_pct"] == 0.207
+    assert iw["mean_net_pct"] == pytest.approx(-0.209) and d["ledger_total_at_generation"] == 220 and isinstance(d["is_stale"], bool)
+    assert d["generated_at"] == "2026-10-22T21:54:57Z"                                       # the OLDEST of the two files
+
+
+def test_a_zero_trade_window_and_a_nan_figure_are_served_without_breaking(client, tmp_path, monkeypatch):
+    _other_files(tmp_path, monkeypatch, nan=True)
+    d = client.get("/api/otherrules").json()
+    assert d["rules"][0]["options_windows"][1]["win_rate_pct"] is None                       # a NaN is null, never invalid JSON
+    empty = d["rules"][1]["options_windows"][0]
+    assert empty["n_trades"] == 0 and empty["win_rate_pct"] is None and empty["total_net_profit"] is None
+
+
+def test_other_rules_work_with_only_one_family_and_say_what_to_run_when_there_is_none(client, tmp_path, monkeypatch):
+    _other_files(tmp_path, monkeypatch, intraday=False)
+    assert [r["id"] for r in client.get("/api/otherrules").json()["rules"]] == ["condor_monthly", "condor_weekly"]
+    _other_files(tmp_path, monkeypatch, options=False)
+    assert [r["id"] for r in client.get("/api/otherrules").json()["rules"]] == ["orb_30"]
+    _other_files(tmp_path, monkeypatch, options=False, intraday=False)
+    r = client.get("/api/otherrules")
+    assert r.status_code == 404 and "options_condors.py --register" in r.json()["detail"] and "intraday_rules.py --register" in r.json()["detail"]
+
+
+def test_other_rules_report_the_smallest_ledger_count_any_file_was_judged_at(client, tmp_path, monkeypatch):
+    _other_files(tmp_path, monkeypatch, ledger=217, intraday_ledger=220)                    # the options file is older: judged at 217, the intraday file at 220
+    d = client.get("/api/otherrules").json()
+    assert d["ledger_total_at_generation"] == 217
+    assert d["rules"][0]["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 217 and d["rules"][2]["strategy"]["out_of_sample"]["sharpe"]["as_of_hypotheses"] == 220

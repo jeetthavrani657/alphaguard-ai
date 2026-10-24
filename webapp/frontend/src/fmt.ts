@@ -10,6 +10,10 @@ export const pct = (x: number | null | undefined, dp = 1): string =>
 export const int = (x: number | null | undefined): string =>
   x === null || x === undefined ? "—" : Math.round(x).toLocaleString("en-IN");
 
+/** Rupees with Indian digit grouping: -139773.2 as "-₹1,39,773". Display only. */
+export const inr = (x: number | null | undefined): string =>
+  x === null || x === undefined ? "—" : `${x < 0 ? "-" : ""}₹${Math.round(Math.abs(x)).toLocaleString("en-IN")}`;
+
 /** CSS class for the SIGN of a figure. The sign is also printed, so colour is never the only signal. */
 export const signClass = (x: number | null | undefined): string =>
   x === null || x === undefined ? "" : x > 0 ? "pos" : x < 0 ? "neg" : "";

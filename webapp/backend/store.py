@@ -124,6 +124,28 @@ def load_survivorship_raw() -> Optional[dict]:
     return _read_json(path) if os.path.exists(path) else None
 
 
+def options_condors_path() -> str:
+    return os.environ.get("WEBAPP_OPTIONS_CONDORS", os.path.join(ROOT, "reports", "output", "options_condors_latest.json"))
+
+
+def intraday_rules_path() -> str:
+    return os.environ.get("WEBAPP_INTRADAY_RULES", os.path.join(ROOT, "reports", "output", "intraday_rules_latest.json"))
+
+
+def load_other_rules_raw() -> dict:
+    """
+    The latest files of the Nifty options rules (research/options_condors.py) and the intraday rules (research/intraday_rules.py), as
+    {"options": dict or None, "intraday": dict or None}. A family that has not been run is simply absent; only when NEITHER exists is it an error.
+    """
+    out = {}
+    for family, path in (("options", options_condors_path()), ("intraday", intraday_rules_path())):
+        out[family] = _read_json(path) if os.path.exists(path) else None
+    if out["options"] is None and out["intraday"] is None:
+        raise NotFound("No options or intraday results yet. Generate them from the project root with: python research/options_condors.py --register "
+                       "and python research/intraday_rules.py --register")
+    return out
+
+
 def advisory_forward_path() -> str:
     return os.environ.get("WEBAPP_ADVISORY_FORWARD", os.path.join(ROOT, "reports", "output", "advisory_forward_latest.json"))
 
