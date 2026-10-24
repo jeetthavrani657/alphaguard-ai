@@ -134,7 +134,7 @@ def test_the_pages_are_wrapped_in_an_error_boundary_so_a_failed_draw_never_leave
     boundary = open(os.path.join(SRC, "components", "ErrorBoundary.tsx"), encoding="utf-8").read()
     assert "getDerivedStateFromError" in boundary and "window.location.reload" in boundary
     assert "<ErrorBoundary key={pathname}>" in app_tsx                   # keyed by address, so a crash does not stick to the next page
-    assert app_tsx.index("<Guarded>") < app_tsx.index("<Routes>") < app_tsx.index("</Guarded>")
+    assert app_tsx.index("<Guarded") < app_tsx.index("<Routes>") < app_tsx.index("</Guarded>")        # "<Guarded key={theme}>": a theme change redraws the page, charts included
 
 
 def test_every_tab_group_uses_the_shared_keyboard_friendly_tabs_component():
@@ -150,3 +150,52 @@ def test_the_screen_reader_text_inside_a_term_is_contained_so_it_cannot_widen_th
     css = open(os.path.join(SRC, "styles.css"), encoding="utf-8").read()
     assert ".sr-only { position: absolute" in css
     assert re.search(r"\.term\s*\{[^}]*position:\s*relative", css), "an absolutely positioned .sr-only inside a table's scroll area escapes it and adds a sideways scrollbar to the page"
+
+
+# ---- the shell: sidebar, search, theme ---------------------------------------------------------------------------------------------
+
+def _read(*parts):
+    return open(os.path.join(SRC, *parts), encoding="utf-8").read()
+
+
+def test_every_sidebar_link_points_at_a_page_that_exists():
+    sidebar = _read("components", "Sidebar.tsx")
+    app = _read("App.tsx")
+    links = {to.split("#")[0] for to in re.findall(r'to:\s*"([^"]+)"', sidebar)}
+    routes = set(re.findall(r'<Route path="([^"]+)"', app))
+    assert links and links <= routes, f"sidebar links with no page behind them: {sorted(links - routes)}"
+    anchors = re.findall(r'to:\s*"[^"#]*#([^"]+)"', sidebar)
+    for anchor in anchors:
+        assert any(f'id="{anchor}"' in text for _, text in _source_files()), f"the sidebar links to #{anchor} but nothing on any page has that id"
+
+
+def test_the_light_theme_redefines_every_colour_variable_of_the_dark_one():
+    css = _read("styles.css")
+    dark = re.search(r":root \{(.*?)\n\}", css, flags=re.S).group(1)
+    light = re.search(r':root\[data-theme="light"\] \{(.*?)\n\}', css, flags=re.S).group(1)
+    names = lambda block: set(re.findall(r"(--[\w-]+)\s*:", block))
+    fixed = {"--font", "--mono"}                                            # typefaces are the same in both themes
+    missing = names(dark) - names(light) - fixed
+    assert not missing, f"the dark theme defines {sorted(missing)} but the light theme does not: it would show dark colours on a white page"
+
+
+def test_the_theme_choice_survives_blocked_storage_and_is_applied_before_the_first_paint():
+    hook = _read("useTheme.ts")
+    assert hook.count("localStorage") == 2 and hook.count("try {") == 2, "every storage access must be guarded: it throws in some private windows"
+    html = open(os.path.join(os.path.dirname(SRC), "index.html"), encoding="utf-8").read()
+    assert 'setAttribute("data-theme"' in html and html.index("data-theme") < html.index('type="module"'), "the theme must be set before the app loads, or the page flashes the wrong one"
+
+
+def test_the_search_palette_is_reachable_by_keyboard_and_announces_itself():
+    app, palette = _read("App.tsx"), _read("components", "CommandPalette.tsx")
+    assert "e.ctrlKey || e.metaKey" in app and 'e.key === "/" && !typing' in app, "Ctrl+K and / must open the search, but / never while the person is typing in a field"
+    assert 't.tagName === "INPUT"' in app and "t.isContentEditable" in app, "typing must cover input, textarea, select and editable text"
+    for needle in ('role="dialog"', 'aria-modal="true"', 'role="combobox"', 'role="listbox"', 'role="option"', "ArrowDown", "ArrowUp", '"Escape"', "Enter"):
+        assert needle in palette, f"the search palette lost {needle}"
+
+
+def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
+    text = _read("components", "ReadFirst.tsx")
+    shown = text.index("not investment advice")
+    assert shown < text.index("<details>", text.index("export function Disclaimer")), "the short disclaimer must come before the part that folds away"
+    assert "places no orders" in text.lower()

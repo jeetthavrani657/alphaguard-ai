@@ -1,10 +1,14 @@
-import { Suspense, lazy, useEffect } from "react";
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { Skeleton } from "./components/Async";
+import { CommandPalette } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { TopBar } from "./components/TopBar";
 import { strategyLabel } from "./labels";
 import { Overview } from "./pages/Overview";
+import { useTheme } from "./useTheme";
 
 // Pages with charts or long tables load on demand, so the first screen appears quickly. Each import returns the whole module,
 // and `named` picks the page component out of it.
@@ -39,15 +43,27 @@ const TITLES: [RegExp, string][] = [
   [/^\/stock\/(.+)/, "Stock"], [/^\/paper/, "Paper trading"], [/^\/research/, "Research log"], [/^\/methodology/, "How it works"],
 ];
 
-/** Sets the browser tab's title for the page shown, and starts each new page at the top. */
+/**
+ * Sets the browser tab's title for the page shown, starts each new page at the top, and scrolls to the part named in the address (/paper#go-live)
+ * once it has been drawn: the page and its data arrive after the click, so the part is looked for a few times before giving up.
+ */
 function PageChrome() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
     const hit = TITLES.find(([re]) => re.test(pathname));
     const detail = pathname.match(/^\/(?:stock|strategies)\/(.+)$/)?.[1];
     document.title = `${hit ? hit[1] : "Page not found"}${detail ? `: ${/^\/strategies\//.test(pathname) ? strategyLabel(decodeURIComponent(detail)) : decodeURIComponent(detail)}` : ""} · AlphaGuard AI`;
-    window.scrollTo(0, 0);
   }, [pathname]);
+  useEffect(() => {
+    if (!hash) { window.scrollTo(0, 0); return; }
+    const id = decodeURIComponent(hash.slice(1));
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      const el = document.getElementById(id);
+      if (el) { el.scrollIntoView(); window.clearInterval(timer); } else if (++tries > 40) window.clearInterval(timer);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [pathname, hash]);
   return null;
 }
 
@@ -58,30 +74,35 @@ function Guarded({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const tab = ({ isActive }: { isActive: boolean }) => (isActive ? "tab active" : "tab");
+  const [theme, toggleTheme] = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => setMenuOpen(false), [pathname]);
+  // Ctrl+K (Cmd+K on a Mac) or "/" opens the search from anywhere, except while typing in a field; Escape closes the phone menu.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      if ((e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setSearchOpen(true); }
+      else if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); setSearchOpen(true); }
+      else if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   return (
     <>
       <a className="skip" href="#main">Skip to the page</a>
       <PageChrome />
       <StatusBar />
-      <nav className="topnav" aria-label="Main">
-        <NavLink to="/" className="brand" aria-label="AlphaGuard AI, home">
-          <img src="/alphaguard-mark.svg" alt="" width={30} height={30} />
-          <span className="brand-name">Alpha<b>Guard</b> <i>AI</i></span>
-        </NavLink>
-        <NavLink to="/" end className={tab}>Home</NavLink>
-        <NavLink to="/advisory" className={tab}>Portfolio advisor</NavLink>
-        <NavLink to="/multiasset" className={tab}>Multi-asset</NavLink>
-        <NavLink to="/strategies" className={tab}>Strategies</NavLink>
-        <NavLink to="/screener" className={tab}>Stocks</NavLink>
-        <NavLink to="/paper" className={tab}>Paper trading</NavLink>
-        <NavLink to="/research" className={tab}>Research log</NavLink>
-        <NavLink to="/methodology" className={tab}>How it works</NavLink>
-        <span className="spacer" />
-        <span className="readonly" title="This application only shows research results. It cannot place orders or touch any account.">read-only</span>
-      </nav>
-      <main id="main">
-        <Guarded><Suspense fallback={<div className="loading"><Skeleton lines={4} /></div>}>
+      <div className="shell">
+        <Sidebar open={menuOpen} onNavigate={() => setMenuOpen(false)} />
+        {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+        <div className="content">
+          <TopBar theme={theme} onToggleTheme={toggleTheme} onSearch={() => setSearchOpen(true)} onMenu={() => setMenuOpen((o) => !o)} menuOpen={menuOpen} />
+          <main id="main">
+        <Guarded key={theme}><Suspense fallback={<div className="loading"><Skeleton lines={4} /></div>}>
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/screener" element={<Screener />} />
@@ -96,11 +117,14 @@ export default function App() {
             <Route path="*" element={<div className="note">No such page. <a href="/">Back to the home page</a>.</div>} />
           </Routes>
         </Suspense></Guarded>
-      </main>
-      <footer className="footer">
-        <span><b>AlphaGuard AI</b> is a research tool, not investment advice. It places no orders.</span>
-        <span>Results are produced in the terminal by the validated backtest code; these pages only display them. <a href="/methodology">How it works</a></span>
-      </footer>
+          </main>
+          <footer className="footer">
+            <span><b>AlphaGuard AI</b> is a research tool, not investment advice. It places no orders.</span>
+            <span>Results are produced in the terminal by the validated backtest code; these pages only display them. <a href="/methodology">How it works</a></span>
+          </footer>
+        </div>
+      </div>
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }

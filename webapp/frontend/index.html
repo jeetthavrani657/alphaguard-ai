@@ -7,9 +7,10 @@
     <meta name="description" content="AlphaGuard AI: a read-only backtesting research terminal for NSE equities. Every edge, tested against the number of things you tried." />
     <meta name="theme-color" content="#0b0f14" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="color-scheme" content="dark" />
-    <!-- Avoids a white flash before the stylesheet loads. The real theme is src/styles.css. -->
-    <style>html, body { background: #0b0f14; }</style>
+    <meta name="color-scheme" content="dark light" />
+    <!-- Avoids a flash of the wrong theme before the stylesheet loads. The real theme is src/styles.css, and the choice is remembered by src/useTheme.ts. -->
+    <style>html, body { background: #0b0f14; } html[data-theme="light"], html[data-theme="light"] body { background: #f4f6f9; }</style>
+    <script>try{var t=localStorage.getItem("alphaguard-theme");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"}document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
   </head>
   <body>
     <div id="root"></div>

@@ -261,6 +261,11 @@ It is **read-only by construction**: it never runs a strategy and never
 places an order. Strategies run from the terminal, where the harness
 discipline applies; the app only displays what they already produced.
 
+**Getting around** (since the shell was rebuilt on 2026-10-25): a left sidebar in five groups (Today, Portfolio, Research, Paper trading, Evidence) that
+becomes a drawer behind the menu button on a phone; **Ctrl+K** (or `/`, or the search box in the top bar) jumps to any page, strategy or stock; a **Light / Dark**
+switch (remembered in this browser, following the computer's own setting the first time). **Home** opens on "Today": how fresh the data is, whether execution is locked,
+and every paper test with a small picture of its path against holding the same assets. Tables become cards on a phone, so no column sits off-screen.
+
 #### Quick start
 
 ```bash

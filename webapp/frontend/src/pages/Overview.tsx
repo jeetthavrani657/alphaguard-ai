@@ -6,6 +6,7 @@ import { Panel } from "../components/Panel";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StockSearch } from "../components/StockSearch";
+import { TodayPanel } from "../components/TodayPanel";
 import { Term } from "../components/Term";
 import { day, pct, signClass } from "../fmt";
 
@@ -27,7 +28,7 @@ export function Overview() {
   return (
     <div>
       <section className="hero">
-        <img className="hero-mark" src="/alphaguard-mark.svg" alt="" width={112} height={112} />
+        <img className="hero-mark" src="/alphaguard-mark.svg" alt="" width={72} height={72} />
         <div>
           <h1 className="hero-title">Alpha<span>Guard</span> <em>AI</em></h1>
           <p className="hero-tag">Every edge, tested against the number of things you tried.</p>
@@ -46,6 +47,8 @@ export function Overview() {
           </div>
         </div>
       </section>
+
+      <TodayPanel />
 
       <h2 className="section-title">What would you like to do?</h2>
       <div className="tasks">

@@ -62,7 +62,7 @@ function RuleRow({ r }: { r: GoLiveRule }) {
 export function GoLive() {
   const state = useApi(() => api.golive(), []);
   return (
-    <Panel title="Go-live gates: what must be true before execution is even considered" flush>
+    <Panel id="go-live" title="Go-live gates: what must be true before execution is even considered" flush>
       <Async state={state}>
         {(d) => (
           <>
