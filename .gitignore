@@ -84,3 +84,6 @@ reports/output/options_vol_run.log
 reports/output/backfill_fo_run*.log
 reports/output/mutate_ob.log
 reports/output/regen_status.log
+
+# Go-live gate check (research/golive_gates.py): reproducible from the daily result files.
+reports/output/golive_gates_latest.json

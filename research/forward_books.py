@@ -42,6 +42,8 @@ import pandas as pd
 
 import buy_and_hold
 import config
+import costs as engine_costs
+import trade_stats
 import fundamentals_snapshot
 import ma_crossover
 import quality_value
@@ -209,9 +211,45 @@ def _empty_report(book: dict, last: pd.Timestamp, pending: list, note: str, hold
     }
 
 
-def _summary(book_metrics: dict, bench_metrics: dict, n_days: int, n_open: int, n_closed) -> dict:
+def _sell_cost(value: float) -> float:
+    """What selling `value` rupees of shares costs under the engine's own cost model."""
+    return float(engine_costs.calculate_trade_cost(value, "sell")["total"])
+
+
+def _trade_stats_per_symbol(run: dict, universe_data: dict, account: float):
+    """Win rate and the other trade figures of a per-stock book: closed trades from its log, open positions marked at the last close. None if anything cannot be computed."""
+    try:
+        closed = trade_stats.closed_from_log(run["pooled_trade_log"]) if len(run["pooled_trade_log"]) else []
+        positions = []
+        for ticker, r in run["per_symbol"].items():
+            op = r["open_position_at_end"]
+            if op is not None:
+                positions.append({"quantity": op["quantity"], "entry_price": op["entry_price"], "buy_costs_total": op["buy_costs_total"],
+                                  "last_close": float(universe_data[ticker]["df"]["close"].iloc[-1])})
+        return trade_stats.book_stats(closed, trade_stats.open_marked(positions, _sell_cost), account)
+    except (KeyError, ValueError, TypeError) as e:                          # wrong numbers would be worse than none: say nothing, and the gates read it as "cannot measure"
+        print(f"[books] trade statistics skipped: {type(e).__name__}: {e}")
+        return None
+
+
+def _trade_stats_portfolio(trade_log, universe: dict, account: float):
+    """The same for a one-account book, from its rebalance fills: a trade is a position's whole life. None if anything cannot be computed."""
+    try:
+        fills = [] if trade_log is None or not len(trade_log) else [
+            {"date": t.date, "symbol": t.symbol, "side": str(t.side), "shares": int(t.shares), "price": float(t.price), "costs": None if pd.isna(t.costs) else float(t.costs)}
+            for t in trade_log.itertuples()]
+        last_price = {sym: float(e["df"]["close"].iloc[-1]) for sym, e in universe.items()}
+        closed, still_open = trade_stats.round_trips(fills, last_price, _sell_cost)
+        return trade_stats.book_stats(closed, still_open, account)
+    except (KeyError, ValueError, TypeError, AttributeError) as e:
+        print(f"[books] trade statistics skipped: {type(e).__name__}: {e}")
+        return None
+
+
+def _summary(book_metrics: dict, bench_metrics: dict, n_days: int, n_open: int, n_closed, stats=None) -> dict:
     gate = n_days >= MIN_DAYS_FOR_SHARPE
     return {
+        "trade_stats": stats,                                              # additive: the go-live gates read it (research/golive_gates.py)
         "return_pct": _num(book_metrics.get("total_return_pct")),
         "benchmark_return_pct": _num(bench_metrics.get("total_return_pct")),
         "max_drawdown_pct": _num(book_metrics.get("max_drawdown_pct")),
@@ -266,6 +304,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
                 holdings.append({"symbol": t.replace(".NS", ""), "since": op["entry_date"].strftime("%Y-%m-%d"),
                                  "entry_price": round(float(op["entry_price"]), 2), "last_close": round(last_close, 2)})
         n_open, n_closed = len(holdings), int(len(run["pooled_trade_log"]))
+        stats = _trade_stats_per_symbol(run, universe_data, config.INITIAL_CAPITAL)       # each stock has its own account of this size, so a loss is measured against all of it (the cautious reading)
         orders = _orders_per_symbol(run)
         if run["blocked"]:
             notes.append(f"{len(run['blocked'])} stock(s) could not run the rule (data gate or too little history).")
@@ -296,6 +335,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
             pending = [{"symbol": "(portfolio)", "action": f"rebalance to the {len(holdings)} targets formed "
                                                          f"{weights.index[-1].date()}, at the next open"}]
         n_open, n_closed = len(holdings), None
+        stats = _trade_stats_portfolio(mom["result"]["trade_log"], eligible, float(config.INITIAL_CAPITAL))
         orders = _orders_portfolio(mom["result"]["trade_log"])
         notes.append("Holdings shown are the latest formation's targets, executed at the next session's open."
                      + (" Rebalanced once a year, on the last trading day of June." if book["kind"] == "fundamental" else ""))
@@ -309,7 +349,7 @@ def build_book_report(book: dict, universe_data: dict) -> dict:
         "status": "RUNNING", "data_through": last.strftime("%Y-%m-%d"), "start": FORWARD_START,
         "first_counted_day": FIRST_COUNTED_DAY, "n_trading_days": n_days,
         "sharpe_withheld_until_days": MIN_DAYS_FOR_SHARPE,
-        "summary": _summary(book_metrics, bench_metrics, n_days, n_open, n_closed),
+        "summary": _summary(book_metrics, bench_metrics, n_days, n_open, n_closed, stats),
         # growth of 100: each curve divided by its OWN starting capital (a portfolio is one account,
         # the benchmark is one account per stock), by the same function the strategy pages use
         "growth_book": _series(growth_of_100(curve, initial)),
