@@ -48,6 +48,11 @@ produced.
 > **Sixth ledger update (2026-10-23): 215 became 217.** Two Nifty iron-condor rules, monthly and weekly (`OPTIONS_IDEAS.md`, `research/options_condors.py`), were registered and judged once; both are
 > `VALIDATED_FAILED` (p out-of-sample 0.371 and 0.501). The weekly rule lost money before costs; the monthly rule won about 83% of its trades and one loss took back most of the gain. Bonferroni bar is now
 > 0.05/217 = 0.000230. Smallcap MA (p = 0.000231) now FAILS it, by a hair: it is `OOS_ONLY_SIGNIFICANT` no longer and becomes `VALIDATED_FAILED` at 217.
+>
+> **Seventh ledger update (2026-10-25): 217 became 220.** Three intraday rules on the Nifty 50's 15-minute candles (`INTRADAY_IDEAS.md`, `research/intraday_rules.py`): opening-range breakout, fading an overnight gap of 1% or more,
+> and a first-half-hour move predicting the last half hour. All three are `VALIDATED_FAILED` (p out-of-sample 1.0, 0.997 and 1.0). The average gross gain per trade was between -0.02% and +0.04% against the 0.2% needed to break even;
+> after costs each lost about 0.16% to 0.22% a trade. Bonferroni bar is now 0.05/220 = 0.000227. The earlier registered results were judged again at 220 and no status changed
+> (`--rejudge` of the factor, options and intraday results; the web app's stored strategy files still say "as of 217" until they are regenerated).
 
 This document is the complete, current research record. It supersedes
 every number previously reported for the strategies below — where a

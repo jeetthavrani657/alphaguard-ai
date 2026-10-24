@@ -458,3 +458,16 @@ What the check also found, and what each turned out to be:
 The first full download was cut off after 11 symbols when the laptop went to sleep (a background task killed with no error), and the second was blocked by Upstox's network (Cloudflare) after
 23 symbols, at about 30 requests a minute. The block is not bypassed. The long download now runs at half that speed (`research/backfill_intraday.py`, 4 seconds a request), restarts where it stopped,
 and stops at once on a block.
+
+## TRENT: an unadjusted corporate action on 2026-01-01 in the Yahoo daily series (found 2026-10-24 by the candle check; registry entry added)
+
+The validator flagged TRENT's -33.0% on 2026-01-01 as UNREVIEWED, so the gate has been keeping the symbol out of every portfolio window that crosses the date (it is not selectable there, and the fake loss never
+enters a result). Nobody had looked at the cause. The Upstox candles give it: they are adjusted, and their price is 1/1.499 of Yahoo's before the date, their volume exactly 1.50 times Yahoo's on every day from 2022 to
+2025-12-31 and exactly 1.00 after, with an ordinary +0.45% on the day itself. So a corporate action with a factor of 1.5 happened and this series was not adjusted for it. Yahoo's recorded splits/dividends hold no
+matching entry. Classified ARTIFACT in `data/discontinuity_registry.py` (it blocks, as UNREVIEWED did, so no result changes). The type of action was not confirmed against the company's announcement, and the series was
+not repaired. Effect: any rule whose window includes 2026-01-01 (the forward paper tests, anything ending after that date) cannot hold TRENT, which is a small bias against a stock that was in the Nifty 50; windows ending
+by 2025-12-31 (the out-of-sample window of the equity rules) are unaffected. A repair (adjusting the earlier prices by 1.5) would need the company's announcement first.
+
+The same comparison shows ITC's volume 4% below Yahoo's before 2025 (ratio 0.96, then 1.00): consistent with an adjustment Upstox applies for ITC's hotel demerger, which matters only for volume, not for the intraday rules.
+Two more of the six symbols the quality table flagged are dividends: ONGC on 2022-11-21 (the price fell 4.8%, Yahoo's earlier prices were lowered 5.1%) and TATASTEEL on 2022-06-15 (a Rs 51 pre-split dividend is Rs 5.1 on
+a price of about Rs 96, 5.3%, against a gap of 5.2%). MAXHEALTH's day high and low differ from Yahoo's on 23 days in 2022 to 2024 (none since): not looked into.

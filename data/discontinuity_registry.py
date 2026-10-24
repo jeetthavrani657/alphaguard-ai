@@ -40,6 +40,20 @@ REVIEWS = {
         ),
     },
 
+    ("TRENT.NS", "2026-01-01"): {
+        "status": "ARTIFACT",
+        "reviewed": "2026-10-24",
+        "reason": (
+            "A corporate action with a factor of 1.5 that this Yahoo series did not adjust for: the close falls "
+            "4272.69 -> 2860.71 (-33.0%) while the stock did not move. Found by comparing with Upstox's 15-minute "
+            "candles (data/intraday/, which ARE adjusted): their close on 2025-12-31 is 2850.8 (4272.69 / 2850.8 = 1.499), "
+            "their traded volume is exactly 1.50 times Yahoo's on every day from 2022 to 2025-12-31 and exactly 1.00 from "
+            "2026-01-01, and the candles show an ordinary +0.45% on 2026-01-01. Yahoo's recorded splits/dividends hold no "
+            "matching entry. The TYPE of action (a bonus or a split) was not confirmed against the company's announcement. "
+            "Nothing was repaired: the symbol stays excluded from any window that crosses this date. See known_issues.md."
+        ),
+    },
+
     # --- YES BANK (YESBANK.NS) -- reviewed 2026-09-02 ---
     # All 10 flagged dates are GENUINE. Every one shows a large volume
     # spike (2x-10x the trailing 30-day average) and price direction that

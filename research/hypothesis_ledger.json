@@ -111,7 +111,15 @@
       "n_hypotheses_this_run": 2,
       "cumulative_hypotheses_before_run": 215,
       "cumulative_hypotheses_after_run": 217
+    },
+    {
+      "run_id": "run_20261024T183000Z_14",
+      "timestamp": "2026-10-24T18:30:00.813488+00:00",
+      "context": "Three intraday rules on the Nifty 50: orb_30, gap_fade, late_momentum (research/intraday_rules.py, INTRADAY_IDEAS.md), registered once",
+      "n_hypotheses_this_run": 3,
+      "cumulative_hypotheses_before_run": 217,
+      "cumulative_hypotheses_after_run": 220
     }
   ],
-  "cumulative_hypotheses": 217
+  "cumulative_hypotheses": 220
 }

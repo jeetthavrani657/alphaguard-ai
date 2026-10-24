@@ -73,6 +73,9 @@ reports/output/alerts_state.json
 reports/output/alerts_log.txt
 reports/output/alerts_last_run.log
 
+# Intraday research output (research/intraday_rules.py): reproducible from the git-ignored candle cache.
+reports/output/intraday_rules_latest.json
+
 # Options research outputs (research/options_*.py, research/backfill_fo.py): reproducible results and run logs.
 reports/output/options_condors_latest.json
 reports/output/options_condors_*.log

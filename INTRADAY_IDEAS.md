@@ -55,3 +55,34 @@ gross gain eaten by costs, the profit with and without the best 5% of trades, an
 
 About 4.7 years of data (see `OVERFIT_CHECKS.md`: with the number of ideas already tried, the best of pure noise would show a Sharpe of about 1.2); entries and exits at candle open and close, not tradable quotes (a real fill in a fast opening minute would be worse than 0.05%); no price impact, which is small for the Nifty 50 at this size;
 no margin or leverage model; no circuit-limit or halt handling; taxes on intraday profits (taxed as business income) are not modelled; the universe is today's index members; a single data source. A rule that works here still needs the forward paper test before it means anything.
+
+## What was found (run 2026-10-25; registered once, ledger 217 to 220, bar 0.05/220 = 0.000227)
+
+All 50 symbols, 1,189 sessions (2022-01-03 to 2026-10-23), the three rules exactly as frozen above. A second implementation reproduced all 72,301 of the engine's trades on the real candles before the run
+(49,278 `orb_30`, 7,580 `gap_fade`, 15,443 `late_momentum`). The engine was first run without registering, as the options rules were, and then registered unchanged.
+
+| | `orb_30` | `gap_fade` | `late_momentum` |
+|---|---|---|---|
+| Trades in-sample / out-of-sample | 25,316 / 23,962 | 4,084 / 3,496 | 8,225 / 7,218 |
+| Trades per day | 41 | 7 | 13 |
+| **Average gross gain per trade, in-sample** | **+0.034%** | **+0.042%** | **-0.021%** |
+| **Average gross gain per trade, out-of-sample** | **-0.002%** | **+0.026%** | **-0.019%** |
+| The break-even bar of `INTRADAY_COSTS.md` | 0.2% | 0.2% | 0.2% |
+| Average cost per trade (default slippage) | 0.207% | 0.186% | 0.196% |
+| Average net gain per trade, out-of-sample | -0.209% | -0.160% | -0.215% |
+| Net, out-of-sample, without the best 5% of trades | -0.329% | -0.334% | -0.265% |
+| Win rate after costs, out-of-sample | 38.7% | 45.1% | 25.1% |
+| Sharpe ratio, in-sample / out-of-sample | -9.6 / -12.7 | -0.7 / -1.8 | -16.9 / -19.3 |
+| Out-of-sample total return, worst fall | -70.0%, -70.2% | -40.0%, -44.9% | -68.1%, -68.1% |
+| Out-of-sample net per trade at 0.03% / 0.10% slippage a side | -0.169% / -0.309% | -0.120% / -0.260% | -0.175% / -0.315% |
+| Harness status at 220 | `VALIDATED_FAILED` | `VALIDATED_FAILED` | `VALIDATED_FAILED` |
+
+(The Nifty 50 ETF over the same out-of-sample window: Sharpe -0.57, -1.8% a year, worst fall 15.2%: a poor window for the benchmark, and still far better than any of the three rules.)
+
+**Reading.** The prior written in advance was that each fails the cost bar, and each fails it by a wide margin: the average gross gain is between -0.02% and +0.04% a trade, one fifth of the 0.2% needed or less. This is
+arithmetic rather than bad luck: even at 0.03% slippage and with no spread at all the statutory costs alone (brokerage, STT, exchange and SEBI fees, stamp, GST) are about 0.10% of a round trip, more than twice the best gross gain. Nothing in the
+results suggests a version of these three rules that is close to working: the gross gain is about zero in the later window for two of them and the best, `gap_fade`, earns 0.026%. `gap_fade` is the least bad for two plain reasons: its gross gain is slightly positive (+0.026%), and it trades 7 times a day instead of 13 or 41, so each trade is larger and the flat brokerage weighs less (0.186% a trade instead of 0.207%). It is still about 0.16% a trade short.
+
+**What this does not show.** Only these three simple rules, with fixed parameters, were tried: not that no intraday rule can work, and not that a rule with a much larger average move per trade could not clear the bar (a rule would need a gross gain per trade of 0.2% or more,
+about five times the best of these, on data it was not designed on). Changing the thresholds, the hold times or the stocks of these rules after seeing this result would be new hypotheses, counted in the ledger, and would be tuning on a result.
+Any follow-up would start from the cost bar, not from these rules. The universe is today's index members, a survivorship bias that if anything flatters a result; costs are modelled, not observed in a broker contract note.
