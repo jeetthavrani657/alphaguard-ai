@@ -158,6 +158,18 @@ def load_condor_payoff_raw() -> dict:
     return _read_json(path)
 
 
+def cost_sensitivity_path() -> str:
+    return os.environ.get("WEBAPP_COST_SENSITIVITY", os.path.join(ROOT, "reports", "output", "cost_sensitivity_latest.json"))
+
+
+def load_cost_sensitivity_raw() -> dict:
+    """research/cost_sensitivity.py's latest file: the four monthly stock-selection rules rerun at higher trading costs. Read back; the API only reshapes it."""
+    path = cost_sensitivity_path()
+    if not os.path.exists(path):
+        raise NotFound("No cost-sensitivity results yet. Generate them from the project root with: python research/cost_sensitivity.py")
+    return _read_json(path)
+
+
 def track_record_path() -> str:
     return os.environ.get("WEBAPP_TRACK_RECORD", os.path.join(ROOT, "reports", "output", "track_record_latest.json"))
 

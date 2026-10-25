@@ -359,6 +359,16 @@ def run_checks(base: str) -> None:
     check(all(c["status"] != "PASS" or (c.get("versions") or 2) >= 2 or c["id"] == "ledger_chain" for c in tr["checks"] if c["id"] != "frozen_first"), "a check that compared fewer than two versions is never a pass")
     check(len(tr["documents"]) >= 3 and all(d["first_commit"] for d in tr["documents"]), "every design document is in git with its first commit")
 
+    print("[smoke] cost sensitivity")
+    st, cs = fetch(base, "/api/cost-sensitivity")
+    check(st == 200 and bare_ratios(cs) == [] and [r["id"] for r in cs["rules"]] == ["momentum_nifty50", "lowvol_nifty50", "reversal1m_nifty50", "momentum_midcap150"], "cost sensitivity responds for the four registered rules, with no bare ratio")
+    for r in cs["rules"]:
+        for w in r["windows"]:
+            rows = w["rows"]
+            check(all(abs(x["cagr_edge_pct"] - (x["rule_cagr_pct"] - x["hold_all_cagr_pct"])) < 0.02 for x in rows), f"{r['id']} {w['window']}: the gap is the rule's return minus holding everything")
+            check([x["slippage_pct"] for x in rows] == sorted(x["slippage_pct"] for x in rows) and rows[0]["slippage_pct"] == 0.05, f"{r['id']} {w['window']}: slippage rises from the engine's own 0.05%")
+            check([x["rule_cost_per_year_pct"] for x in rows] == sorted(x["rule_cost_per_year_pct"] for x in rows), f"{r['id']} {w['window']}: worse slippage never means lower costs paid")
+
     print("[smoke] claim checker")
     st, cc = fetch(base, "/api/claim-check?claimed=1&years=1&tries=1")
     check(st == 200 and bare_ratios(cc) == [] and cc["luck_bar_annual"] == 0.0 and abs(cc["chance_of_no_edge_pct"] - 15.94) < 0.05, "a single try over a year: no luck bar, a 15.9% chance of no edge (worked out by hand)")

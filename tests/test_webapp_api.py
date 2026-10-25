@@ -1309,3 +1309,32 @@ def test_the_claim_check_refuses_numbers_outside_what_it_can_judge(client):
         assert client.get("/api/claim-check", params={**ok, **bad}).status_code == 422, bad
     assert client.get("/api/claim-check", params={"claimed": 1.0}).status_code == 422                        # the years are required
     assert client.get("/api/claim-check", params={"claimed": 1.0, "years": 3}).json()["tries"] == 1            # tries default to one
+
+
+# --- cost sensitivity (research/cost_sensitivity.py): the stock-selection rules at higher trading costs, reshaped and served ------
+
+def _cost_file(path):
+    def row(s, rule, hold):
+        return {"slippage_pct": s, "rule": {"sharpe": 0.9, "cagr_pct": rule, "max_drawdown_pct": -20.0, "cost_paid_pct_of_start_per_year": 1.5},
+                "hold_all": {"sharpe": 0.8, "cagr_pct": hold, "max_drawdown_pct": -18.0, "cost_paid_pct_of_start_per_year": 0.2}, "cagr_edge_over_hold_all_pct": round(rule - hold, 2)}
+    w = lambda a, b: {"start": "2015-01-01", "end": "2020-06-30", "rows": [row(0.05, a, b), row(0.3, a - 3.0, b - 0.2)]}
+    path.write_text(json.dumps({"generated_at": "2026-10-22T18:23:43Z", "slippage_levels_pct": [0.05, 0.3], "note": "Diagnostic of registered rules; registers nothing.",
+                                "rules": {"momentum_nifty50": {"label": "12-1 momentum, Nifty 50, top 10", "windows": {"in_sample": w(11.0, 10.0), "out_of_sample": w(36.0, 30.0)}}}}), encoding="utf-8")
+
+
+def test_the_cost_sensitivity_serves_each_rule_at_each_slippage_without_any_bare_sharpe(client, tmp_path, monkeypatch):
+    path = tmp_path / "cost.json"
+    _cost_file(path)
+    monkeypatch.setenv("WEBAPP_COST_SENSITIVITY", str(path))
+    d = client.get("/api/cost-sensitivity").json()
+    r = d["rules"][0]
+    assert r["id"] == "momentum_nifty50" and [w["window"] for w in r["windows"]] == ["in_sample", "out_of_sample"]
+    oos = r["windows"][1]["rows"]
+    assert [x["slippage_pct"] for x in oos] == [0.05, 0.3] and oos[0]["cagr_edge_pct"] == 6.0 and oos[1]["cagr_edge_pct"] == 3.2 and oos[0]["rule_cost_per_year_pct"] == 1.5
+    assert "sharpe" not in json.dumps(d).lower() and _find_bare_ratios(d) == []                      # the file's Sharpe values carry no status, so they are left out
+
+
+def test_the_cost_sensitivity_says_how_to_make_the_file_when_it_does_not_exist(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_COST_SENSITIVITY", str(tmp_path / "nope.json"))
+    r = client.get("/api/cost-sensitivity")
+    assert r.status_code == 404 and "cost_sensitivity.py" in r.json()["detail"]

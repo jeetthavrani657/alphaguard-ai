@@ -460,6 +460,24 @@ def stock_selection():
         survivorship=None if survivorship is None else schemas.SurvivorshipCheck(**survivorship))
 
 
+@api.get("/cost-sensitivity", response_model=schemas.CostSensitivity,
+         summary="The registered monthly stock-selection rules rerun at higher trading costs, against holding the whole list (research/cost_sensitivity.py).")
+def cost_sensitivity():
+    raw = store.load_cost_sensitivity_raw()
+    rules = []
+    for rid, r in raw["rules"].items():
+        windows = []
+        for window in ("in_sample", "out_of_sample"):
+            w = r["windows"][window]
+            rows = [schemas.CostRow(slippage_pct=row["slippage_pct"], rule_cagr_pct=_finite(row["rule"].get("cagr_pct")), rule_max_drawdown_pct=_finite(row["rule"].get("max_drawdown_pct")),
+                                    rule_cost_per_year_pct=_finite(row["rule"].get("cost_paid_pct_of_start_per_year")), hold_all_cagr_pct=_finite(row["hold_all"].get("cagr_pct")),
+                                    hold_all_cost_per_year_pct=_finite(row["hold_all"].get("cost_paid_pct_of_start_per_year")), cagr_edge_pct=_finite(row.get("cagr_edge_over_hold_all_pct")))
+                    for row in w["rows"]]
+            windows.append(schemas.CostWindow(window=window, start=w["start"], end=w["end"], rows=rows))
+        rules.append(schemas.CostRule(id=rid, label=r["label"], windows=windows))
+    return schemas.CostSensitivity(generated_at=raw["generated_at"], note=raw.get("note", ""), rules=rules)
+
+
 @api.get("/claim-check", response_model=schemas.ClaimCheck,
          summary="Judge a claim 'annual Sharpe X over Y years after Z attempts' against what luck alone would produce (webapp/backend/report.py).")
 def claim_check(claimed: float = Query(..., ge=-5, le=10, description="The claimed annual Sharpe ratio."),

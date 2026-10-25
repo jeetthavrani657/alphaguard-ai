@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cost-sensitivity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The registered monthly stock-selection rules rerun at higher trading costs, against holding the whole list (research/cost_sensitivity.py). */
+        get: operations["cost_sensitivity_api_cost_sensitivity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/claim-check": {
         parameters: {
             query?: never;
@@ -1086,6 +1103,70 @@ export interface components {
             net_pnl: number;
             /** Payoff */
             payoff: components["schemas"]["PayoffPoint"][];
+        };
+        /**
+         * CostRow
+         * @description One assumed level of slippage: what the rule and "hold every stock" earned and paid. Percent; costs are a share of the starting capital per year. No Sharpe is carried here on purpose.
+         */
+        CostRow: {
+            /**
+             * Slippage Pct
+             * @description The assumed slippage per side, in percent (0.05 is the engine's own assumption).
+             */
+            slippage_pct: number;
+            /** Rule Cagr Pct */
+            rule_cagr_pct?: number | null;
+            /** Rule Max Drawdown Pct */
+            rule_max_drawdown_pct?: number | null;
+            /**
+             * Rule Cost Per Year Pct
+             * @description Trading costs the rule paid, per year, as % of the starting capital.
+             */
+            rule_cost_per_year_pct?: number | null;
+            /** Hold All Cagr Pct */
+            hold_all_cagr_pct?: number | null;
+            /** Hold All Cost Per Year Pct */
+            hold_all_cost_per_year_pct?: number | null;
+            /**
+             * Cagr Edge Pct
+             * @description The rule's yearly return minus holding the whole list, in percentage points. Below zero the rule is worse than owning everything.
+             */
+            cagr_edge_pct?: number | null;
+        };
+        /** CostRule */
+        CostRule: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Windows */
+            windows: components["schemas"]["CostWindow"][];
+        };
+        /**
+         * CostSensitivity
+         * @description How much of each registered stock-selection rule's result survives worse trading costs (research/cost_sensitivity.py). A diagnostic: it registers nothing and changes no status.
+         */
+        CostSensitivity: {
+            /** Generated At */
+            generated_at: string;
+            /** Note */
+            note: string;
+            /** Rules */
+            rules: components["schemas"]["CostRule"][];
+        };
+        /** CostWindow */
+        CostWindow: {
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "in_sample" | "out_of_sample";
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            /** Rows */
+            rows: components["schemas"]["CostRow"][];
         };
         /** DataQualityResponse */
         DataQualityResponse: {
@@ -3202,6 +3283,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockSelectionResponse"];
+                };
+            };
+        };
+    };
+    cost_sensitivity_api_cost_sensitivity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostSensitivity"];
                 };
             };
         };

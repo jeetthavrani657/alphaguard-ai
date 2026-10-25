@@ -973,6 +973,39 @@ class OtherRule(BaseModel):
     intraday_windows: list[IntradayRuleWindow] = []
 
 
+class CostRow(BaseModel):
+    """One assumed level of slippage: what the rule and "hold every stock" earned and paid. Percent; costs are a share of the starting capital per year. No Sharpe is carried here on purpose."""
+    slippage_pct: float = Field(description="The assumed slippage per side, in percent (0.05 is the engine's own assumption).")
+    rule_cagr_pct: Optional[float] = None
+    rule_max_drawdown_pct: Optional[float] = None
+    rule_cost_per_year_pct: Optional[float] = Field(None, description="Trading costs the rule paid, per year, as % of the starting capital.")
+    hold_all_cagr_pct: Optional[float] = None
+    hold_all_cost_per_year_pct: Optional[float] = None
+    cagr_edge_pct: Optional[float] = Field(None, description="The rule's yearly return minus holding the whole list, in percentage points. Below zero the rule is worse than owning everything.")
+
+
+class CostWindow(BaseModel):
+    window: Window
+    start: str
+    end: str
+    rows: list[CostRow]
+
+
+class CostRule(BaseModel):
+    id: str
+    label: str
+    windows: list[CostWindow]
+
+
+class CostSensitivity(BaseModel):
+    """
+    How much of each registered stock-selection rule's result survives worse trading costs (research/cost_sensitivity.py). A diagnostic: it registers nothing and changes no status.
+    """
+    generated_at: str
+    note: str
+    rules: list[CostRule]
+
+
 class TrackCheck(BaseModel):
     id: str
     title: str

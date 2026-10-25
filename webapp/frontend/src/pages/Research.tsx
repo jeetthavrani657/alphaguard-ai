@@ -8,6 +8,7 @@ import { plain } from "../labels";
 import { Term } from "../components/Term";
 import { StockIdeas } from "../components/StockIdeas";
 import { CondorExplainer } from "../components/CondorExplainer";
+import { CostSensitivity } from "../components/CostSensitivity";
 import { OtherRules } from "../components/OtherRules";
 import { int, pct, signClass } from "../fmt";
 
@@ -57,6 +58,7 @@ export function Research() {
       </Panel>
 
       <StockIdeas />
+      <CostSensitivity />
 
       <OtherRules />
       <CondorExplainer />

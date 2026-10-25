@@ -6,7 +6,7 @@
 
 import type {
   AdvisoryForwardResponse, AdvisoryResponse, BasketResponse, MultiassetResponse, RebalanceResponse, DataQualityResponse, EquityResponse, ForwardBooksResponse, ForwardResponse, Health, LedgerResponse, LiveQuotesResponse, PriceSeries,
-  ClaimCheck, CondorExplainer, GoLiveResponse, TrackRecord, OtherRulesResponse, ScreenerResponse, StockSelectionResponse, StrategyDetail, StrategyList, StrategyReport, SymbolDetail, TradePage, Window,
+  ClaimCheck, CondorExplainer, CostSensitivity, GoLiveResponse, TrackRecord, OtherRulesResponse, ScreenerResponse, StockSelectionResponse, StrategyDetail, StrategyList, StrategyReport, SymbolDetail, TradePage, Window,
 } from "./types";
 
 export class ApiError extends Error {
@@ -61,6 +61,7 @@ export const api = {
   multiasset: (family: "trend" | "momentum" = "trend") => get<MultiassetResponse>("/multiasset", { family }),
   stockSelection: () => get<StockSelectionResponse>("/stockselection"),
   otherRules: () => get<OtherRulesResponse>("/otherrules"),
+  costSensitivity: () => get<CostSensitivity>("/cost-sensitivity"),
   claimCheck: (claimed: number, years: number, tries: number) => get<ClaimCheck>("/claim-check", { claimed, years, tries }),
   trackRecord: () => get<TrackRecord>("/track-record"),
   optionsExplainer: () => get<CondorExplainer>("/options-explainer"),

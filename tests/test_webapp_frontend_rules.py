@@ -253,6 +253,13 @@ def test_the_claim_checker_asks_the_api_for_every_figure_and_says_what_it_cannot
     assert "/claim-checker" in _read("components", "Sidebar.tsx") and 'path="/claim-checker"' in _read("App.tsx")
 
 
+def test_the_cost_panel_is_on_the_research_page_reads_the_api_and_draws_no_ratio():
+    text = _read("components", "CostSensitivity.tsx")
+    assert "<CostSensitivity />" in _read("pages", "Research.tsx") and "api.costSensitivity()" in text
+    assert "Rule minus holding all" in text and "A positive gap is not a pass" in text, "a gap over holding everything must not read as a pass"
+    assert not re.search(r"\.\w*(sharpe|sortino)", _strip_comments(text), flags=re.I) and "<Ratio" not in text, "the file carries no Sharpe with a status, so none is drawn"
+
+
 def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
     text = _read("components", "ReadFirst.tsx")
     shown = text.index("not investment advice")
