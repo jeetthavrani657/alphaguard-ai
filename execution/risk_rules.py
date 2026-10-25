@@ -7,15 +7,16 @@ The ACCOUNT-level risk rules of RISK_RULES.md, for the paper layer: what the acc
     drawdown breaker   the account's fall from its highest value:  warning, halt (no new orders), review (everything stops until a person has looked)
     daily loss limit   a single day's fall in the account's value:  halt
 
-THE NUMBERS BELOW ARE PROPOSALS from RISK_RULES.md. The owner has not yet answered its five questions, so these are placeholders chosen to be conservative, kept in this one place
-so that changing them is a one-line edit, and every one has a test that makes it bite. Nothing real depends on them: the layer is simulated.
+THE NUMBERS BELOW ARE SET (2026-10-25). The owner gave the 10% halt and, for the rest, told the assistant to set them from its own recommendation in RISK_RULES.md: 5% warning, 15% review (which only
+stops and waits for a person; it never sells), and a 3% daily loss. They are kept in this one place so that changing one is a one-line edit, and every one has a test that makes it bite.
+The layer is simulated: nothing real depends on them yet.
 """
 
 RISK = {
-    "drawdown_warning": 0.05,       # a visible alert; nothing stops
+    "drawdown_warning": 0.05,       # a visible alert; nothing stops. Set from the assistant's recommendation, at the owner's instruction, 2026-10-25
     "drawdown_halt": 0.10,          # no new orders until a person writes a note (the same 10% as go-live gate 7). CONFIRMED by the owner, 2026-10-25: "10%"
-    "drawdown_review": 0.15,        # everything stops until the rule has been re-judged
-    "daily_loss_halt": 0.03,        # one day's fall of this much halts new orders: a daily-bar rule should never lose this in a day, so something is wrong
+    "drawdown_review": 0.15,        # everything stops until the rule has been re-judged; it never sells. Set as above
+    "daily_loss_halt": 0.03,        # one day's fall of this much halts new orders: a daily-bar rule should never lose this in a day, so something is wrong. Set as above
 }
 
 OK, WARNING, HALT, REVIEW = "OK", "WARNING", "HALT", "REVIEW"
