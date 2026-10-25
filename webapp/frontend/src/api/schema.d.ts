@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/track-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checks, made from git history, that the idea count and the forward results were never rewritten (research/track_record.py). */
+        get: operations["track_record_api_track_record_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/options-explainer": {
         parameters: {
             query?: never;
@@ -2484,6 +2501,69 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** TrackCheck */
+        TrackCheck: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Status
+             * @description CANNOT_CHECK means there was not enough history to test it; it is never shown as a pass.
+             * @enum {string}
+             */
+            status: "PASS" | "FAIL" | "CANNOT_CHECK";
+            /** Detail */
+            detail: string;
+            /**
+             * Versions
+             * @description How many saved versions of the file were compared.
+             */
+            versions?: number | null;
+        };
+        /**
+         * TrackDocument
+         * @description A frozen design document: when it was first committed and how often it was edited since.
+         */
+        TrackDocument: {
+            /** Document */
+            document: string;
+            /** First Commit */
+            first_commit?: string | null;
+            /** First Committed */
+            first_committed?: string | null;
+            /** Edits Since */
+            edits_since?: number | null;
+            /**
+             * Forward Started
+             * @description The first counted day of the forward test it describes, if one has begun.
+             */
+            forward_started?: string | null;
+            /**
+             * Before Forward Start
+             * @description Whether the design was committed in an EARLIER commit than the first one holding a counted day. None: not judged.
+             */
+            before_forward_start?: boolean | null;
+        };
+        /**
+         * TrackRecord
+         * @description Checks made by research/track_record.py from the git history of the public repository: the idea count is an unbroken chain that was only ever added to, the forward
+         *     files were never rewritten for earlier days, and each design was committed before its test began. Anyone with the repository can run the same script.
+         */
+        TrackRecord: {
+            /** Generated At */
+            generated_at: string;
+            /** Repo Url */
+            repo_url?: string | null;
+            /** Checked At Commit */
+            checked_at_commit?: string | null;
+            /** Ledger Total */
+            ledger_total?: number | null;
+            /** Checks */
+            checks: components["schemas"]["TrackCheck"][];
+            /** Documents */
+            documents: components["schemas"]["TrackDocument"][];
+        };
         /** TradePage */
         TradePage: {
             /** Strategy Id */
@@ -3046,6 +3126,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockSelectionResponse"];
+                };
+            };
+        };
+    };
+    track_record_api_track_record_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackRecord"];
                 };
             };
         };

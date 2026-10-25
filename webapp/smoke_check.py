@@ -346,6 +346,17 @@ def run_checks(base: str) -> None:
         check(abs(worst["net_pnl"] - min(c["net_pnl"] for c in r["cycles"])) < 0.01, f"{r['id']}: the 'worst' trade is the worst of all")
     check([y["year"] for y in ex["years"]] == sorted(y["year"] for y in ex["years"]) and all(y["days"] > 100 for y in ex["years"][:-1]), "the volatility table is by year, oldest first")
 
+    print("[smoke] track record")
+    st, tr = fetch(base, "/api/track-record")
+    check(st == 200 and bare_ratios(tr) == [], "the track record responds, with no bare ratio")
+    by_id = {c["id"]: c for c in tr["checks"]}
+    check(not any(c["status"] == "FAIL" for c in tr["checks"]), "no track-record check failed: nothing in the record was rewritten")
+    check(by_id["ledger_chain"]["status"] == "PASS", "the idea ledger is an unbroken chain")
+    st, lg = fetch(base, "/api/ledger")
+    check(tr["ledger_total"] == lg["cumulative_hypotheses"], "the track record was checked against the same idea count the ledger page shows (run python research/track_record.py if this fails)")
+    check(all(c["status"] != "PASS" or (c.get("versions") or 2) >= 2 or c["id"] == "ledger_chain" for c in tr["checks"] if c["id"] != "frozen_first"), "a check that compared fewer than two versions is never a pass")
+    check(len(tr["documents"]) >= 3 and all(d["first_commit"] for d in tr["documents"]), "every design document is in git with its first commit")
+
     print("[smoke] go-live gates")
     st, gl = fetch(base, "/api/golive")
     check(st == 200 and len(gl["rules"]) >= 3, "go-live gates respond with every paper rule")

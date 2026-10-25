@@ -8,7 +8,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Portfolio", items: [{ to: "/advisory", label: "Portfolio advisor" }] },
   { group: "Research", items: [{ to: "/strategies", label: "Strategies" }, { to: "/compare", label: "Compare" }, { to: "/multiasset", label: "Multi-asset rules" }, { to: "/screener", label: "Stocks" }] },
   { group: "Paper trading", items: [{ to: "/paper", label: "Scoreboard", end: true }, { to: "/paper#go-live", label: "Go-live gates" }] },
-  { group: "Evidence", items: [{ to: "/research", label: "Research log" }, { to: "/methodology", label: "How it works" }] },
+  { group: "Evidence", items: [{ to: "/research", label: "Research log" }, { to: "/track-record", label: "Track record" }, { to: "/methodology", label: "How it works" }] },
 ];
 
 /** A link is current when its page is open; the two Paper trading links tell themselves apart by the #go-live part of the address. */

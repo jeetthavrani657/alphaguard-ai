@@ -52,6 +52,10 @@ rem Go-live gates (research\golive_gates.py, GO_LIVE_GATES.md): reads the result
 rem Paper trading page shows it. It places no order and unlocks nothing, and never changes FORWARD_RESULT. Output overwrites reports\output\golive_gates_last_run.log.
 "C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\golive_gates.py > "reports\output\golive_gates_last_run.log" 2>&1
 
+rem Track record (research\track_record.py): checks, from the git history, that the idea ledger and the forward files were never rewritten, for the web app's Track record page.
+rem It reads files and git only, changes nothing and never changes FORWARD_RESULT. Output overwrites reports\output\track_record_last_run.log.
+"C:\Users\Jeet\AppData\Local\Python\pythoncore-3.14-64\python.exe" research\track_record.py > "reports\output\track_record_last_run.log" 2>&1
+
 rem Phone alerts (research\alerts.py). LAST on purpose: it only reads the files the steps above wrote and sends a short Telegram message to the owner's
 rem own bot, and only if ALPHAGUARD_TELEGRAM_TOKEN and ALPHAGUARD_TELEGRAM_CHAT_ID are set as Windows environment variables. Without them it sends nothing and
 rem writes what it would have sent to reports\output\alerts_log.txt. It never changes FORWARD_RESULT. Output overwrites reports\output\alerts_last_run.log.

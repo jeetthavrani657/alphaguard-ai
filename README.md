@@ -345,6 +345,15 @@ it. The brief's five rules, and what enforces each:
   buy-and-hold, with a clock that shows how many of the 252 days needed for any verdict have passed.
 - **Research record** (`/research`): the hypothesis ledger, the forward test,
   and the stocks with unresolved data issues.
+- **Track record** (`/track-record`): checks, made from the git history of the public repository by
+  `python research/track_record.py`, that the idea ledger and the forward-test files were never rewritten
+  and that each design was saved before its test began. Anyone with a copy of the repository can repeat them.
+- **Compare** (`/compare`), the strategy **report card** (`/strategies/ID/card`, saved to PDF through the
+  browser's print dialog) and the **condor payoff** panel on the Research page (`python research/condor_payoff.py`).
+
+**Trying a new rule: the honest builder.** `python research/try_idea.py ideas/<id>.json --plan` shows what an idea
+would add to the hypothesis ledger; `--run` runs every combination of its grid, counts all of them at once, and only then
+shows results. The idea file must be committed first and cannot be run twice. See `ideas/README.md`.
 
 #### Reading it correctly
 

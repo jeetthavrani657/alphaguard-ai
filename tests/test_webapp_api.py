@@ -1253,3 +1253,35 @@ def test_the_options_explainer_says_how_to_make_the_file_when_it_does_not_exist(
     monkeypatch.setenv("WEBAPP_CONDOR_PAYOFF", str(tmp_path / "nope.json"))
     r = client.get("/api/options-explainer")
     assert r.status_code == 404 and "condor_payoff.py" in r.json()["detail"]
+
+
+# --- the track record (research/track_record.py): checks made from git history, served as written ------------------------------
+
+def _track_file(path, status="PASS"):
+    data = {"generated_at": "2026-10-25T07:33:00Z", "repo_url": "https://github.com/x/y", "checked_at_commit": "ee8800e0000000000000000000000000000000ab", "ledger_total": 220,
+            "checks": [{"id": "ledger_chain", "title": "The idea count is an unbroken chain", "status": status, "detail": "15 runs.", "versions": None},
+                       {"id": "forward:forward_books.csv", "title": "forward_books.csv: earlier days were never rewritten", "status": "CANNOT_CHECK", "detail": "Only one saved version so far.", "versions": 1}],
+            "documents": [{"document": "FORWARD_BOOKS.md", "first_commit": "fd381b9", "first_committed": "2026-10-16T10:00:00+05:30", "edits_since": 1, "forward_started": "2026-10-20", "before_forward_start": True},
+                          {"document": "OPTIONS_IDEAS.md", "first_commit": "abc1234", "first_committed": "2026-10-23T10:00:00+05:30", "edits_since": 0, "forward_started": None, "before_forward_start": None}]}
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_the_track_record_serves_each_check_with_its_status_and_never_turns_too_early_into_a_pass(client, tmp_path, monkeypatch):
+    path = tmp_path / "track.json"
+    _track_file(path)
+    monkeypatch.setenv("WEBAPP_TRACK_RECORD", str(path))
+    d = client.get("/api/track-record").json()
+    assert [c["status"] for c in d["checks"]] == ["PASS", "CANNOT_CHECK"] and d["ledger_total"] == 220 and d["repo_url"] == "https://github.com/x/y"
+    assert d["documents"][0]["before_forward_start"] is True and d["documents"][1]["before_forward_start"] is None
+    assert _find_bare_ratios(d) == []
+
+
+def test_the_track_record_refuses_a_status_it_does_not_know_and_says_how_to_make_the_file(client, tmp_path, monkeypatch):
+    path = tmp_path / "track.json"
+    _track_file(path, status="MAYBE")
+    monkeypatch.setenv("WEBAPP_TRACK_RECORD", str(path))
+    with pytest.raises(Exception):                                                                                     # an invented status is an error (a 500 in the running app), never shown
+        client.get("/api/track-record")
+    monkeypatch.setenv("WEBAPP_TRACK_RECORD", str(tmp_path / "nope.json"))
+    r = client.get("/api/track-record")
+    assert r.status_code == 404 and "track_record.py" in r.json()["detail"]

@@ -632,3 +632,6 @@ kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--borde
   html, body, .shell, .content, main { background: #fff !important; }
   .reportcard th, .reportcard td { padding: 4px 6px; }
 }
+
+/* ---- Track record ---- */
+.codeblock { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font: 13px var(--mono); overflow-x: auto; margin: 8px 0; }

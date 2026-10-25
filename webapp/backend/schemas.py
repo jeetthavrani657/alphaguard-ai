@@ -949,6 +949,37 @@ class OtherRule(BaseModel):
     intraday_windows: list[IntradayRuleWindow] = []
 
 
+class TrackCheck(BaseModel):
+    id: str
+    title: str
+    status: Literal["PASS", "FAIL", "CANNOT_CHECK"] = Field(description="CANNOT_CHECK means there was not enough history to test it; it is never shown as a pass.")
+    detail: str
+    versions: Optional[int] = Field(None, description="How many saved versions of the file were compared.")
+
+
+class TrackDocument(BaseModel):
+    """A frozen design document: when it was first committed and how often it was edited since."""
+    document: str
+    first_commit: Optional[str] = None
+    first_committed: Optional[str] = None
+    edits_since: Optional[int] = None
+    forward_started: Optional[str] = Field(None, description="The first counted day of the forward test it describes, if one has begun.")
+    before_forward_start: Optional[bool] = Field(None, description="Whether the design was committed in an EARLIER commit than the first one holding a counted day. None: not judged.")
+
+
+class TrackRecord(BaseModel):
+    """
+    Checks made by research/track_record.py from the git history of the public repository: the idea count is an unbroken chain that was only ever added to, the forward
+    files were never rewritten for earlier days, and each design was committed before its test began. Anyone with the repository can run the same script.
+    """
+    generated_at: str
+    repo_url: Optional[str] = None
+    checked_at_commit: Optional[str] = None
+    ledger_total: Optional[int] = None
+    checks: list[TrackCheck]
+    documents: list[TrackDocument]
+
+
 class PayoffPoint(BaseModel):
     level: float = Field(description="Where the Nifty finishes at expiry.")
     pnl: float = Field(description="Profit or loss of the whole position at that level, in rupees, before costs.")

@@ -237,6 +237,14 @@ def test_the_report_card_prints_on_white_with_its_disclaimer_and_needs_nothing_i
     assert "@page { size: A4" in css and "print-color-adjust: exact" in css and ".noprint" in css
 
 
+def test_the_track_record_page_never_turns_too_early_into_a_pass_and_says_what_it_does_not_prove():
+    page = _read("pages", "TrackRecord.tsx")
+    assert "api.trackRecord()" in page and 'CANNOT_CHECK: "TOO EARLY TO CHECK"' in page and 'PASS: "PASSED"' in page and 'FAIL: "FAILED"' in page
+    assert "do <b>not</b> show that any strategy is good" in page, "the page must say what the checks do not prove"
+    assert "python research/track_record.py" in page and 'target="_blank" rel="noreferrer"' in page, "a way to repeat the checks, and external links that cannot reach back into the app"
+    assert "/track-record" in _read("components", "Sidebar.tsx") and 'path="/track-record"' in _read("App.tsx")
+
+
 def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
     text = _read("components", "ReadFirst.tsx")
     shown = text.index("not investment advice")

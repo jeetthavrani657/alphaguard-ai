@@ -158,6 +158,18 @@ def load_condor_payoff_raw() -> dict:
     return _read_json(path)
 
 
+def track_record_path() -> str:
+    return os.environ.get("WEBAPP_TRACK_RECORD", os.path.join(ROOT, "reports", "output", "track_record_latest.json"))
+
+
+def load_track_record_raw() -> dict:
+    """research/track_record.py's latest file: checks, made from the git history, that the record was not rewritten. Read back untouched; the app never checks anything itself."""
+    path = track_record_path()
+    if not os.path.exists(path):
+        raise NotFound("No track-record checks yet. Generate them from the project root with: python research/track_record.py")
+    return _read_json(path)
+
+
 def golive_gates_path() -> str:
     return os.environ.get("WEBAPP_GOLIVE_GATES", os.path.join(ROOT, "reports", "output", "golive_gates_latest.json"))
 

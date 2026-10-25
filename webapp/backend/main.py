@@ -460,6 +460,12 @@ def stock_selection():
         survivorship=None if survivorship is None else schemas.SurvivorshipCheck(**survivorship))
 
 
+@api.get("/track-record", response_model=schemas.TrackRecord,
+         summary="Checks, made from git history, that the idea count and the forward results were never rewritten (research/track_record.py).")
+def track_record():
+    return schemas.TrackRecord(**store.load_track_record_raw())
+
+
 @api.get("/options-explainer", response_model=schemas.CondorExplainer,
          summary="Real condor trades with their payoff at expiry, where the Nifty landed against the shorts, and implied against realised volatility by year (research/condor_payoff.py).")
 def options_explainer():
