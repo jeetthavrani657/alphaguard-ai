@@ -192,6 +192,8 @@ def run_checks(base: str) -> None:
     with_latest = [r for r in rows if r.get("latest")]
     check(len(with_latest) > 0 and sc.get("latest_prices_through"), "the screener carries latest closes (run `python -m webapp.backend.latest_prices` if this fails)")
     check(all(r["latest"]["close"] > 0 and r["latest"]["date"] >= r["last_date"] or r["latest"]["stale"] for r in with_latest), "a latest close is never older than the research window unless it is marked stale")
+    stale_n = sum(1 for r in with_latest if r["latest"]["stale"])
+    check(stale_n <= 10, f"only a handful of stocks are marked STALE ({stale_n}); run `python data/refresh_display.py` if many are")
     check(all(r["latest"]["recent_closes"] and r["latest"]["recent_closes"][-1] == r["latest"]["close"] and len(r["latest"]["recent_closes"]) <= 60 for r in with_latest),
           "the price line of every stock ends at its latest close and has at most 60 points")
     long_ones = [r["latest"] for r in with_latest if len(r["latest"]["recent_closes"]) > 21]

@@ -484,3 +484,10 @@ What this exposed: **all 145 Midcap 150 stocks have a newest bar of 2026-10-14**
 depends on is affected (the midcap idea was judged on its own window), but anything shown "latest" for a midcap stock is nine days old until its cache is refreshed. Four ETFs and one smallcap are stale for the
 ordinary reason that they are no longer updated. The fix (refreshing the midcap cache each evening, which costs several minutes, or taking its daily bars from the read-only broker feed) is a decision, not
 done here. The research chart on a stock page still ends on 2025-12-31 with a note saying so; extending it would show unvalidated bars next to validated ones and is left for a later step.
+
+**Handled 2026-10-25 (the owner chose to refresh the Midcap 150 daily): `data/refresh_display.py`.** The obvious fix, refreshing the midcap research cache, is the wrong one: `data/loader.py` never splices a new
+tail onto old history (Yahoo re-scales prices backwards when a dividend goes ex), so adding a few days re-downloads and REPLACES the whole cached history, which shifts every cached price slightly and
+would leave the stored results, worked out on the old prices, no longer matching the cache. Instead the daily run now downloads about four months of prices for each stock whose research cache is more than
+5 days behind, into `data/display_cache/` (git-ignored), a folder only `webapp/backend/latest_prices.py` reads. A stock is drawn from ONE file (the display file only when its newest bar is later), never a
+splice. The research cache is not touched (checked: all 446 files byte-identical before and after a real run of 146 stocks, 190 seconds, 0 failures). STALE stocks went from 150 to 4. These four are the ETFs
+and the smallcap that are no longer updated for ordinary reasons. The stock-page research chart still ends on 2025-12-31, as before.

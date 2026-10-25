@@ -89,3 +89,32 @@ def test_the_recent_closes_are_the_latest_sixty_oldest_first_and_end_at_the_show
     p = lp.build(str(tmp_path))["prices"]
     assert p["LONG"]["recent_closes"] == [float(10 + i) for i in range(40, 100)] and p["LONG"]["recent_closes"][-1] == p["LONG"]["close"]
     assert p["FEW"]["recent_closes"] == [5.0, 6.0]
+
+
+# --- the display store for stocks the daily run does not update ------------------------------------------------------------------------------
+
+def test_a_newer_display_file_replaces_the_research_cache_for_that_stock_and_a_tie_keeps_the_research_cache(tmp_path):
+    cache, disp = tmp_path / "cache", tmp_path / "display"
+    cache.mkdir()
+    disp.mkdir()
+    cache_file(cache, "OLD", [("2026-10-13", 100.0), ("2026-10-14", 110.0)])                       # the research cache stopped on the 14th
+    cache_file(disp, "OLD", [("2026-10-22", 150.0), ("2026-10-23", 153.0)])                         # the display file reaches the 23rd, on its own basis
+    cache_file(cache, "TIE", [("2026-10-22", 10.0), ("2026-10-23", 11.0)])
+    cache_file(disp, "TIE", [("2026-10-22", 99.0), ("2026-10-23", 98.0)])
+    cache_file(disp, "ONLYDISPLAY", [("2026-10-22", 5.0), ("2026-10-23", 6.0)])
+    p = lp.build(str(cache), str(disp))["prices"]
+    assert p["OLD"]["date"] == "2026-10-23" and p["OLD"]["close"] == 153.0 and p["OLD"]["prev_close"] == 150.0     # all from the display file: one basis, no splice
+    assert p["TIE"]["close"] == 11.0                                                                               # equal newest dates: the research cache wins
+    assert p["ONLYDISPLAY"]["close"] == 6.0 and p["OLD"]["stale"] is False
+
+
+def test_an_older_or_missing_display_file_changes_nothing_and_without_a_display_folder_nothing_is_read(tmp_path):
+    cache, disp = tmp_path / "cache", tmp_path / "display"
+    cache.mkdir()
+    disp.mkdir()
+    cache_file(cache, "A", [("2026-10-22", 10.0), ("2026-10-23", 11.0)])
+    cache_file(disp, "A", [("2026-10-01", 1.0), ("2026-10-02", 2.0)])                               # older than the research cache: ignored
+    assert lp.build(str(cache), str(disp))["prices"]["A"]["close"] == 11.0
+    assert lp.build(str(cache), str(tmp_path / "nope"))["prices"]["A"]["close"] == 11.0              # a display folder that does not exist is fine
+    cache_file(disp, "B", [("2026-10-22", 3.0), ("2026-10-23", 4.0)])
+    assert "B" not in lp.build(str(cache))["prices"]                                                # no display folder given: the default never leaks the real one in

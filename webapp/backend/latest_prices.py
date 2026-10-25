@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CACHE_DIR = os.path.join(ROOT, "data", "cache")
+DISPLAY_DIR = os.path.join(ROOT, "data", "display_cache")      # short recent histories for stocks the daily run does not update (data/refresh_display.py); read here and nowhere else
 OUT_NAME = "latest_prices.json"
 SUSPECT_MOVE_PCT = 25.0              # a one-day move beyond this is the validator's own "large move" line; it is shown with a warning, not trusted silently
 RECENT_DAYS = 60                     # how many of the latest closes are kept for the small price line on the Stocks page
@@ -46,16 +47,24 @@ def read_recent(path: str):
     return last["date"], float(last["close"]), prev, recent, month_ago
 
 
-def build(cache_dir: str = CACHE_DIR) -> dict:
-    """{"as_of", "generated_at", "prices": {SYMBOL: {date, close, prev_close, change_pct, change_1m_pct, recent_closes, suspect, stale}}} for every *.NS.csv in `cache_dir`."""
+def build(cache_dir: str = CACHE_DIR, display_dir: str | None = None) -> dict:
+    """
+    {"as_of", "generated_at", "prices": {SYMBOL: {date, close, prev_close, change_pct, change_1m_pct, recent_closes, suspect, stale}}} for every *.NS.csv in `cache_dir`.
+    With `display_dir`, a stock's file there is used INSTEAD when its newest bar is later than the research cache's (a tie keeps the research cache). Each stock is drawn from ONE file,
+    never a splice of two, so the line and the one-month change always sit on a single price basis.
+    """
     import pandas as pd
     found = {}
-    for name in sorted(os.listdir(cache_dir)):
-        if not name.endswith(".NS.csv"):
+    for directory in (cache_dir, display_dir):
+        if directory is None or not os.path.isdir(directory):
             continue
-        got = read_recent(os.path.join(cache_dir, name))
-        if got is not None:
-            found[name[: -len(".NS.csv")]] = got
+        for name in sorted(os.listdir(directory)):
+            if not name.endswith(".NS.csv"):
+                continue
+            got = read_recent(os.path.join(directory, name))
+            symbol = name[: -len(".NS.csv")]
+            if got is not None and (symbol not in found or got[0] > found[symbol][0]):
+                found[symbol] = got
     if not found:
         return {"as_of": None, "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "prices": {}}
     as_of = max(v[0] for v in found.values())
@@ -71,8 +80,8 @@ def build(cache_dir: str = CACHE_DIR) -> dict:
     return {"as_of": as_of.strftime("%Y-%m-%d"), "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "prices": prices}
 
 
-def write(out_dir: str, cache_dir: str = CACHE_DIR) -> dict:
-    data = build(cache_dir)
+def write(out_dir: str, cache_dir: str = CACHE_DIR, display_dir: str | None = None) -> dict:
+    data = build(cache_dir, display_dir)
     os.makedirs(out_dir, exist_ok=True)
     tmp = os.path.join(out_dir, OUT_NAME + ".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
@@ -83,7 +92,7 @@ def write(out_dir: str, cache_dir: str = CACHE_DIR) -> dict:
 
 def main() -> int:
     out_dir = os.environ.get("WEBAPP_SNAPSHOT_DIR", os.path.join(ROOT, "webapp", "snapshots"))
-    data = write(out_dir)
+    data = write(out_dir, display_dir=DISPLAY_DIR)
     n = len(data["prices"])
     print(f"[latest-prices] {n} stocks, newest close {data['as_of']}, "
           f"{sum(1 for p in data['prices'].values() if p['suspect'])} suspect, {sum(1 for p in data['prices'].values() if p['stale'])} stale -> {out_dir}")

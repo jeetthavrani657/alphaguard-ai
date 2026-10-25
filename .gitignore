@@ -91,3 +91,6 @@ reports/output/golive_gates_last_run.log
 
 # Latest closes for the web app (webapp/backend/latest_prices.py): run log; the JSON itself sits in the ignored webapp/snapshots/.
 reports/output/latest_prices_last_run.log
+
+# Display-only recent prices for stocks the daily run does not update (data/refresh_display.py); only the web app's latest-prices layer reads them.
+data/display_cache/
