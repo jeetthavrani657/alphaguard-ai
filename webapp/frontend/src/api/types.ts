@@ -46,6 +46,7 @@ export type Health = S["Health"];
 export type StrategyReport = S["StrategyReport"];
 export type CondorExplainer = S["CondorExplainer"];
 export type TrackRecord = S["TrackRecord"];
+export type ClaimCheck = S["ClaimCheck"];
 export type TrackCheck = S["TrackCheck"];
 export type CondorTrade = S["CondorTrade"];
 export type CondorCycle = S["CondorCycle"];

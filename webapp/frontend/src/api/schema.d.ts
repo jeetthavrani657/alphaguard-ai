@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/claim-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Judge a claim 'annual Sharpe X over Y years after Z attempts' against what luck alone would produce (webapp/backend/report.py). */
+        get: operations["claim_check_api_claim_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/track-record": {
         parameters: {
             query?: never;
@@ -891,6 +908,56 @@ export interface components {
             n_open_positions: number | null;
             /** N Closed Trades */
             n_closed_trades: number | null;
+        };
+        /**
+         * ClaimCheck
+         * @description A claim of the form "annual Sharpe X over Y years after Z attempts", judged the way this project judges its own results: against what the best of Z attempts with no skill would show
+         *     by chance. Assumes normally distributed daily returns (which flatters option-selling and other rare-large-loss strategies). Nothing here is about any real strategy.
+         */
+        ClaimCheck: {
+            /** Claimed Annual */
+            claimed_annual: number;
+            /** Years */
+            years: number;
+            /** Window Days */
+            window_days: number;
+            /** Tries */
+            tries: number;
+            /**
+             * Luck Bar Annual
+             * @description The annual Sharpe the best of `tries` strategies with no skill would be expected to show over this many years.
+             */
+            luck_bar_annual: number;
+            /**
+             * Chance Of No Edge Pct
+             * @description The chance, in percent, given the claim, that the true edge is zero or less.
+             */
+            chance_of_no_edge_pct: number;
+            /**
+             * Chance Beats Luck Pct
+             * @description The chance, in percent, that the true edge is better than the luck bar.
+             */
+            chance_beats_luck_pct: number;
+            /**
+             * Clears Luck Bar
+             * @description At least 95% likely to beat the luck bar.
+             */
+            clears_luck_bar: boolean;
+            /**
+             * Edge Needed Annual
+             * @description The annual Sharpe that WOULD be 95% likely to beat the luck bar over this many years and this many tries.
+             */
+            edge_needed_annual: number;
+            /**
+             * Years Needed
+             * @description Years of data this claimed edge would need to be 95% likely to beat the luck bar; null beyond 300 or for a claim of zero or less.
+             */
+            years_needed?: number | null;
+            /**
+             * By Tries
+             * @description The same claim judged after 1, 5, 20, 100 and 1000 attempts.
+             */
+            by_tries: components["schemas"]["TriesRow"][];
         };
         /** ClosedTrade */
         ClosedTrade: {
@@ -2594,6 +2661,15 @@ export interface components {
             /** Rebalances */
             rebalances?: components["schemas"]["Rebalance"][] | null;
         };
+        /** TriesRow */
+        TriesRow: {
+            /** Tries */
+            tries: number;
+            /** Luck Bar Annual */
+            luck_bar_annual: number;
+            /** Chance Beats Luck Pct */
+            chance_beats_luck_pct: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -3126,6 +3202,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockSelectionResponse"];
+                };
+            };
+        };
+    };
+    claim_check_api_claim_check_get: {
+        parameters: {
+            query: {
+                /** @description The claimed annual Sharpe ratio. */
+                claimed: number;
+                /** @description Years of data the claim rests on. */
+                years: number;
+                /** @description How many variants or ideas were tried to get this result. */
+                tries?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

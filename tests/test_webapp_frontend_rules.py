@@ -245,6 +245,14 @@ def test_the_track_record_page_never_turns_too_early_into_a_pass_and_says_what_i
     assert "/track-record" in _read("components", "Sidebar.tsx") and 'path="/track-record"' in _read("App.tsx")
 
 
+def test_the_claim_checker_asks_the_api_for_every_figure_and_says_what_it_cannot_tell_you():
+    page = _read("pages", "ClaimChecker.tsx")
+    assert "api.claimCheck(" in page and "What this cannot tell you" in page and "bell-shaped" in page, "the page must say what the three numbers cannot show"
+    assert "problem ? Promise.resolve(null)" in page, "an unfinished or out-of-range entry is never sent to the API"
+    assert not re.search(r"\.\w*(sharpe|sortino)", _strip_comments(page), flags=re.I), "the page reads no ratio field: it only draws what the check returned"
+    assert "/claim-checker" in _read("components", "Sidebar.tsx") and 'path="/claim-checker"' in _read("App.tsx")
+
+
 def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
     text = _read("components", "ReadFirst.tsx")
     shown = text.index("not investment advice")

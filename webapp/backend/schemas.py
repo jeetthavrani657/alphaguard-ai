@@ -283,6 +283,30 @@ class EvidenceBlock(BaseModel):
     years_needed_for_edge_of_1_single_try: Optional[float] = Field(None, description="The same if it had been the only idea tried.")
 
 
+class TriesRow(BaseModel):
+    tries: int
+    luck_bar_annual: float
+    chance_beats_luck_pct: float
+
+
+class ClaimCheck(BaseModel):
+    """
+    A claim of the form "annual Sharpe X over Y years after Z attempts", judged the way this project judges its own results: against what the best of Z attempts with no skill would show
+    by chance. Assumes normally distributed daily returns (which flatters option-selling and other rare-large-loss strategies). Nothing here is about any real strategy.
+    """
+    claimed_annual: float
+    years: float
+    window_days: int
+    tries: int
+    luck_bar_annual: float = Field(description="The annual Sharpe the best of `tries` strategies with no skill would be expected to show over this many years.")
+    chance_of_no_edge_pct: float = Field(description="The chance, in percent, given the claim, that the true edge is zero or less.")
+    chance_beats_luck_pct: float = Field(description="The chance, in percent, that the true edge is better than the luck bar.")
+    clears_luck_bar: bool = Field(description="At least 95% likely to beat the luck bar.")
+    edge_needed_annual: float = Field(description="The annual Sharpe that WOULD be 95% likely to beat the luck bar over this many years and this many tries.")
+    years_needed: Optional[float] = Field(None, description="Years of data this claimed edge would need to be 95% likely to beat the luck bar; null beyond 300 or for a claim of zero or less.")
+    by_tries: list[TriesRow] = Field(description="The same claim judged after 1, 5, 20, 100 and 1000 attempts.")
+
+
 class StrategyReport(BaseModel):
     """Monthly returns, the spread of the trades, the worst stretches below a peak and the evidence, for one window of one strategy. Display only."""
     strategy_id: str

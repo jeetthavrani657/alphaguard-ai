@@ -1285,3 +1285,27 @@ def test_the_track_record_refuses_a_status_it_does_not_know_and_says_how_to_make
     monkeypatch.setenv("WEBAPP_TRACK_RECORD", str(tmp_path / "nope.json"))
     r = client.get("/api/track-record")
     assert r.status_code == 404 and "track_record.py" in r.json()["detail"]
+
+
+# --- the claim checker: a claim judged against luck, computed by the API from nothing but the three numbers -------------------
+
+def test_the_claim_check_judges_a_claim_and_keeps_its_inputs_in_view(client):
+    d = client.get("/api/claim-check", params={"claimed": 1.0, "years": 1.0, "tries": 1}).json()
+    assert d["claimed_annual"] == 1.0 and d["years"] == 1.0 and d["tries"] == 1 and d["window_days"] == 252
+    assert d["luck_bar_annual"] == 0.0 and d["clears_luck_bar"] is False and 15.9 < d["chance_of_no_edge_pct"] < 16.0
+    assert [r["tries"] for r in d["by_tries"]] == [1, 5, 20, 100, 1000] and _find_bare_ratios(d) == []
+
+
+def test_the_same_claim_with_more_tries_gets_a_higher_bar(client):
+    one = client.get("/api/claim-check", params={"claimed": 2.0, "years": 3, "tries": 1}).json()
+    many = client.get("/api/claim-check", params={"claimed": 2.0, "years": 3, "tries": 500}).json()
+    assert many["luck_bar_annual"] > one["luck_bar_annual"] and many["chance_beats_luck_pct"] < one["chance_beats_luck_pct"] and many["edge_needed_annual"] > one["edge_needed_annual"]
+
+
+def test_the_claim_check_refuses_numbers_outside_what_it_can_judge(client):
+    ok = {"claimed": 1.0, "years": 3, "tries": 10}
+    assert client.get("/api/claim-check", params=ok).status_code == 200
+    for bad in ({"claimed": 11}, {"claimed": -6}, {"years": 0.4}, {"years": 51}, {"tries": 0}, {"tries": 100001}, {"claimed": "abc"}):
+        assert client.get("/api/claim-check", params={**ok, **bad}).status_code == 422, bad
+    assert client.get("/api/claim-check", params={"claimed": 1.0}).status_code == 422                        # the years are required
+    assert client.get("/api/claim-check", params={"claimed": 1.0, "years": 3}).json()["tries"] == 1            # tries default to one

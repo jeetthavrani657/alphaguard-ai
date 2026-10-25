@@ -111,3 +111,43 @@ def test_how_long_a_real_edge_takes_to_show_depends_on_how_many_ideas_were_tried
     assert 2.6 < e["years_needed_for_edge_of_1_single_try"] < 3.0                           # about 2.8 years if it was the only idea
     assert 18.5 < e["years_needed_for_edge_of_1"] < 21.0                                    # and close to 20 once about 220 were tried
     assert e["years_needed_for_edge_of_1"] > e["years_needed_for_edge_of_1_single_try"]
+
+
+# --- checking somebody else's claim ----------------------------------------------------------------------------------------------------------
+
+def test_a_single_try_over_a_year_is_judged_against_zero_by_hand():
+    c = rp.claim_check(1.0, 1.0, 1)
+    # daily Sharpe = 1/sqrt(252) = 0.06299; times sqrt(251) = 0.9980; over sqrt(1 + 0.5 x 0.06299^2) = 1.00099 gives 0.9970: Phi(0.997) = 0.8407, so a 15.9% chance of no edge
+    assert c["window_days"] == 252 and c["luck_bar_annual"] == 0.0
+    assert c["chance_of_no_edge_pct"] == pytest.approx(15.94, abs=0.02) and c["chance_beats_luck_pct"] == pytest.approx(84.06, abs=0.02) and c["clears_luck_bar"] is False      # Phi(0.997) = 0.84134 - 0.003 x 0.24197 = 0.84061
+
+
+def test_the_same_claim_after_more_tries_faces_a_higher_bar_and_is_less_likely_to_beat_it():
+    rows = rp.claim_check(1.5, 5.0, 1)["by_tries"]
+    assert [r["tries"] for r in rows] == [1, 5, 20, 100, 1000] and rows[0]["luck_bar_annual"] == 0.0
+    assert [r["luck_bar_annual"] for r in rows] == sorted(r["luck_bar_annual"] for r in rows) and len({r["luck_bar_annual"] for r in rows}) == 5
+    assert [r["chance_beats_luck_pct"] for r in rows] == sorted((r["chance_beats_luck_pct"] for r in rows), reverse=True)
+
+
+def test_the_luck_bar_and_the_years_needed_match_the_projects_own_figures():
+    c = rp.claim_check(1.0, 1175 / 252, 220)
+    assert c["window_days"] == 1175 and 1.2 < c["luck_bar_annual"] < 1.4                                      # as OVERFIT_CHECKS.md says
+    assert c["years_needed"] == rp.evidence(1175, 220)["years_needed_for_edge_of_1"]                           # the same 19.8 years the strategy pages show
+    assert c["clears_luck_bar"] is False and c["chance_of_no_edge_pct"] < 5                                      # a real-looking edge that still cannot be told from the best of 220 tries
+
+
+def test_the_edge_that_would_be_needed_is_exactly_the_one_that_clears_with_95_percent():
+    c = rp.claim_check(1.0, 3.0, 40)
+    need = c["edge_needed_annual"]
+    just = rp.claim_check(need + 0.01, 3.0, 40)
+    short = rp.claim_check(need - 0.01, 3.0, 40)
+    assert just["clears_luck_bar"] is True and short["clears_luck_bar"] is False
+    assert just["chance_beats_luck_pct"] == pytest.approx(95.0, abs=0.5) and short["chance_beats_luck_pct"] == pytest.approx(95.0, abs=0.5)
+    assert rp.claim_check(1.0, 3.0, 400)["edge_needed_annual"] > need > rp.claim_check(1.0, 3.0, 1)["edge_needed_annual"]       # more tries, a higher bar to clear
+
+
+def test_a_losing_claim_never_clears_and_has_no_years_needed_and_a_short_window_is_floored():
+    c = rp.claim_check(-0.5, 5.0, 1)
+    assert c["clears_luck_bar"] is False and c["chance_of_no_edge_pct"] > 50 and c["years_needed"] is None
+    assert rp.claim_check(1.0, 0.5, 1)["window_days"] == 126                                                    # the shortest window the page accepts: half a year
+    assert rp.claim_check(1.0, 1.0, 0)["tries"] == 1                                                            # zero tries is read as one

@@ -359,6 +359,15 @@ def run_checks(base: str) -> None:
     check(all(c["status"] != "PASS" or (c.get("versions") or 2) >= 2 or c["id"] == "ledger_chain" for c in tr["checks"] if c["id"] != "frozen_first"), "a check that compared fewer than two versions is never a pass")
     check(len(tr["documents"]) >= 3 and all(d["first_commit"] for d in tr["documents"]), "every design document is in git with its first commit")
 
+    print("[smoke] claim checker")
+    st, cc = fetch(base, "/api/claim-check?claimed=1&years=1&tries=1")
+    check(st == 200 and bare_ratios(cc) == [] and cc["luck_bar_annual"] == 0.0 and abs(cc["chance_of_no_edge_pct"] - 15.94) < 0.05, "a single try over a year: no luck bar, a 15.9% chance of no edge (worked out by hand)")
+    st, ev = fetch(base, "/api/strategies/ma_crossover_nifty50/report?window=out_of_sample")
+    st2, cm = fetch(base, f"/api/claim-check?claimed=1&years={ev['evidence']['window_years']}&tries={ev['evidence']['ideas_tried']}")
+    check(st2 == 200 and abs(cm["luck_bar_annual"] - ev["evidence"]["luck_bar_annual"]) < 0.02 and cm["years_needed"] == ev["evidence"]["years_needed_for_edge_of_1"],
+          "the claim checker and a strategy's evidence panel give the same luck bar and the same years needed")
+    check(fetch(base, "/api/claim-check?claimed=1&years=0.1&tries=1")[0] == 422 and fetch(base, "/api/claim-check?claimed=1&years=3&tries=0")[0] == 422, "out-of-range claims are refused")
+
     print("[smoke] go-live gates")
     st, gl = fetch(base, "/api/golive")
     check(st == 200 and len(gl["rules"]) >= 3, "go-live gates respond with every paper rule")

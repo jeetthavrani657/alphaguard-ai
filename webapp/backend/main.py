@@ -460,6 +460,14 @@ def stock_selection():
         survivorship=None if survivorship is None else schemas.SurvivorshipCheck(**survivorship))
 
 
+@api.get("/claim-check", response_model=schemas.ClaimCheck,
+         summary="Judge a claim 'annual Sharpe X over Y years after Z attempts' against what luck alone would produce (webapp/backend/report.py).")
+def claim_check(claimed: float = Query(..., ge=-5, le=10, description="The claimed annual Sharpe ratio."),
+                years: float = Query(..., ge=0.5, le=50, description="Years of data the claim rests on."),
+                tries: int = Query(1, ge=1, le=100000, description="How many variants or ideas were tried to get this result.")):
+    return schemas.ClaimCheck(**rp.claim_check(claimed, years, tries))
+
+
 @api.get("/track-record", response_model=schemas.TrackRecord,
          summary="Checks, made from git history, that the idea count and the forward results were never rewritten (research/track_record.py).")
 def track_record():

@@ -18,6 +18,7 @@ const Screener = named(() => import("./pages/Screener"), "Screener");
 const Stock = named(() => import("./pages/Stock"), "Stock");
 const Strategies = named(() => import("./pages/Strategies"), "Strategies");
 const Compare = named(() => import("./pages/Compare"), "Compare");
+const ClaimChecker = named(() => import("./pages/ClaimChecker"), "ClaimChecker");
 const TrackRecord = named(() => import("./pages/TrackRecord"), "TrackRecord");
 const ReportCard = named(() => import("./pages/ReportCard"), "ReportCard");
 const StrategyPage = named(() => import("./pages/StrategyPage"), "StrategyPage");
@@ -41,12 +42,13 @@ const Methodology = named(() => import("./pages/Methodology"), "Methodology");
 //   /stock/:symbol        Stock cockpit   one stock: chart, strategy slices, data quality
 //   /paper                Paper trading   frozen candidates run forward, against buy-and-hold
 //   /track-record         Track record    checks, from git history, that the record was never rewritten
+//   /claim-checker        Claim checker   judge "Sharpe X over Y years after Z tries" against what luck produces
 //   /research             Research log    hypothesis ledger, forward test, data quality
 //   /methodology          How it works    how the results were produced and what they cannot show
 const TITLES: [RegExp, string][] = [
   [/^\/$/, "Home"], [/^\/advisory/, "Portfolio advisor"], [/^\/multiasset/, "Multi-asset trading rules"],
   [/^\/compare/, "Compare strategies"], [/^\/strategies\/[^/]+\/card$/, "Report card"], [/^\/strategies\/.+/, "Strategy"], [/^\/strategies/, "Strategies"], [/^\/screener/, "Stocks"],
-  [/^\/stock\/(.+)/, "Stock"], [/^\/paper/, "Paper trading"], [/^\/research/, "Research log"], [/^\/track-record/, "Track record"], [/^\/methodology/, "How it works"],
+  [/^\/stock\/(.+)/, "Stock"], [/^\/paper/, "Paper trading"], [/^\/research/, "Research log"], [/^\/track-record/, "Track record"], [/^\/claim-checker/, "Claim checker"], [/^\/methodology/, "How it works"],
 ];
 
 /**
@@ -122,6 +124,7 @@ export default function App() {
             <Route path="/paper" element={<PaperTrading />} />
             <Route path="/research" element={<Research />} />
             <Route path="/track-record" element={<TrackRecord />} />
+            <Route path="/claim-checker" element={<ClaimChecker />} />
             <Route path="/methodology" element={<Methodology />} />
             <Route path="*" element={<div className="note">No such page. <a href="/">Back to the home page</a>.</div>} />
           </Routes>

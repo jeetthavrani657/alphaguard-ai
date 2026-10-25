@@ -110,3 +110,48 @@ def evidence(n_days: int, n_trials: int) -> dict:
     bar = _expected_max_sharpe(tries, 1.0 / (days - 1.0)) * math.sqrt(TRADING_DAYS)
     return {"ideas_tried": int(n_trials), "window_days": int(n_days), "window_years": round(n_days / TRADING_DAYS, 2), "luck_bar_annual": round(bar, 3),
             "years_needed_for_edge_of_1": _years_needed(1.0, tries), "years_needed_for_edge_of_1_single_try": _years_needed(1.0, 1)}
+
+
+# --- checking somebody else's claim ----------------------------------------------------------------------------------------------------------
+
+CLAIM_PASS_PROBABILITY = 0.95          # a claim "clears the luck bar" when it is at least this likely to beat what the best of that many tries would show by chance
+TRIES_SHOWN = [1, 5, 20, 100, 1000]    # the same claim after more and more attempts: how a good-looking number is produced by trying
+
+
+def _beats(sr_daily: float, bar_daily: float, days: int) -> float:
+    """The probability that the TRUE daily Sharpe is above `bar_daily`, given a measured `sr_daily` over `days` days (normal returns: skew 0, kurtosis 3)."""
+    return _NORMAL.cdf((sr_daily - bar_daily) * math.sqrt(days - 1.0) / math.sqrt(1.0 + 0.5 * sr_daily ** 2))
+
+
+def claim_check(claimed_annual: float, years: float, tries: int) -> dict:
+    """
+    Judges a claim of the form "annual Sharpe X over Y years, after Z attempts" the way the project judges its own results. Returns the luck bar (what the best of Z no-skill attempts would
+    show by chance over Y years), how likely the claim is to be better than zero and better than that bar, the annual Sharpe that WOULD clear the bar over this many years, how many years of
+    data this claim would need, and the same claim after more attempts. Assumes normally distributed daily returns, which flatters strategies that sell options or fall rarely and hard.
+    """
+    days = max(int(years * TRADING_DAYS), 30)
+    tries = max(int(tries), 1)
+    sr = claimed_annual / math.sqrt(TRADING_DAYS)
+    var = 1.0 / (days - 1.0)
+
+    def bar(n: int) -> float:
+        return _expected_max_sharpe(n, var)
+
+    def needed() -> float:
+        lo, hi = 0.0, 20.0                                     # the page accepts at most 100000 tries over at least half a year, where an annual 20 always clears; bisect between
+        for _ in range(60):
+            mid = (lo + hi) / 2.0
+            if _beats(mid / math.sqrt(TRADING_DAYS), bar(tries), days) >= CLAIM_PASS_PROBABILITY:
+                hi = mid
+            else:
+                lo = mid
+        return hi
+
+    beats_luck = _beats(sr, bar(tries), days)
+    return {"claimed_annual": claimed_annual, "years": years, "window_days": days, "tries": tries,
+            "luck_bar_annual": round(bar(tries) * math.sqrt(TRADING_DAYS), 3),
+            "chance_of_no_edge_pct": round((1.0 - _beats(sr, 0.0, days)) * 100.0, 2),
+            "chance_beats_luck_pct": round(beats_luck * 100.0, 2), "clears_luck_bar": beats_luck >= CLAIM_PASS_PROBABILITY,
+            "edge_needed_annual": round(needed(), 3),
+            "years_needed": _years_needed(claimed_annual, tries) if claimed_annual > 0 else None,
+            "by_tries": [{"tries": n, "luck_bar_annual": round(bar(n) * math.sqrt(TRADING_DAYS), 3), "chance_beats_luck_pct": round(_beats(sr, bar(n), days) * 100.0, 2)} for n in TRIES_SHOWN]}
