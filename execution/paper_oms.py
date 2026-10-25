@@ -25,6 +25,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_DIR = os.path.join(PROJECT_ROOT, "execution", "state")      # git-ignored run state: journal, account, tickets, the kill file
 KILL_FILE = "KILL"                                                  # exists = nothing new may be submitted
 HALT_FILE = "HALT_RECON"                                            # written when reconciliation finds a difference; needs a person to clear it
+ACCOUNT_HALT_FILE = "HALT_ACCOUNT"                                  # written by the account-level risk rules (execution/risk_rules.py); needs a person to clear it
 JOURNAL_FILE = "journal.jsonl"
 GENESIS = "0" * 64                                                  # the "previous hash" of the very first journal line
 
@@ -50,6 +51,13 @@ def kill_switch_engaged(state_dir: str | None = None) -> tuple:
         except OSError:
             detail = "(the reason could not be read)"
         return True, f"halted after a reconciliation difference; a person must look and clear it: {detail}"
+    if ACCOUNT_HALT_FILE in names:
+        try:
+            with open(os.path.join(folder, ACCOUNT_HALT_FILE), encoding="utf-8") as f:
+                detail = f.read().strip()
+        except OSError:
+            detail = "(the reason could not be read)"
+        return True, f"halted by an account risk rule; a person must look and clear it: {detail}"
     return False, ""
 
 
@@ -78,15 +86,32 @@ def set_halt(reason: str, state_dir: str | None = None) -> None:
     append_event("HALT_SET", {"reason": reason}, folder)
 
 
+def set_account_halt(reason: str, state_dir: str | None = None) -> None:
+    """An account risk rule stopped everything (execution/risk_rules.py). Journalled once: a second call while the halt is in force changes nothing."""
+    folder = state_dir or STATE_DIR
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, ACCOUNT_HALT_FILE)
+    if os.path.exists(path):
+        return
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(reason + "\n")
+    append_event("ACCOUNT_HALT_SET", {"reason": reason}, folder)
+
+
+def account_halt_engaged(state_dir: str | None = None) -> bool:
+    return os.path.exists(os.path.join(state_dir or STATE_DIR, ACCOUNT_HALT_FILE))
+
+
 def clear_halt(note: str, state_dir: str | None = None) -> None:
-    """A person has looked at the reconciliation difference. The note is required and goes into the journal."""
+    """A person has looked at the halt (a reconciliation difference or an account risk rule). The note is required and goes into the journal."""
     if not note.strip():
         raise ValueError("clearing a halt needs a written note saying what was checked")
     folder = state_dir or STATE_DIR
-    path = os.path.join(folder, HALT_FILE)
-    if os.path.exists(path):
-        os.remove(path)
-        append_event("HALT_CLEARED", {"note": note}, folder)
+    for name, kind in ((HALT_FILE, "HALT_CLEARED"), (ACCOUNT_HALT_FILE, "ACCOUNT_HALT_CLEARED")):
+        path = os.path.join(folder, name)
+        if os.path.exists(path):
+            os.remove(path)
+            append_event(kind, {"note": note}, folder)
 
 
 # ---------------------------------------------------------------------------------------------------------------------

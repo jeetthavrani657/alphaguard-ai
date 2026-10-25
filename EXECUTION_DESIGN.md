@@ -87,6 +87,7 @@ The steps are separate so a person stands between the rule and the account: `pro
 | Idempotency | A decision always has the same client id (a hash of rule, formation date, symbol, side, quantity); a second submission is refused. |
 | Reconciliation | Account shares and cash are compared with what the fills explain. A difference no order explains halts everything. A limit order that did not fill is reported as unfilled, not as an error. |
 | Costs and slippage | Every fill pays the engine's Indian cost model including 0.05% slippage. Comparing real fills with that assumption is for a real account and does not exist yet. |
+| Account risk | `execution/risk_rules.py` (RISK_RULES.md): a drawdown breaker (warning 5%, halt 10%, review 15% below the account's highest value) and a daily loss limit (3%), run on every proposal. A halt stops every ticket, fails closed, and needs a written note to clear; clearing resets the highest value, journalled. The numbers are proposals the owner has not yet confirmed. |
 | Paper first | This is the paper stage; no real account is involved. |
 | Audit | An append-only, hash-chained journal (`execution/state/journal.jsonl`, git-ignored). It shows tampering; it does not prevent it. |
 

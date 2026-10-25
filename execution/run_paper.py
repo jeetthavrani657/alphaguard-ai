@@ -33,6 +33,7 @@ import pandas as pd
 
 import config
 import paper_oms as oms
+import risk_rules as rk
 import sim_broker as sb
 
 DEFAULT_PATHS = {"state": oms.STATE_DIR,
@@ -130,6 +131,10 @@ def cmd_propose(book_id: str, paths: dict, initial_cash: float | None = None, re
         equity = sb.account_equity(account, prices)
     except ValueError as e:                                                         # a held stock has no current price, so the account cannot be valued
         raise StepError(f"cannot value the account: {e}") from None
+    risk = rk.assess(account, equity, session.strftime("%Y-%m-%d"))               # the account-level rules: a halt here stops every ticket below, whatever the rule says
+    sb.save_account(account, paths["state"])
+    if risk["halt"]:
+        oms.set_account_halt("; ".join(risk["reasons"]), paths["state"])
     limits = oms.default_limits(equity)
     priced_targets = {s: w for s, w in target["targets_pct"].items() if s in prices}      # a stock with a stale price is reported once, below, and not traded
     built = oms.build_tickets(book_id, target["formation_date"], priced_targets, account["positions"], prices, equity, limits)
@@ -137,7 +142,7 @@ def cmd_propose(book_id: str, paths: dict, initial_cash: float | None = None, re
     intended = {s: int(math.floor(target["targets_pct"].get(s, 0.0) / 100.0 * equity / prices[s])) for s in symbols if s in prices}
     batch = {"book": book_id, "formation_date": target["formation_date"], "session_day": session.strftime("%Y-%m-%d"), "equity": equity,
              "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "start_positions": dict(account["positions"]),
-             "intended_positions": intended, "limits": limits, "tickets": checked["passed"],
+             "intended_positions": intended, "limits": limits, "risk": risk, "tickets": checked["passed"],
              "rejected": [{"ticket": t, "reasons": r} for t, r in checked["rejected"]], "skipped": built["skipped"] + stale}
     os.makedirs(paths["state"], exist_ok=True)
     _write_json(path, batch)
@@ -227,6 +232,22 @@ def cmd_reconcile(paths: dict, batch_name: str | None = None, initial_cash: floa
     return {"batch": name, **report}
 
 
+def cmd_clear_halt(paths: dict, note: str, initial_cash: float | None = None) -> dict:
+    """
+    A person has looked and says so in writing. Clears a reconciliation halt and an account risk halt. For an account halt the highest value is reset to the last value seen, journalled with the old one and the
+    note: otherwise the same fall would halt the very next proposal and the account could never be resumed. Each later fall of the same size needs its own note.
+    """
+    had_account_halt = oms.account_halt_engaged(paths["state"])
+    oms.clear_halt(note, paths["state"])                                              # raises if the note is empty, before anything changes
+    if not had_account_halt:
+        return {"rebased": False}
+    account = sb.load_account(paths["state"], float(config.INITIAL_CAPITAL if initial_cash is None else initial_cash))
+    old, new = rk.rebase_peak(account)
+    sb.save_account(account, paths["state"])
+    oms.append_event("PEAK_REBASED", {"old_peak": old, "new_peak": new, "note": note}, paths["state"])
+    return {"rebased": True, "old_peak": old, "new_peak": new}
+
+
 def cmd_status(paths: dict, initial_cash: float | None = None) -> dict:
     engaged, why = oms.kill_switch_engaged(paths["state"])
     ok, problem = oms.verify_journal(paths["state"])
@@ -244,7 +265,11 @@ def cmd_status(paths: dict, initial_cash: float | None = None) -> dict:
     counts = {}
     for o in account["orders"].values():
         counts[o["status"]] = counts.get(o["status"], 0) + 1
-    return {"stopped": engaged, "why_stopped": why, "journal_ok": ok, "journal_problem": problem, "cash": account["cash"], "positions": account["positions"],
+    risk = None
+    if equity is not None:
+        peek = json.loads(json.dumps(account))                                       # look at the marks without writing them: status changes nothing
+        risk = rk.assess(peek, equity, datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    return {"risk": risk, "stopped": engaged, "why_stopped": why, "journal_ok": ok, "journal_problem": problem, "cash": account["cash"], "positions": account["positions"],
             "equity": equity, "orders_by_status": counts, "batches": _batch_files(paths["state"])}
 
 
@@ -252,6 +277,11 @@ def cmd_status(paths: dict, initial_cash: float | None = None) -> dict:
 
 def _show_batch(r: dict) -> None:
     print(f"Batch {r['batch']}: rule {r['book']}, formed {r['formation_date']}, prices of {r['session_day']}, account value {r['equity']:,.0f}")
+    risk = r.get("risk")
+    if risk and risk["halt"]:
+        print("  ACCOUNT HALTED: " + "; ".join(risk["reasons"]) + " (a person clears it with: clear-halt --note ...)")
+    elif risk and risk["level"] == rk.WARNING:
+        print(f"  WARNING: the account is {risk['drawdown_pct']}% below its highest value; nothing is stopped yet")
     for t in r["tickets"]:
         print(f"  {t['client_id']}  {t['side']:<4} {t['quantity']:>6} {t['symbol']:<12} limit {t['limit_price']:>9.2f}  about {t['quantity'] * t['reference_price']:>10,.0f}  | {t['reason']}")
     for item in r["rejected"]:
@@ -300,7 +330,8 @@ def main(argv=None, paths: dict | None = None) -> int:
         elif args.command == "release":
             oms.release_kill(paths["state"]); print("kill switch released (a reconciliation halt, if any, is separate)")
         elif args.command == "clear-halt":
-            oms.clear_halt(args.note, paths["state"]); print("halt cleared and the note journalled")
+            r = cmd_clear_halt(paths, args.note)
+            print("halt cleared and the note journalled" + (f"; the account's highest value is now {r['new_peak']:,.0f} (was {r['old_peak']:,.0f})" if r["rebased"] else ""))
     except (StepError, ValueError) as e:
         print(f"cannot do that: {e}")
         return 1

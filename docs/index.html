@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AlphaGuard AI: track record checks</title>
+<meta name="description" content="Checks, made from the public git history, that this research project's idea ledger and paper-trading files were never rewritten.">
+<style>
+:root { --bg:#ffffff; --text:#1b2430; --muted:#5b6878; --line:#d9e0e8; --panel:#f5f7fa; --pass:#1a7f37; --fail:#c62631; --early:#8f5f00; --link:#0b64c0; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0e141b; --text:#d7dee8; --muted:#8494a8; --line:#243040; --panel:#131b24; --pass:#3fb950; --fail:#f85149; --early:#e3b341; --link:#4da3ff; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 26px; margin: 0 0 4px; } h2 { font-size: 18px; margin: 28px 0 8px; }
+p { margin: 8px 0; } .muted { color: var(--muted); font-size: 14px; }
+a { color: var(--link); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
+.tablewrap { overflow-x: auto; }
+.pass { color: var(--pass); font-weight: 600; } .fail { color: var(--fail); font-weight: 700; } .early { color: var(--early); font-weight: 600; }
+.banner { padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid var(--pass); background: var(--panel); border-radius: 6px; }
+.banner.bad { border-left-color: var(--fail); }
+code, pre { font: 13px ui-monospace, Consolas, monospace; } pre { background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; border-radius: 8px; overflow-x: auto; }
+footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--line); }
+</style></head>
+<body><main>
+<h1>AlphaGuard AI: is the record honest?</h1>
+<p class="muted">A research project on Indian equities. This page does not say any strategy makes money. It shows only whether the project's own record has been kept straight.</p>
+<p class="banner" role="status"><b>No check failed.</b> 220 ideas are counted in the ledger.</p>
+
+<h2>Was the record rewritten?</h2>
+<p>Every idea tried is counted in a ledger, every design is written down before it is tested, and every day of paper trading is kept as it was first written. These checks are made from the history of the public repository, which cannot be quietly edited afterwards.</p>
+<div class="tablewrap"><table><thead><tr><th>Check</th><th>Result</th><th>What was found</th></tr></thead><tbody><tr><td><b>The idea count is an unbroken chain</b></td><td class="pass">Passed</td><td>15 runs, each starting where the last ended; the total, 220, is the sum of them.</td></tr><tr><td><b>The list of ideas tried was never edited, only added to</b></td><td class="pass">Passed</td><td>8 saved versions compared; every earlier run is still there, unchanged.</td></tr><tr><td><b>forward_snapshots.csv: earlier days were never rewritten</b></td><td class="pass">Passed</td><td>3 saved versions compared; no earlier row changed.</td></tr><tr><td><b>forward_books.csv: earlier days were never rewritten</b></td><td class="pass">Passed</td><td>2 saved versions compared; no earlier row changed.</td></tr><tr><td><b>advisory_forward.csv: earlier days were never rewritten</b></td><td class="pass">Passed</td><td>4 saved versions compared; no earlier row changed.</td></tr><tr><td><b>Each design was committed before its forward test began</b></td><td class="pass">Passed</td><td>FORWARD_TEST.md committed 2026-10-16, first counted day 2026-10-20; FORWARD_BOOKS.md committed 2026-10-16, first counted day 2026-10-20; ADVISORY.md committed 2026-10-19, first counted day 2026-10-22</td></tr><tr><td><b>Each idea tried through the builder was saved before it was run, and not changed since</b></td><td class="early">Too early to check</td><td>No idea has gone through the builder yet (research/try_idea.py), so there is nothing to check.</td></tr></tbody></table></div>
+<p class="muted">"Too early to check" means there is not yet enough history to test it. It is never shown as a pass.</p>
+
+<h2>Designs written down first</h2>
+<div class="tablewrap"><table><thead><tr><th>Document</th><th>First saved</th><th>Edited since</th><th>Test counted from</th><th>Saved before the test began?</th></tr></thead><tbody><tr><td><b>FORWARD_TEST.md</b></td><td>2026-10-16 · <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/221eff9cd3904df63e134812f72db0c351e46fb3" rel="noopener">221eff9</a></td><td>0</td><td>2026-10-20</td><td>yes</td></tr><tr><td><b>FORWARD_BOOKS.md</b></td><td>2026-10-16 · <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/fd381b9ae1c6df4b2644d4ec078a58c4416cd0b7" rel="noopener">fd381b9</a></td><td>0</td><td>2026-10-20</td><td>yes</td></tr><tr><td><b>ADVISORY.md</b></td><td>2026-10-19 · <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/f286de6bed7b5f56106c38b852fb2c4f642c399b" rel="noopener">f286de6</a></td><td>3</td><td>2026-10-22</td><td>yes</td></tr><tr><td><b>GO_LIVE_GATES.md</b></td><td>2026-10-25 · <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/5b2b6c7ee1b67e719963ec43cee6c6ad3aec7d7c" rel="noopener">5b2b6c7</a></td><td>1</td><td>—</td><td>not judged</td></tr><tr><td><b>OPTIONS_IDEAS.md</b></td><td>2026-10-23 · <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/656dba97c0fb46b44e5d924335ff57e8afeeda48" rel="noopener">656dba9</a></td><td>0</td><td>—</td><td>not judged</td></tr><tr><td><b>INTRADAY_IDEAS.md</b></td><td>2026-10-24 · <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/8705140f26891be9819d39308e77a620e867ba6e" rel="noopener">8705140</a></td><td>1</td><td>—</td><td>not judged</td></tr></tbody></table></div>
+<p class="muted">"Before" is judged by the order of the saved versions, not by their dates, because a date can be set to anything.</p>
+
+<h2>Check it yourself</h2>
+<p>You do not have to trust this page. The code, the idea ledger, the design documents and every saved version of the paper-trading files are in <a href="https://github.com/jeetthavrani657/alphaguard-ai" rel="noopener">github.com/jeetthavrani657/alphaguard-ai</a>. After copying the repository, one command repeats every check above from the history:</p>
+<pre>python research/track_record.py</pre>
+<p class="muted">These checks ran at commit <a href="https://github.com/jeetthavrani657/alphaguard-ai/commit/41dcc0151d49c9f3833aa86120e070068bc63f18" rel="noopener">41dcc01</a>. They cannot show that numbers were measured correctly, only that nothing was changed after it was written.</p>
+
+<footer>
+<p><b>Research only. This is not investment advice and not an offer of any product or service.</b> Nothing here recommends buying or selling anything, and no result on this page is a claim about future returns. The project places no orders and cannot touch any account.</p>
+<p class="muted">Checks made 2026-10-25T10:26:48Z. Page built 25 Oct 2026, 10:26 UTC. A page that is older than that may be out of date.</p>
+</footer>
+</main></body></html>
