@@ -146,6 +146,18 @@ def load_other_rules_raw() -> dict:
     return out
 
 
+def condor_payoff_path() -> str:
+    return os.environ.get("WEBAPP_CONDOR_PAYOFF", os.path.join(ROOT, "reports", "output", "condor_payoff_latest.json"))
+
+
+def load_condor_payoff_raw() -> dict:
+    """research/condor_payoff.py's latest file: real condor trades with their payoff curves, and implied against realised volatility by year. Read back untouched."""
+    path = condor_payoff_path()
+    if not os.path.exists(path):
+        raise NotFound("No condor payoff file yet. Generate it from the project root with: python research/condor_payoff.py")
+    return _read_json(path)
+
+
 def golive_gates_path() -> str:
     return os.environ.get("WEBAPP_GOLIVE_GATES", os.path.join(ROOT, "reports", "output", "golive_gates_latest.json"))
 

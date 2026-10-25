@@ -26,6 +26,8 @@ export function chartColors() {
     volume: css("--volume", "#3a4859"),
     drawdown: css("--neg", "#f85149"),
     exposure: css("--muted", "#8494a8"),
+    // three distinguishable lines for the compare view; none is the buy-and-hold yellow, which means "the benchmark" everywhere else
+    series: [css("--accent", "#4da3ff"), css("--sma200", "#bc8cff"), css("--rsi", "#39c5cf")],
   };
 }
 

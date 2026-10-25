@@ -36,6 +36,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
+from . import report as rp
 from . import schemas, store
 
 app = FastAPI(
@@ -174,6 +175,24 @@ def get_trades(
     return schemas.TradePage(total=len(data.closed_trades), closed_trades=data.closed_trades[offset:offset + limit], **page)
 
 
+@api.get("/strategies/{strategy_id}/report", response_model=schemas.StrategyReport,
+         summary="Monthly returns, the spread of the trades, the deepest falls and the evidence for one window: other views of numbers already stored.")
+def get_report(strategy_id: str, window: schemas.Window = Query(..., description="in_sample or out_of_sample")):
+    sf = store.load_strategy_file(strategy_id)
+    data = sf.data[window]
+    growth, bench = data.growth_strategy or data.equity_strategy, data.growth_benchmark or data.equity_benchmark
+    base = 100.0 if data.growth_strategy else None            # a "growth of 100" series starts from 100 on the day BEFORE its first value, so the first month is measured from there
+    dd_s, dd_b = data.drawdown_strategy_pct, data.drawdown_benchmark_pct
+    return schemas.StrategyReport(
+        strategy_id=strategy_id, window=window,
+        monthly_strategy=rp.monthly_returns(growth.dates, growth.values, base),
+        monthly_benchmark=rp.monthly_returns(bench.dates, bench.values, base if data.growth_benchmark else None),
+        trade_histogram=None if sf.detail.kind == "portfolio" else rp.trade_histogram([t.return_pct for t in data.closed_trades]),
+        drawdown_periods_strategy=rp.drawdown_periods(dd_s.dates, dd_s.values) if dd_s else [],
+        drawdown_periods_benchmark=rp.drawdown_periods(dd_b.dates, dd_b.values) if dd_b else [],
+        evidence=rp.evidence(len(growth.dates), sf.detail.as_of_hypotheses))
+
+
 @api.get("/data-quality", response_model=schemas.DataQualityResponse,
          summary="Per-symbol validator results and price discontinuities.")
 def data_quality(
@@ -213,7 +232,7 @@ def screener(
     latest = store.load_latest_prices() or {}
     prices = latest.get("prices", {})
     rows = [r.model_copy(update={"latest": schemas.LatestPrice(**prices[r.symbol]) if r.symbol in prices else None}) for r in rows]
-    return data.model_copy(update={"rows": rows, "latest_prices_through": latest.get("as_of")})
+    return data.model_copy(update={"rows": rows, "latest_prices_through": latest.get("as_of"), "sectors": sorted({r.sector for r in data.rows if r.sector})})
 
 
 @api.get("/symbols/{symbol}", response_model=schemas.SymbolDetail,
@@ -439,6 +458,16 @@ def stock_selection():
         generated_at=raw["generated_at"], ledger_total_at_generation=total, ledger_total_now=now,
         is_stale=(now is not None and now != total), ideas=ideas,
         survivorship=None if survivorship is None else schemas.SurvivorshipCheck(**survivorship))
+
+
+@api.get("/options-explainer", response_model=schemas.CondorExplainer,
+         summary="Real condor trades with their payoff at expiry, where the Nifty landed against the shorts, and implied against realised volatility by year (research/condor_payoff.py).")
+def options_explainer():
+    raw = store.load_condor_payoff_raw()
+    return schemas.CondorExplainer(
+        generated_at=raw["generated_at"], data_through=raw["data_through"],
+        rules=[schemas.CondorRuleView(id=rid, **r) for rid, r in raw["rules"].items()],
+        years=raw["volatility"]["years"], series=raw["volatility"]["series"])
 
 
 @api.get("/otherrules", response_model=schemas.OtherRulesResponse,

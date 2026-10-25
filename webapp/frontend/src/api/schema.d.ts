@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/strategies/{strategy_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Monthly returns, the spread of the trades, the deepest falls and the evidence for one window: other views of numbers already stored. */
+        get: operations["get_report_api_strategies__strategy_id__report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/data-quality": {
         parameters: {
             query?: never;
@@ -234,6 +251,23 @@ export interface paths {
         };
         /** Stock-selection ideas (research/factor_ideas.py): three registered hypotheses against a no-selection benchmark and random picks. */
         get: operations["stock_selection_api_stockselection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/options-explainer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Real condor trades with their payoff at expiry, where the Nifty landed against the shorts, and implied against realised volatility by year (research/condor_payoff.py). */
+        get: operations["options_explainer_api_options_explainer_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -865,6 +899,110 @@ export interface components {
             /** Total Costs */
             total_costs: number;
         };
+        /**
+         * CondorCycle
+         * @description Every trade as one dot: where the Nifty finished against the two short strikes.
+         */
+        CondorCycle: {
+            /** Expiry */
+            expiry: string;
+            /** Final Level */
+            final_level: number;
+            /** Short Put */
+            short_put: number;
+            /** Short Call */
+            short_call: number;
+            /** Net Pnl */
+            net_pnl: number;
+        };
+        /**
+         * CondorExplainer
+         * @description How the two frozen iron-condor rules really paid (research/condor_payoff.py): real trades with their payoff at expiry, every trade's landing place, and the
+         *     implied-against-realised volatility that the rules try to collect. A description, not a hypothesis; nothing here is counted or judged.
+         */
+        CondorExplainer: {
+            /** Generated At */
+            generated_at: string;
+            /** Data Through */
+            data_through: string;
+            /** Rules */
+            rules: components["schemas"]["CondorRuleView"][];
+            /** Years */
+            years: components["schemas"]["VolYear"][];
+            /** Series */
+            series: components["schemas"]["VolPoint"][];
+        };
+        /** CondorRuleView */
+        CondorRuleView: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Trades */
+            trades: components["schemas"]["CondorTrade"][];
+            /** Cycles */
+            cycles: components["schemas"]["CondorCycle"][];
+        };
+        /**
+         * CondorTrade
+         * @description One REAL trade of a condor rule, with its payoff at expiry. Rupees; strikes in Nifty points; the money figures are for the whole position (all lots).
+         */
+        CondorTrade: {
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "worst" | "best" | "typical" | "latest";
+            /** Entry Day */
+            entry_day: string;
+            /** Expiry */
+            expiry: string;
+            /** Lots */
+            lots: number;
+            /**
+             * Units
+             * @description Lots times the lot size: how many Nifty units the position is.
+             */
+            units: number;
+            /** Long Put */
+            long_put: number;
+            /** Short Put */
+            short_put: number;
+            /** Short Call */
+            short_call: number;
+            /** Long Call */
+            long_call: number;
+            /**
+             * Credit Per Unit
+             * @description Premium received per unit, in Nifty points.
+             */
+            credit_per_unit: number;
+            /** Width */
+            width: number;
+            /** Breakeven Low */
+            breakeven_low: number;
+            /** Breakeven High */
+            breakeven_high: number;
+            /** Max Profit */
+            max_profit: number;
+            /** Max Loss */
+            max_loss: number;
+            /**
+             * Final Level
+             * @description Where the Nifty actually settled at expiry.
+             */
+            final_level: number;
+            /** Gross Pnl */
+            gross_pnl: number;
+            /** Entry Cost */
+            entry_cost: number;
+            /** Exit Cost */
+            exit_cost: number;
+            /** Net Pnl */
+            net_pnl: number;
+            /** Payoff */
+            payoff: components["schemas"]["PayoffPoint"][];
+        };
         /** DataQualityResponse */
         DataQualityResponse: {
             /** Generated At */
@@ -891,6 +1029,24 @@ export interface components {
             status: string;
             /** Reason */
             reason?: string | null;
+        };
+        /** DrawdownPeriod */
+        DrawdownPeriod: {
+            /** Peak Date */
+            peak_date: string;
+            /** Trough Date */
+            trough_date: string;
+            /**
+             * Recovered Date
+             * @description null if it had not recovered by the last day of the window.
+             */
+            recovered_date?: string | null;
+            /** Depth Pct */
+            depth_pct: number;
+            /** Days Peak To Trough */
+            days_peak_to_trough: number;
+            /** Days Underwater */
+            days_underwater: number;
         };
         /**
          * EquityCurve
@@ -927,6 +1083,33 @@ export interface components {
              * @default strategy/benchmark are portfolio value in Rs as the engine computed it. A portfolio strategy is one account, the benchmark is one account per stock, so do not compare the two rupee curves: use growth_strategy / growth_benchmark (both start at 100).
              */
             note: string;
+        };
+        /**
+         * EvidenceBlock
+         * @description How much a result can tell apart from luck, from how many ideas were tried and how many days were seen. A property of the test, not of any strategy.
+         */
+        EvidenceBlock: {
+            /** Ideas Tried */
+            ideas_tried: number;
+            /** Window Days */
+            window_days: number;
+            /** Window Years */
+            window_years: number;
+            /**
+             * Luck Bar Annual
+             * @description The annual Sharpe the best of `ideas_tried` strategies with NO skill would be expected to show over this many days.
+             */
+            luck_bar_annual: number;
+            /**
+             * Years Needed For Edge Of 1
+             * @description Years of data to tell a true annual Sharpe of 1.0 from luck after `ideas_tried` tries; null beyond 300.
+             */
+            years_needed_for_edge_of_1?: number | null;
+            /**
+             * Years Needed For Edge Of 1 Single Try
+             * @description The same if it had been the only idea tried.
+             */
+            years_needed_for_edge_of_1_single_try?: number | null;
         };
         /**
          * Execution
@@ -1190,6 +1373,21 @@ export interface components {
              */
             forward_health_problems: string[];
         };
+        /** HistogramBin */
+        HistogramBin: {
+            /**
+             * Low Pct
+             * @description null for the open-ended bin below the lowest edge.
+             */
+            low_pct?: number | null;
+            /**
+             * High Pct
+             * @description null for the open-ended bin above the highest edge.
+             */
+            high_pct?: number | null;
+            /** Count */
+            count: number;
+        };
         /**
          * IntradayRuleWindow
          * @description What the trades of an intraday rule looked like in one window, with the gain per trade set against the cost of a same-day round trip.
@@ -1241,6 +1439,16 @@ export interface components {
              * @description The day's change in %, from the previous close in the cache.
              */
             change_pct?: number | null;
+            /**
+             * Change 1M Pct
+             * @description The change in % since the close 21 trading days earlier; null with fewer than 22 closes.
+             */
+            change_1m_pct?: number | null;
+            /**
+             * Recent Closes
+             * @description The latest closes (up to 60), oldest first, for a small price line. Display only.
+             */
+            recent_closes?: number[];
             /**
              * Suspect
              * @default false
@@ -1345,6 +1553,18 @@ export interface components {
              * @default []
              */
             quotes: components["schemas"]["LiveQuote"][];
+        };
+        /** MonthlyReturn */
+        MonthlyReturn: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /**
+             * Return Pct
+             * @description That calendar month's return from the stored growth series (its last value over the previous month's last).
+             */
+            return_pct: number;
         };
         /**
          * MultiassetBenchmark
@@ -1544,6 +1764,19 @@ export interface components {
             is_stale: boolean;
             /** Rules */
             rules: components["schemas"]["OtherRule"][];
+        };
+        /** PayoffPoint */
+        PayoffPoint: {
+            /**
+             * Level
+             * @description Where the Nifty finishes at expiry.
+             */
+            level: number;
+            /**
+             * Pnl
+             * @description Profit or loss of the whole position at that level, in rupees, before costs.
+             */
+            pnl: number;
         };
         /**
          * PriceSeries
@@ -1769,6 +2002,11 @@ export interface components {
              * @description The freshest date in the latest-prices file; null when there is none.
              */
             latest_prices_through?: string | null;
+            /**
+             * Sectors
+             * @description Every sector name in the whole snapshot (not just the filtered rows), sorted: for the filter chips.
+             */
+            sectors?: string[];
             /** Rows */
             rows: components["schemas"]["ScreenerRow"][];
         };
@@ -1971,6 +2209,33 @@ export interface components {
             snapshot_generated_at: string;
             /** Strategies */
             strategies: components["schemas"]["StrategySummary"][];
+        };
+        /**
+         * StrategyReport
+         * @description Monthly returns, the spread of the trades, the worst stretches below a peak and the evidence, for one window of one strategy. Display only.
+         */
+        StrategyReport: {
+            /** Strategy Id */
+            strategy_id: string;
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "in_sample" | "out_of_sample";
+            /** Monthly Strategy */
+            monthly_strategy: components["schemas"]["MonthlyReturn"][];
+            /** Monthly Benchmark */
+            monthly_benchmark: components["schemas"]["MonthlyReturn"][];
+            /**
+             * Trade Histogram
+             * @description null for a portfolio strategy, which has rebalances rather than closed trades.
+             */
+            trade_histogram?: components["schemas"]["HistogramBin"][] | null;
+            /** Drawdown Periods Strategy */
+            drawdown_periods_strategy: components["schemas"]["DrawdownPeriod"][];
+            /** Drawdown Periods Benchmark */
+            drawdown_periods_benchmark: components["schemas"]["DrawdownPeriod"][];
+            evidence: components["schemas"]["EvidenceBlock"];
         };
         /** StrategySummary */
         StrategySummary: {
@@ -2262,6 +2527,41 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VolPoint */
+        VolPoint: {
+            /** Date */
+            date: string;
+            /** Implied Pct */
+            implied_pct: number;
+            /** Realised Pct */
+            realised_pct: number;
+        };
+        /**
+         * VolYear
+         * @description One calendar year of implied against realised volatility, in volatility points (percent).
+         */
+        VolYear: {
+            /** Year */
+            year: number;
+            /** Days */
+            days: number;
+            /** Implied Pct */
+            implied_pct: number;
+            /** Realised Pct */
+            realised_pct: number;
+            /**
+             * Premium Pct
+             * @description Implied minus realised, averaged over the year.
+             */
+            premium_pct: number;
+            /**
+             * Share Implied Above Pct
+             * @description Share of days on which what options priced in was above what then happened.
+             */
+            share_implied_above_pct: number;
+            /** Worst Premium Pct */
+            worst_premium_pct: number;
+        };
         /** WindowInfo */
         WindowInfo: {
             /**
@@ -2456,6 +2756,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TradePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_api_strategies__strategy_id__report_get: {
+        parameters: {
+            query: {
+                /** @description in_sample or out_of_sample */
+                window: "in_sample" | "out_of_sample";
+            };
+            header?: never;
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyReport"];
                 };
             };
             /** @description Validation Error */
@@ -2712,6 +3046,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StockSelectionResponse"];
+                };
+            };
+        };
+    };
+    options_explainer_api_options_explainer_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CondorExplainer"];
                 };
             };
         };

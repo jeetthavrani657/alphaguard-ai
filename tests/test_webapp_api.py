@@ -378,6 +378,7 @@ def test_screener_rows_and_filters(client):
     assert [r["symbol"] for r in client.get("/api/screener?universe=midcap150").json()["rows"]] == ["BBB"]
     assert [r["symbol"] for r in client.get("/api/screener?sector=Bank").json()["rows"]] == ["AAA"]
     assert [r["symbol"] for r in client.get("/api/screener?flagged_only=true").json()["rows"]] == ["BBB"]
+    assert d["sectors"] == ["Bank"] and client.get("/api/screener?universe=midcap150").json()["sectors"] == ["Bank"]      # the chips list every sector, whatever the filter
     assert not any("sharpe" in k.lower() for r in d["rows"] for k in r)   # a screener never ranks by Sharpe
 
 
@@ -1109,9 +1110,15 @@ def test_the_screener_carries_the_latest_close_for_stocks_that_have_one_and_null
     d = client.get("/api/screener").json()
     rows = {r["symbol"]: r for r in d["rows"]}
     assert d["latest_prices_through"] == "2026-10-23"
-    assert rows["AAA"]["latest"] == {"date": "2026-10-23", "close": 1190.0, "prev_close": 1184.5, "change_pct": 0.46, "suspect": False, "stale": False}
+    assert rows["AAA"]["latest"] == {"date": "2026-10-23", "close": 1190.0, "prev_close": 1184.5, "change_pct": 0.46, "change_1m_pct": None, "recent_closes": [], "suspect": False, "stale": False}
     assert rows["BBB"]["latest"] is None                                                   # not in the file: nothing is invented
     assert rows["AAA"]["last_close"] == 104.0                                              # the backtest-window close is untouched
+
+
+def test_the_screener_passes_on_the_one_month_change_and_the_recent_closes_for_the_price_line(client):
+    _latest_file({"AAA": {"date": "2026-10-23", "close": 110.0, "prev_close": 109.0, "change_pct": 0.92, "change_1m_pct": 10.0, "recent_closes": [100.0, 105.0, 110.0], "suspect": False, "stale": False}})
+    a = {r["symbol"]: r for r in client.get("/api/screener").json()["rows"]}["AAA"]["latest"]
+    assert a["change_1m_pct"] == 10.0 and a["recent_closes"] == [100.0, 105.0, 110.0]
 
 
 def test_without_a_latest_prices_file_everything_still_works_and_nothing_is_shown_as_latest(client):
@@ -1186,3 +1193,63 @@ def test_missing_golive_results_are_a_helpful_404_naming_the_command(client, tmp
     monkeypatch.setenv("WEBAPP_GOLIVE_GATES", str(tmp_path / "nope.json"))
     r = client.get("/api/golive")
     assert r.status_code == 404 and "golive_gates.py" in r.json()["detail"]
+
+
+# --- a strategy's report (webapp/backend/report.py) -----------------------------------------------------------------------------
+
+def test_the_report_gives_monthly_returns_the_trade_spread_the_deepest_falls_and_the_evidence_for_a_per_stock_strategy(client):
+    d = client.get("/api/strategies/alpha/report", params={"window": "out_of_sample"}).json()
+    assert d["monthly_strategy"] == [{"year": 2020, "month": 1, "return_pct": pytest.approx(2.5)}]       # 100 to 102.5 inside January
+    assert d["monthly_benchmark"][0]["return_pct"] == pytest.approx(5.0)                                   # 100 to 105
+    seven = [b for b in d["trade_histogram"] if b["count"]]
+    assert seven == [{"low_pct": 7.5, "high_pct": 10.0, "count": 7}]                                       # seven trades of +9.5%
+    assert d["drawdown_periods_strategy"] == [{"peak_date": "2020-01-02", "trough_date": "2020-01-03", "recovered_date": None, "depth_pct": -1.5, "days_peak_to_trough": 1, "days_underwater": 1}]
+    assert d["drawdown_periods_benchmark"][0]["depth_pct"] == -3.0 and d["drawdown_periods_benchmark"][0]["days_peak_to_trough"] == 2
+    e = d["evidence"]
+    assert e["ideas_tried"] == 204 and e["window_days"] == 3 and e["luck_bar_annual"] > 0 and e["years_needed_for_edge_of_1"] > e["years_needed_for_edge_of_1_single_try"]
+    assert _find_bare_ratios(d) == []                                                                       # no strategy Sharpe is served here
+
+
+def test_a_portfolio_strategy_has_no_trade_histogram_because_it_has_rebalances_not_closed_trades(client):
+    d = client.get("/api/strategies/beta_portfolio/report", params={"window": "in_sample"}).json()
+    assert d["trade_histogram"] is None and d["monthly_strategy"] and d["window"] == "in_sample"
+
+
+def test_the_report_refuses_an_unknown_strategy_and_a_missing_window(client):
+    assert client.get("/api/strategies/nope/report", params={"window": "in_sample"}).status_code == 404
+    assert client.get("/api/strategies/alpha/report").status_code == 422
+    assert client.get("/api/strategies/alpha/report", params={"window": "whenever"}).status_code == 422
+
+
+# --- the options explainer (research/condor_payoff.py): real condor trades and their payoff, read back untouched -----------------
+
+def _condor_payoff_file(path):
+    trade = {"label": "worst", "entry_day": "2024-09-30", "expiry": "2024-10-31", "lots": 2, "units": 150.0, "long_put": 24250.0, "short_put": 25300.0, "short_call": 27100.0, "long_call": 27700.0,
+             "credit_per_unit": 120.0, "width": 1050.0, "breakeven_low": 25180.0, "breakeven_high": 27220.0, "max_profit": 18000.0, "max_loss": 139500.0, "final_level": 24205.0,
+             "gross_pnl": -139000.0, "entry_cost": 500.0, "exit_cost": 273.0, "net_pnl": -139773.0,
+             "payoff": [{"level": 23200.0, "pnl": -139500.0}, {"level": 25300.0, "pnl": 18000.0}, {"level": 28750.0, "pnl": -139500.0}]}
+    data = {"generated_at": "2026-10-25T06:00:00Z", "data_through": "2026-10-22",
+            "rules": {"condor_monthly": {"name": "Nifty monthly iron condor", "trades": [trade],
+                                         "cycles": [{"expiry": "2024-10-31", "final_level": 24205.0, "short_put": 25300.0, "short_call": 27100.0, "net_pnl": -139773.0}]}},
+            "volatility": {"years": [{"year": 2024, "days": 246, "implied_pct": 14.0, "realised_pct": 13.3, "premium_pct": 0.7, "share_implied_above_pct": 70.0, "worst_premium_pct": -15.0}],
+                           "series": [{"date": "2024-01-02", "implied_pct": 14.0, "realised_pct": 12.0}]}}
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_the_options_explainer_serves_the_real_trades_and_the_volatility_table_as_written(client, tmp_path, monkeypatch):
+    path = tmp_path / "condor_payoff.json"
+    _condor_payoff_file(path)
+    monkeypatch.setenv("WEBAPP_CONDOR_PAYOFF", str(path))
+    d = client.get("/api/options-explainer").json()
+    r = d["rules"][0]
+    assert r["id"] == "condor_monthly" and r["name"] == "Nifty monthly iron condor" and d["data_through"] == "2026-10-22"
+    t = r["trades"][0]
+    assert t["label"] == "worst" and t["net_pnl"] == -139773.0 and t["breakeven_low"] == 25180.0 and [p["pnl"] for p in t["payoff"]] == [-139500.0, 18000.0, -139500.0]
+    assert r["cycles"][0]["final_level"] == 24205.0 and d["years"][0]["premium_pct"] == 0.7 and d["series"][0]["date"] == "2024-01-02"
+    assert _find_bare_ratios(d) == []
+
+
+def test_the_options_explainer_says_how_to_make_the_file_when_it_does_not_exist(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBAPP_CONDOR_PAYOFF", str(tmp_path / "nope.json"))
+    r = client.get("/api/options-explainer")
+    assert r.status_code == 404 and "condor_payoff.py" in r.json()["detail"]

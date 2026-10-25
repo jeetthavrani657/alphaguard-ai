@@ -71,7 +71,7 @@ export function OtherRules() {
                       <td data-label="Unseen period"><Ratio ratio={r.strategy.out_of_sample.sharpe} compact /></td>
                       <td className={`num ${signClass(r.strategy.out_of_sample.cagr_pct)}`} data-label="Unseen return a year">{pct(r.strategy.out_of_sample.cagr_pct)}</td>
                       <td className="num neg" data-label="Unseen worst fall">{pct(r.strategy.out_of_sample.max_drawdown_pct)}</td>
-                      <td className="wrap" data-label="Trades (unseen period)">{unseenTrades(r)}</td>
+                      <td className="wrap" data-label="Trades (unseen period)"><span>{unseenTrades(r)}</span></td>
                     </tr>
                   ))}
                 </tbody>

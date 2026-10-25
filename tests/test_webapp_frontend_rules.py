@@ -194,6 +194,49 @@ def test_the_search_palette_is_reachable_by_keyboard_and_announces_itself():
         assert needle in palette, f"the search palette lost {needle}"
 
 
+def test_the_strategy_page_draws_its_report_from_the_api_and_the_report_views_compute_nothing():
+    page, views = _read("pages", "StrategyPage.tsx"), _read("components", "ReportViews.tsx")
+    assert "api.report(" in page and "<EvidenceMeter" in page and "<MonthlyHeatmap" in page and "<TradeHistogram" in page and "<DrawdownTable" in page
+    assert page.index("<StrategyChart") < page.index("<EvidenceMeter") < page.index("<MetricsTable"), "the chart comes first, then the evidence, then the detail tables"
+    code = _strip_comments(views)
+    assert not re.search(r"\bsharpe\b|\bsortino\b", code, flags=re.I), "the report views never draw a ratio: only <Ratio> may"
+    assert not re.search(r"\.(filter|map)\([^)]*\)\s*\.reduce|\bsum\b", code), "counts and returns are shown as sent, not totalled here"
+
+
+def test_the_compare_page_keeps_its_choice_in_the_address_limits_it_to_three_and_names_each_curve_by_universe():
+    page, chart = _read("pages", "Compare.tsx"), _read("components", "charts", "CompareChart.tsx")
+    assert "useSearchParams" in page and "const MAX = 3" in page and ".slice(-MAX)" in page and "known.includes(x)" in page, "the choice lives in ?ids=, is capped, and unknown ids are dropped"
+    assert page.count("${d.name} · ${d.universe}") == 2, "the chart legend and the phone cards both name a curve by rule AND universe: two universes of the same rule must not share a label"
+    assert "chartColors().series" in chart and ".benchmark" not in chart, "no curve may use the buy-and-hold colour"
+    assert '"/compare"' in _read("components", "Sidebar.tsx") and 'path="/compare"' in _read("App.tsx")
+
+
+def test_the_stocks_page_filters_on_the_server_sorts_only_by_what_it_is_given_and_has_no_sharpe_column():
+    page = _read("pages", "Screener.tsx")
+    assert "api.screener({ universe" in page and "flagged_only: flaggedOnly" in page and "[universe, sector, flaggedOnly]" in page, "universe, sector and flagged-only are applied by the API"
+    for view in ('id: "overview"', 'id: "returns"', 'id: "data"', 'id: "heatmap"'):
+        assert view in page
+    assert "<Tabs " in page and 'aria-pressed={on}' in page, "views use the shared keyboard tabs; chips say whether they are on"
+    assert not re.search(r"\.\w*sharpe|<Ratio|<th[^>]*>[^<]*sharpe", _strip_comments(page), flags=re.I), "a screener never ranks by Sharpe (the note saying so is allowed; a column or a field is not)"
+    assert "<Sparkline values={r.latest?.recent_closes}" in page, "the price line draws the API's closes untouched"
+
+
+def test_the_condor_explainer_is_on_the_research_page_reads_the_api_and_describes_each_picture_for_a_screen_reader():
+    text = _read("components", "CondorExplainer.tsx")
+    assert "<CondorExplainer />" in _read("pages", "Research.tsx") and "api.optionsExplainer()" in text
+    assert text.count('role="img"') == 3 and text.count("aria-label=") >= 3, "each of the three pictures says what it shows"
+    assert 'id="condor-payoff"' in text and "Tabs" in text, "the rule and trade choices use the shared keyboard tabs"
+    assert not re.search(r"(sharpe|sortino)", _strip_comments(text), flags=re.I), "the explainer draws no ratio"
+
+
+def test_the_report_card_prints_on_white_with_its_disclaimer_and_needs_nothing_installed():
+    card, app, css = _read("pages", "ReportCard.tsx"), _read("App.tsx"), _read("styles.css")
+    assert 'path="/strategies/:id/card"' in app and "/card`}" in _read("pages", "StrategyPage.tsx"), "the card has its own address and the strategy page links to it"
+    assert "window.print()" in card and '"beforeprint"' in card and '"afterprint"' in card and 'setAttribute("data-theme", "light")' in card, "printing switches to the light theme and back"
+    assert "not investment advice" in card and "places no orders" in card and "as_of_hypotheses" in card, "the card carries the disclaimer and the count its status is judged at"
+    assert "@page { size: A4" in css and "print-color-adjust: exact" in css and ".noprint" in css
+
+
 def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
     text = _read("components", "ReadFirst.tsx")
     shown = text.index("not investment advice")

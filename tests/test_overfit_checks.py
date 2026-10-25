@@ -91,3 +91,15 @@ def test_pbo_refuses_unusable_settings_and_is_repeatable():
     with pytest.raises(ValueError):
         oc.pbo_cscv(_noise(m=2))
     assert oc.pbo_cscv(_noise()) == oc.pbo_cscv(_noise())
+
+
+def test_years_needed_matches_the_published_orders_of_magnitude_and_moves_the_right_way():
+    one, many = oc.years_needed(1.0, 1), oc.years_needed(1.0, 215)
+    assert 2.6 < one < 3.0 and 18.5 < many < 21.0                                              # about 2.8 years for a single try, about 20 once 215 were tried
+    assert oc.years_needed(1.0, 10) < oc.years_needed(1.0, 215)                                # more tries, more years
+    assert oc.years_needed(2.0, 215) < oc.years_needed(1.0, 215) < oc.years_needed(0.5, 215)   # a bigger real edge shows sooner
+
+
+def test_years_needed_is_none_when_it_would_take_centuries_and_the_target_matters():
+    assert oc.years_needed(0.01, 215) is None
+    assert oc.years_needed(1.0, 1, target=0.99) > oc.years_needed(1.0, 1, target=0.95) > oc.years_needed(1.0, 1, target=0.80)

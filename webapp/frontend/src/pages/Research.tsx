@@ -7,6 +7,7 @@ import { StatusChip } from "../components/StatusChip";
 import { plain } from "../labels";
 import { Term } from "../components/Term";
 import { StockIdeas } from "../components/StockIdeas";
+import { CondorExplainer } from "../components/CondorExplainer";
 import { OtherRules } from "../components/OtherRules";
 import { int, pct, signClass } from "../fmt";
 
@@ -58,6 +59,7 @@ export function Research() {
       <StockIdeas />
 
       <OtherRules />
+      <CondorExplainer />
 
       <div className="grid2">
         <Panel title="The dip-buying forward test (frozen in advance)" flush>

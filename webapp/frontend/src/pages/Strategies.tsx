@@ -15,7 +15,7 @@ export function Strategies() {
       <div className="pagehead"><h1>Strategies</h1></div>
       <p className="lede">
         Each row is a trading rule tested on a whole list of stocks, first on an early window and then on a later one it was not first judged on. Click one for the detail.
-        Most rules that look good in one window fail the honest check, and the status beside each Sharpe ratio says which.
+        Most rules that look good in one window fail the honest check, and the status beside each Sharpe ratio says which. <Link to="/compare">Compare two or three on one chart →</Link>
       </p>
       <Async state={state}>
         {(d) => (

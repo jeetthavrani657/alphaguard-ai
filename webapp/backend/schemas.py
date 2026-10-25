@@ -248,6 +248,53 @@ class TradePage(BaseModel):
     rebalances: Optional[list[Rebalance]] = None
 
 
+# --- a strategy's report: other views of numbers the snapshot already holds -------------------------------------
+
+class MonthlyReturn(BaseModel):
+    year: int
+    month: int
+    return_pct: float = Field(description="That calendar month's return from the stored growth series (its last value over the previous month's last).")
+
+
+class HistogramBin(BaseModel):
+    low_pct: Optional[float] = Field(None, description="null for the open-ended bin below the lowest edge.")
+    high_pct: Optional[float] = Field(None, description="null for the open-ended bin above the highest edge.")
+    count: int
+
+
+class DrawdownPeriod(BaseModel):
+    peak_date: str
+    trough_date: str
+    recovered_date: Optional[str] = Field(None, description="null if it had not recovered by the last day of the window.")
+    depth_pct: float
+    days_peak_to_trough: int
+    days_underwater: int
+
+
+class EvidenceBlock(BaseModel):
+    """
+    How much a result can tell apart from luck, from how many ideas were tried and how many days were seen. A property of the test, not of any strategy.
+    """
+    ideas_tried: int
+    window_days: int
+    window_years: float
+    luck_bar_annual: float = Field(description="The annual Sharpe the best of `ideas_tried` strategies with NO skill would be expected to show over this many days.")
+    years_needed_for_edge_of_1: Optional[float] = Field(None, description="Years of data to tell a true annual Sharpe of 1.0 from luck after `ideas_tried` tries; null beyond 300.")
+    years_needed_for_edge_of_1_single_try: Optional[float] = Field(None, description="The same if it had been the only idea tried.")
+
+
+class StrategyReport(BaseModel):
+    """Monthly returns, the spread of the trades, the worst stretches below a peak and the evidence, for one window of one strategy. Display only."""
+    strategy_id: str
+    window: Window
+    monthly_strategy: list[MonthlyReturn]
+    monthly_benchmark: list[MonthlyReturn]
+    trade_histogram: Optional[list[HistogramBin]] = Field(None, description="null for a portfolio strategy, which has rebalances rather than closed trades.")
+    drawdown_periods_strategy: list[DrawdownPeriod]
+    drawdown_periods_benchmark: list[DrawdownPeriod]
+    evidence: EvidenceBlock
+
+
 # --- what is stored on disk per strategy (not an API response) ---------------
 
 class StoredWindowData(BaseModel):
@@ -314,6 +361,8 @@ class LatestPrice(BaseModel):
     close: float
     prev_close: Optional[float] = None
     change_pct: Optional[float] = Field(None, description="The day's change in %, from the previous close in the cache.")
+    change_1m_pct: Optional[float] = Field(None, description="The change in % since the close 21 trading days earlier; null with fewer than 22 closes.")
+    recent_closes: list[float] = Field(default_factory=list, description="The latest closes (up to 60), oldest first, for a small price line. Display only.")
     suspect: bool = False
     stale: bool = False
 
@@ -347,6 +396,7 @@ class ScreenerResponse(BaseModel):
     in_sample: str
     out_of_sample: str
     latest_prices_through: Optional[str] = Field(None, description="The freshest date in the latest-prices file; null when there is none.")
+    sectors: list[str] = Field(default_factory=list, description="Every sector name in the whole snapshot (not just the filtered rows), sorted: for the filter chips.")
     rows: list[ScreenerRow]
 
 
@@ -897,6 +947,81 @@ class OtherRule(BaseModel):
     strategy: AdvisoryWindows
     options_windows: list[OptionsRuleWindow] = []
     intraday_windows: list[IntradayRuleWindow] = []
+
+
+class PayoffPoint(BaseModel):
+    level: float = Field(description="Where the Nifty finishes at expiry.")
+    pnl: float = Field(description="Profit or loss of the whole position at that level, in rupees, before costs.")
+
+
+class CondorTrade(BaseModel):
+    """One REAL trade of a condor rule, with its payoff at expiry. Rupees; strikes in Nifty points; the money figures are for the whole position (all lots)."""
+    label: Literal["worst", "best", "typical", "latest"]
+    entry_day: str
+    expiry: str
+    lots: int
+    units: float = Field(description="Lots times the lot size: how many Nifty units the position is.")
+    long_put: float
+    short_put: float
+    short_call: float
+    long_call: float
+    credit_per_unit: float = Field(description="Premium received per unit, in Nifty points.")
+    width: float
+    breakeven_low: float
+    breakeven_high: float
+    max_profit: float
+    max_loss: float
+    final_level: float = Field(description="Where the Nifty actually settled at expiry.")
+    gross_pnl: float
+    entry_cost: float
+    exit_cost: float
+    net_pnl: float
+    payoff: list[PayoffPoint]
+
+
+class CondorCycle(BaseModel):
+    """Every trade as one dot: where the Nifty finished against the two short strikes."""
+    expiry: str
+    final_level: float
+    short_put: float
+    short_call: float
+    net_pnl: float
+
+
+class CondorRuleView(BaseModel):
+    id: str
+    name: str
+    trades: list[CondorTrade]
+    cycles: list[CondorCycle]
+
+
+class VolYear(BaseModel):
+    """One calendar year of implied against realised volatility, in volatility points (percent)."""
+    year: int
+    days: int
+    implied_pct: float
+    realised_pct: float
+    premium_pct: float = Field(description="Implied minus realised, averaged over the year.")
+    share_implied_above_pct: float = Field(description="Share of days on which what options priced in was above what then happened.")
+    worst_premium_pct: float
+
+
+class VolPoint(BaseModel):
+    date: str
+    implied_pct: float
+    realised_pct: float
+
+
+class CondorExplainer(BaseModel):
+    """
+    How the two frozen iron-condor rules really paid (research/condor_payoff.py): real trades with their payoff at expiry, every trade's landing place, and the
+    implied-against-realised volatility that the rules try to collect. A description, not a hypothesis; nothing here is counted or judged.
+    """
+    generated_at: str
+    data_through: str
+    rules: list[CondorRuleView]
+    years: list[VolYear]
+    series: list[VolPoint]
 
 
 class OtherRulesResponse(BaseModel):

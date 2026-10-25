@@ -68,3 +68,24 @@ def test_the_written_file_is_valid_json_and_an_empty_cache_writes_nothing_mislea
     empty = tmp_path / "empty"
     empty.mkdir()
     assert lp.build(str(empty)) | {"generated_at": None} == {"as_of": None, "generated_at": None, "prices": {}}
+
+
+def test_the_one_month_change_compares_the_newest_close_with_the_close_21_rows_earlier(tmp_path):
+    from datetime import date, timedelta
+    rows = [((date(2026, 9, 1) + timedelta(days=i)).isoformat(), 100.0 + i) for i in range(30)]       # 100, 101 ... 129
+    cache_file(tmp_path, "UP", rows)
+    p = lp.build(str(tmp_path))["prices"]["UP"]
+    assert p["close"] == 129.0 and p["change_1m_pct"] == pytest.approx((129.0 / 108.0 - 1.0) * 100.0, abs=0.01)      # 21 rows before the last (index 29) is index 8: 108
+    cache_file(tmp_path, "SHORT", rows[:22])                                                                         # 22 closes: just enough, compared with the very first
+    cache_file(tmp_path, "TOOSHORT", rows[:21])                                                                      # 21 closes: not enough for a month
+    p = lp.build(str(tmp_path))["prices"]
+    assert p["SHORT"]["change_1m_pct"] == pytest.approx((121.0 / 100.0 - 1.0) * 100.0, abs=0.01) and p["TOOSHORT"]["change_1m_pct"] is None
+
+
+def test_the_recent_closes_are_the_latest_sixty_oldest_first_and_end_at_the_shown_close(tmp_path):
+    from datetime import date, timedelta
+    cache_file(tmp_path, "LONG", [((date(2026, 1, 1) + timedelta(days=i)).isoformat(), 10.0 + i) for i in range(100)])     # 10 ... 109
+    cache_file(tmp_path, "FEW", [("2026-10-22", 5.0), ("2026-10-23", 6.0)])
+    p = lp.build(str(tmp_path))["prices"]
+    assert p["LONG"]["recent_closes"] == [float(10 + i) for i in range(40, 100)] and p["LONG"]["recent_closes"][-1] == p["LONG"]["close"]
+    assert p["FEW"]["recent_closes"] == [5.0, 6.0]

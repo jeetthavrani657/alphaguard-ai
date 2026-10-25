@@ -166,6 +166,23 @@ def run_checks(base: str) -> None:
                 last = (t2.get("closed_trades") or t2.get("executions") or [])
                 check(st == 200 and len(last) == 1, f"{sid} {w}: last-row pagination returns exactly one row")
 
+            # the report's views must agree with figures that were worked out another way
+            st, r = fetch(base, f"/api/strategies/{sid}/report?window={w}")
+            check(st == 200 and not bare_ratios(r), f"{sid} {w}: report ok, no bare ratio")
+            compounded = 1.0
+            for m in r["monthly_strategy"]:
+                compounded *= 1.0 + m["return_pct"] / 100.0
+            check(abs((compounded - 1.0) * 100.0 - d[w]["strategy"]["total_return_pct"]) < 1e-2,
+                  f"{sid} {w}: the months compound to the strategy's total return")
+            if r["drawdown_periods_strategy"]:
+                check(abs(r["drawdown_periods_strategy"][0]["depth_pct"] - d[w]["strategy"]["max_drawdown_pct"]) < 1e-2,
+                      f"{sid} {w}: the deepest fall listed is the max drawdown")
+            check(r["evidence"]["ideas_tried"] == d["as_of_hypotheses"], f"{sid} {w}: evidence counts the same ideas as the strategy")
+            if d["kind"] == "portfolio":
+                check(r["trade_histogram"] is None, f"{sid} {w}: a portfolio has no trade histogram")
+            else:
+                check(sum(b["count"] for b in r["trade_histogram"]) == t["total"], f"{sid} {w}: every closed trade is in exactly one bin")
+
     print("[smoke] screener and every stock")
     st, sc = fetch(base, "/api/screener")
     rows = sc["rows"]
@@ -175,6 +192,12 @@ def run_checks(base: str) -> None:
     with_latest = [r for r in rows if r.get("latest")]
     check(len(with_latest) > 0 and sc.get("latest_prices_through"), "the screener carries latest closes (run `python -m webapp.backend.latest_prices` if this fails)")
     check(all(r["latest"]["close"] > 0 and r["latest"]["date"] >= r["last_date"] or r["latest"]["stale"] for r in with_latest), "a latest close is never older than the research window unless it is marked stale")
+    check(all(r["latest"]["recent_closes"] and r["latest"]["recent_closes"][-1] == r["latest"]["close"] and len(r["latest"]["recent_closes"]) <= 60 for r in with_latest),
+          "the price line of every stock ends at its latest close and has at most 60 points")
+    long_ones = [r["latest"] for r in with_latest if len(r["latest"]["recent_closes"]) > 21]
+    check(len(long_ones) > 0 and all(abs(l["change_1m_pct"] - (l["close"] / l["recent_closes"][-22] - 1.0) * 100.0) < 0.02 for l in long_ones),
+          "the one-month change matches the closes it is drawn from")
+    check(sc["sectors"] == sorted({r["sector"] for r in rows if r["sector"]}) and len(sc["sectors"]) > 5, "the sector chips list every sector of the whole snapshot")
     st, hl = fetch(base, "/api/health")
     check(st == 200 and hl.get("latest_prices_through") == sc.get("latest_prices_through"), "the status strip and the screener agree on the latest-prices date")
 
@@ -304,6 +327,24 @@ def run_checks(base: str) -> None:
         if r["family"] == "intraday":
             w = [x for x in r["intraday_windows"] if x["window"] == "out_of_sample"][0]
             check(w["bar_pct"] == 0.2 and w["mean_net_pct"] is not None and w["mean_net_pct"] < w["mean_gross_pct"], f"{r['id']}: costs are subtracted and the 0.2% bar is shown")
+
+    print("[smoke] how a condor pays")
+    st, ex = fetch(base, "/api/options-explainer")
+    check(st == 200 and bare_ratios(ex) == [] and [r["id"] for r in ex["rules"]] == ["condor_monthly", "condor_weekly"], "the condor explainer responds for both rules, with no bare ratio")
+    registered = {r["id"]: sum(w["total_net_profit"] or 0.0 for w in r["options_windows"]) for r in orr["rules"] if r["family"] == "options"}
+    counts = {r["id"]: sum(w["n_trades"] for w in r["options_windows"]) for r in orr["rules"] if r["family"] == "options"}
+    for r in ex["rules"]:
+        check(len(r["cycles"]) == counts[r["id"]], f"{r['id']}: every registered trade is in the explainer ({len(r['cycles'])})")
+        check(abs(sum(c["net_pnl"] for c in r["cycles"]) - registered[r["id"]]) < 1.0, f"{r['id']}: the trades add up to the registered profit")
+        check([t["label"] for t in r["trades"]] == ["worst", "best", "typical", "latest"], f"{r['id']}: four real trades are shown")
+        for t in r["trades"]:
+            ys = [p["pnl"] for p in t["payoff"]]
+            check(abs(max(ys) - t["max_profit"]) < 1.0 and abs(min(ys) + t["max_loss"]) < 1.0, f"{r['id']} {t['label']}: the curve's top and floor are the stated best and worst case")
+            check(abs(t["gross_pnl"] - t["net_pnl"] - t["entry_cost"] - t["exit_cost"]) < 0.01 and t["net_pnl"] >= -t["max_loss"] - t["entry_cost"] - t["exit_cost"] - 1.0,
+                  f"{r['id']} {t['label']}: costs reconcile and no trade lost more than its worst case plus costs")
+        worst = [t for t in r["trades"] if t["label"] == "worst"][0]
+        check(abs(worst["net_pnl"] - min(c["net_pnl"] for c in r["cycles"])) < 0.01, f"{r['id']}: the 'worst' trade is the worst of all")
+    check([y["year"] for y in ex["years"]] == sorted(y["year"] for y in ex["years"]) and all(y["days"] > 100 for y in ex["years"][:-1]), "the volatility table is by year, oldest first")
 
     print("[smoke] go-live gates")
     st, gl = fetch(base, "/api/golive")

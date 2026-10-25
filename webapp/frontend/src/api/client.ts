@@ -6,7 +6,7 @@
 
 import type {
   AdvisoryForwardResponse, AdvisoryResponse, BasketResponse, MultiassetResponse, RebalanceResponse, DataQualityResponse, EquityResponse, ForwardBooksResponse, ForwardResponse, Health, LedgerResponse, LiveQuotesResponse, PriceSeries,
-  GoLiveResponse, OtherRulesResponse, ScreenerResponse, StockSelectionResponse, StrategyDetail, StrategyList, SymbolDetail, TradePage, Window,
+  CondorExplainer, GoLiveResponse, OtherRulesResponse, ScreenerResponse, StockSelectionResponse, StrategyDetail, StrategyList, StrategyReport, SymbolDetail, TradePage, Window,
 } from "./types";
 
 export class ApiError extends Error {
@@ -44,6 +44,7 @@ export const api = {
   strategies: () => get<StrategyList>("/strategies"),
   strategy: (id: string) => get<StrategyDetail>(`/strategies/${sym(id)}`),
   equity: (id: string, window: Window) => get<EquityResponse>(`/strategies/${sym(id)}/equity`, { window }),
+  report: (id: string, window: Window) => get<StrategyReport>(`/strategies/${sym(id)}/report`, { window }),
   trades: (id: string, window: Window, limit: number, offset: number) =>
     get<TradePage>(`/strategies/${sym(id)}/trades`, { window, limit, offset }),
   screener: (p: { universe?: string; sector?: string; flagged_only?: boolean }) =>
@@ -60,6 +61,7 @@ export const api = {
   multiasset: (family: "trend" | "momentum" = "trend") => get<MultiassetResponse>("/multiasset", { family }),
   stockSelection: () => get<StockSelectionResponse>("/stockselection"),
   otherRules: () => get<OtherRulesResponse>("/otherrules"),
+  optionsExplainer: () => get<CondorExplainer>("/options-explainer"),
   golive: () => get<GoLiveResponse>("/golive"),
   advisoryForward: () => get<AdvisoryForwardResponse>("/advisory/forward"),
   rebalance: (profile: string, holdings: string) => get<RebalanceResponse>("/advisory/rebalance", { profile, holdings }),

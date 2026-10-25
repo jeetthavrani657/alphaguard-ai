@@ -81,6 +81,22 @@ def deflated_sharpe(excess: pd.Series, n_trials: int) -> dict:
             "dsr": probabilistic_sharpe(s["sr_daily"], bar, s["n_obs"], s["skew"], s["kurtosis"])}
 
 
+def years_needed(sr_annual: float, n_trials: int, target: float = 0.95) -> float | None:
+    """
+    The fewest years of daily data at which a strategy whose TRUE annual Sharpe is `sr_annual` (normal returns, and a sample Sharpe equal to the true one) would reach a Deflated
+    Sharpe of `target` after `n_trials` tries; None if it would take more than 300 years. This is how long it takes to tell a real edge from the best of n_trials lucky ones:
+    about 2.8 years for a true Sharpe of 1.0 if it was the only idea tried, and about 20 years once 215 were.
+    """
+    sr = sr_annual / np.sqrt(TRADING_DAYS)
+    for tenths in range(2, 3000):
+        years = tenths / 10.0
+        days = int(years * TRADING_DAYS)
+        bar = expected_max_sharpe(n_trials, 1.0 / (days - 1.0))
+        if probabilistic_sharpe(sr, bar, days, 0.0, 3.0) >= target:
+            return years
+    return None
+
+
 def _sharpe_columns(block: np.ndarray) -> np.ndarray:
     """Per-day Sharpe of every column of a (days x candidates) array."""
     sd = block.std(axis=0, ddof=1)

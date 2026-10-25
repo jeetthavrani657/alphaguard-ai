@@ -8,13 +8,14 @@ import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { Term } from "../components/Term";
+import { DrawdownTable, EvidenceMeter, MonthlyHeatmap, TradeHistogram } from "../components/ReportViews";
 import { plain } from "../labels";
 import { int, num, pct, signClass, when } from "../fmt";
 import type { Window, WindowMetrics } from "../api/types";
 
 const PAGE = 10;
 
-function MetricsTable({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
+export function MetricsTable({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
   const row = (label: ReactNode, f: (m: WindowMetrics) => string, sign?: (m: WindowMetrics) => number | null) => (
     <tr>
       <td>{label}</td>
@@ -44,6 +45,26 @@ function MetricsTable({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
   );
 }
 
+/** The headline figures of the chosen window, strategy over buy & hold. Every figure is one the API sent. */
+function KpiRow({ s, b }: { s: WindowMetrics; b: WindowMetrics }) {
+  const tile = (label: ReactNode, value: ReactNode, vs: ReactNode, cls = "", wide = false) => (
+    <div className={wide ? "kpi wide" : "kpi"}>
+      <span className="kpi-label">{label}</span>
+      <span className={`kpi-value ${cls}`}>{value}</span>
+      <span className="kpi-vs muted">{vs}</span>
+    </div>
+  );
+  return (
+    <div className="kpis">
+      {tile(<Term k="cagr">CAGR</Term>, pct(s.cagr_pct), <>buy &amp; hold {pct(b.cagr_pct)}</>, signClass(s.cagr_pct))}
+      {tile("Total return", pct(s.total_return_pct), <>buy &amp; hold {pct(b.total_return_pct)}</>, signClass(s.total_return_pct))}
+      {tile(<Term k="drawdown">Max drawdown</Term>, pct(s.max_drawdown_pct), <>buy &amp; hold {pct(b.max_drawdown_pct)}</>)}
+      {tile("Win rate", pct(s.win_rate_pct), <>{int(s.total_trades)} closed trades</>)}
+      {tile(<Term k="sharpe">Sharpe</Term>, <Ratio ratio={s.sharpe} compact />, <>buy &amp; hold <Ratio ratio={b.sharpe} compact /></>, "", true)}
+    </div>
+  );
+}
+
 export function StrategyPage() {
   const { id = "" } = useParams();
   const [window, setWindow] = useState<Window>("out_of_sample");
@@ -54,6 +75,7 @@ export function StrategyPage() {
 
   const detail = useApi(() => api.strategy(id), [id]);
   const equity = useApi(() => api.equity(id, window), [id, window]);
+  const report = useApi(() => api.report(id, window), [id, window]);
   const trades = useApi(() => api.trades(id, window, PAGE, offset), [id, window, offset]);
 
   return (
@@ -68,12 +90,59 @@ export function StrategyPage() {
               <StatusChip status={d.status} />
               <span className="muted">as of {d.as_of_hypotheses} hypotheses</span>
               {d.stale && <span className="chip stale">STALE: ledger has grown since</span>}
+              <Link to={`/strategies/${encodeURIComponent(id)}/card`} className="cardlink">Report card (PDF)</Link>
             </div>
             <p className="lede">
               {d.rationale}
               {Object.keys(d.params).length > 0 && <> Settings: {Object.entries(d.params).map(([k, v]) => `${k.replaceAll("_", " ")} ${String(v)}`).join(" · ")}.</>}
             </p>
             {d.notes.map((n) => <p className="note" key={n}>{plain(n)}</p>)}
+
+            <div className="windowbar">
+              <span className="muted">Window</span>
+              <span className="seg">
+                {(["in_sample", "out_of_sample"] as Window[]).map((w) => (
+                  <button key={w} className={w === window ? "on" : ""} onClick={() => { setWindow(w); setOffset(0); }}>
+                    {w === "in_sample" ? "Early (in-sample)" : "Later (out-of-sample)"}
+                  </button>
+                ))}
+              </span>
+              <span className="muted">{window === "in_sample" ? `${d.in_sample.start} → ${d.in_sample.end}` : `${d.out_of_sample.start} → ${d.out_of_sample.end}`}</span>
+            </div>
+            <KpiRow s={(window === "in_sample" ? d.in_sample : d.out_of_sample).strategy} b={(window === "in_sample" ? d.in_sample : d.out_of_sample).benchmark} />
+
+            <Panel title={`Growth, drawdown, exposure · ${window === "in_sample" ? "in-sample" : "out-of-sample"}`}>
+              <Async state={equity}>{(e) => <StrategyChart data={e} />}</Async>
+            </Panel>
+
+            <Async state={report}>
+              {(r) => (
+                <>
+                  <div className="grid2">
+                    <Panel title="How much evidence is there?" id="evidence">
+                      <EvidenceMeter e={r.evidence} />
+                    </Panel>
+                    <Panel title="Biggest falls from a peak">
+                      <h3 className="sub">Strategy</h3>
+                      <DrawdownTable rows={r.drawdown_periods_strategy} label="Strategy" />
+                      <h3 className="sub">Buy &amp; hold (same stocks)</h3>
+                      <DrawdownTable rows={r.drawdown_periods_benchmark} label="Buy and hold" />
+                    </Panel>
+                  </div>
+                  <Panel title="Return of each month">
+                    <h3 className="sub">Strategy</h3>
+                    <MonthlyHeatmap rows={r.monthly_strategy} label="Strategy return by month" />
+                    <h3 className="sub">Buy &amp; hold (same stocks)</h3>
+                    <MonthlyHeatmap rows={r.monthly_benchmark} label="Buy and hold return by month" />
+                  </Panel>
+                  {r.trade_histogram && (
+                    <Panel title="How the trades turned out (net return per closed trade)">
+                      <TradeHistogram bins={r.trade_histogram} />
+                    </Panel>
+                  )}
+                </>
+              )}
+            </Async>
 
             <div className="grid2">
               <Panel title={`Early window (in-sample) · ${d.in_sample.start} → ${d.in_sample.end}`} flush>
@@ -93,21 +162,6 @@ export function StrategyPage() {
           </>
         )}
       </Async>
-
-      <Panel
-        title={`Growth, drawdown, exposure · ${window === "in_sample" ? "in-sample" : "out-of-sample"}`}
-        right={
-          <span className="seg">
-            {(["in_sample", "out_of_sample"] as Window[]).map((w) => (
-              <button key={w} className={w === window ? "on" : ""} onClick={() => { setWindow(w); setOffset(0); }}>
-                {w === "in_sample" ? "In-sample" : "Out-of-sample"}
-              </button>
-            ))}
-          </span>
-        }
-      >
-        <Async state={equity}>{(e) => <StrategyChart data={e} />}</Async>
-      </Panel>
 
       <Panel title="Trade log" flush>
         <Async state={trades}>

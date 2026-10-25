@@ -6,7 +6,7 @@ export type NavItem = { to: string; label: string; end?: boolean };
 export const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Today", items: [{ to: "/", label: "Home", end: true }] },
   { group: "Portfolio", items: [{ to: "/advisory", label: "Portfolio advisor" }] },
-  { group: "Research", items: [{ to: "/strategies", label: "Strategies" }, { to: "/multiasset", label: "Multi-asset rules" }, { to: "/screener", label: "Stocks" }] },
+  { group: "Research", items: [{ to: "/strategies", label: "Strategies" }, { to: "/compare", label: "Compare" }, { to: "/multiasset", label: "Multi-asset rules" }, { to: "/screener", label: "Stocks" }] },
   { group: "Paper trading", items: [{ to: "/paper", label: "Scoreboard", end: true }, { to: "/paper#go-live", label: "Go-live gates" }] },
   { group: "Evidence", items: [{ to: "/research", label: "Research log" }, { to: "/methodology", label: "How it works" }] },
 ];

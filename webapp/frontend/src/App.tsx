@@ -17,6 +17,8 @@ const named = <T extends Record<string, unknown>>(load: () => Promise<T>, key: k
 const Screener = named(() => import("./pages/Screener"), "Screener");
 const Stock = named(() => import("./pages/Stock"), "Stock");
 const Strategies = named(() => import("./pages/Strategies"), "Strategies");
+const Compare = named(() => import("./pages/Compare"), "Compare");
+const ReportCard = named(() => import("./pages/ReportCard"), "ReportCard");
 const StrategyPage = named(() => import("./pages/StrategyPage"), "StrategyPage");
 const PaperTrading = named(() => import("./pages/PaperTrading"), "PaperTrading");
 const Advisory = named(() => import("./pages/Advisory"), "Advisory");
@@ -32,6 +34,8 @@ const Methodology = named(() => import("./pages/Methodology"), "Methodology");
 //   /multiasset           Multi-asset     trend-filter trading rules over six asset classes, against no timing
 //   /strategies           Strategies      every strategy with its validation status
 //   /strategies/:id       (detail of one strategy)
+//   /strategies/:id/card  (the same strategy on one printable page: "Save as PDF")
+//   /compare              Compare         two or three strategies on one chart and one table
 //   /screener             Stocks          every stock: table or sector heatmap
 //   /stock/:symbol        Stock cockpit   one stock: chart, strategy slices, data quality
 //   /paper                Paper trading   frozen candidates run forward, against buy-and-hold
@@ -39,7 +43,7 @@ const Methodology = named(() => import("./pages/Methodology"), "Methodology");
 //   /methodology          How it works    how the results were produced and what they cannot show
 const TITLES: [RegExp, string][] = [
   [/^\/$/, "Home"], [/^\/advisory/, "Portfolio advisor"], [/^\/multiasset/, "Multi-asset trading rules"],
-  [/^\/strategies\/.+/, "Strategy"], [/^\/strategies/, "Strategies"], [/^\/screener/, "Stocks"],
+  [/^\/compare/, "Compare strategies"], [/^\/strategies\/[^/]+\/card$/, "Report card"], [/^\/strategies\/.+/, "Strategy"], [/^\/strategies/, "Strategies"], [/^\/screener/, "Stocks"],
   [/^\/stock\/(.+)/, "Stock"], [/^\/paper/, "Paper trading"], [/^\/research/, "Research log"], [/^\/methodology/, "How it works"],
 ];
 
@@ -51,7 +55,7 @@ function PageChrome() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
     const hit = TITLES.find(([re]) => re.test(pathname));
-    const detail = pathname.match(/^\/(?:stock|strategies)\/(.+)$/)?.[1];
+    const detail = pathname.match(/^\/(?:stock|strategies)\/([^/]+)/)?.[1];
     document.title = `${hit ? hit[1] : "Page not found"}${detail ? `: ${/^\/strategies\//.test(pathname) ? strategyLabel(decodeURIComponent(detail)) : decodeURIComponent(detail)}` : ""} · AlphaGuard AI`;
   }, [pathname]);
   useEffect(() => {
@@ -109,6 +113,8 @@ export default function App() {
             <Route path="/stock/:symbol" element={<Stock />} />
             <Route path="/strategies" element={<Strategies />} />
             <Route path="/strategies/:id" element={<StrategyPage />} />
+            <Route path="/strategies/:id/card" element={<ReportCard />} />
+            <Route path="/compare" element={<Compare />} />
             <Route path="/multiasset" element={<MultiAsset />} />
             <Route path="/advisory" element={<Advisory />} />
             <Route path="/paper" element={<PaperTrading />} />

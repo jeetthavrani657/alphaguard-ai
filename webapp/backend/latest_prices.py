@@ -20,11 +20,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 CACHE_DIR = os.path.join(ROOT, "data", "cache")
 OUT_NAME = "latest_prices.json"
 SUSPECT_MOVE_PCT = 25.0              # a one-day move beyond this is the validator's own "large move" line; it is shown with a warning, not trusted silently
+RECENT_DAYS = 60                     # how many of the latest closes are kept for the small price line on the Stocks page
+MONTH_ROWS = 21                      # one month of trading days: the "1 month" change compares the newest close with the close this many rows earlier
 STALE_AFTER_DAYS = 7                 # a newest bar this many days behind the freshest stock means the stock stopped updating (delisted, renamed, a failed download)
 
 
-def last_two_closes(path: str):
-    """(date, close, previous close or None) of the last row of one cache file, or None if the file has no usable close. Reads the whole small CSV, ignores bad rows."""
+def read_recent(path: str):
+    """
+    (date, close, previous close or None, recent closes oldest first, close one month earlier or None) from one cache file, or None if the file has no usable close.
+    Reads the whole small CSV, ignores bad rows.
+    """
     import pandas as pd
     try:
         frame = pd.read_csv(path, usecols=["date", "close"], parse_dates=["date"])
@@ -36,27 +41,31 @@ def last_two_closes(path: str):
         return None
     last = frame.iloc[-1]
     prev = float(frame.iloc[-2]["close"]) if len(frame) > 1 else None
-    return last["date"], float(last["close"]), prev
+    month_ago = float(frame.iloc[-1 - MONTH_ROWS]["close"]) if len(frame) > MONTH_ROWS else None
+    recent = [round(float(c), 2) for c in frame["close"].tail(RECENT_DAYS)]
+    return last["date"], float(last["close"]), prev, recent, month_ago
 
 
 def build(cache_dir: str = CACHE_DIR) -> dict:
-    """{"as_of", "generated_at", "prices": {SYMBOL: {date, close, prev_close, change_pct, suspect, stale}}} for every *.NS.csv in `cache_dir`."""
+    """{"as_of", "generated_at", "prices": {SYMBOL: {date, close, prev_close, change_pct, change_1m_pct, recent_closes, suspect, stale}}} for every *.NS.csv in `cache_dir`."""
     import pandas as pd
     found = {}
     for name in sorted(os.listdir(cache_dir)):
         if not name.endswith(".NS.csv"):
             continue
-        got = last_two_closes(os.path.join(cache_dir, name))
+        got = read_recent(os.path.join(cache_dir, name))
         if got is not None:
             found[name[: -len(".NS.csv")]] = got
     if not found:
         return {"as_of": None, "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "prices": {}}
-    as_of = max(d for d, _, _ in found.values())
+    as_of = max(v[0] for v in found.values())
     prices = {}
-    for symbol, (d, close, prev) in found.items():
+    for symbol, (d, close, prev, recent, month_ago) in found.items():
         change = 100.0 * (close / prev - 1.0) if prev else None
+        month = 100.0 * (close / month_ago - 1.0) if month_ago else None
         prices[symbol] = {"date": d.strftime("%Y-%m-%d"), "close": round(close, 2), "prev_close": None if prev is None else round(prev, 2),
                           "change_pct": None if change is None else round(change, 2),
+                          "change_1m_pct": None if month is None else round(month, 2), "recent_closes": recent,
                           "suspect": change is not None and abs(change) > SUSPECT_MOVE_PCT,
                           "stale": (as_of - d).days > STALE_AFTER_DAYS}
     return {"as_of": as_of.strftime("%Y-%m-%d"), "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "prices": prices}
