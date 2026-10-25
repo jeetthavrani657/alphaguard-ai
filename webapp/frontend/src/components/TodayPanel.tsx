@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useApi } from "../api/useApi";
@@ -67,14 +68,16 @@ export function TodayPanel() {
           </Async>
         </div>
       </div>
+      {tiles.length > 0 && <h3 className="subhead">The paper systems <span className="muted">(real prices, no real money)</span></h3>}
       {tiles.length > 0 && (
         <div className="today-grid">
           {tiles.map((t) => (
             <Link key={t.id} className="today-tile" to={t.to}>
               <span className="tile-name">{t.name}</span>
               <Sparkline values={t.growth} benchmark={t.growthBench} label={t.name} />
+              <span className="prog" style={{ "--d": t.days, "--n": t.need } as CSSProperties} role="img" aria-label={`day ${t.days} of ${t.need}`}><i /></span>
               <span className="tile-meta">
-                <span className="mono">day {t.days} of {t.need}</span>
+                <span className="mono">day {t.days} of {t.need} <span className="muted">· no verdict yet</span></span>
                 <b className={signClass(t.ret)}>{t.ret === null || t.ret === undefined ? "—" : pct(t.ret, 2)}</b>
                 <span className="muted">vs {t.bench === null || t.bench === undefined ? "—" : pct(t.bench, 2)}</span>
               </span>

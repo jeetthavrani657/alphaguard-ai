@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
+import { Fold } from "../useViewMode";
 import { StatusChip } from "../components/StatusChip";
 import { plain } from "../labels";
 import { Term } from "../components/Term";
@@ -57,6 +58,7 @@ export function Research() {
         </Async>
       </Panel>
 
+      <Fold title="More of the record" hint="the stock-picking ideas, what worse trading costs do, the options and same-day ideas, how a condor pays, the dip-buying test, and stocks with a data problem">
       <StockIdeas />
       <CostSensitivity />
 
@@ -126,6 +128,7 @@ export function Research() {
           </Async>
         </Panel>
       </div>
+      </Fold>
     </div>
   );
 }

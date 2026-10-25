@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
+import { Fold } from "../useViewMode";
 import { checkLabel, strategyLabel } from "../labels";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
@@ -129,6 +130,7 @@ export function Stock() {
 
       <Async state={detail}>
         {(d) => (
+          <Fold title="How the strategies did on this stock, its trades and its data quality" hint="each strategy's result on this one stock (a slice, never a verdict), the trades, and the data checks">
           <div className="grid2">
             <Panel title="Strategy results on this stock">
               <p className="note slice">{d.caveat}</p>
@@ -185,6 +187,7 @@ export function Stock() {
               </Panel>
             </div>
           </div>
+          </Fold>
         )}
       </Async>
     </div>

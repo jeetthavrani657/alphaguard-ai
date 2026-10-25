@@ -9,7 +9,9 @@ import { StatusChip } from "../components/StatusChip";
 import { StrategyChart } from "../components/charts/StrategyChart";
 import { Term } from "../components/Term";
 import { DrawdownTable, EvidenceMeter, MonthlyHeatmap, TradeHistogram } from "../components/ReportViews";
-import { plain } from "../labels";
+import { plain, VERDICT } from "../labels";
+import { GLOSSARY } from "../glossary";
+import { Fold } from "../useViewMode";
 import { int, num, pct, signClass, when } from "../fmt";
 import type { Window, WindowMetrics } from "../api/types";
 
@@ -96,6 +98,11 @@ export function StrategyPage() {
               {d.rationale}
               {Object.keys(d.params).length > 0 && <> Settings: {Object.entries(d.params).map(([k, v]) => `${k.replaceAll("_", " ")} ${String(v)}`).join(" · ")}.</>}
             </p>
+            <div className={d.status === "VALIDATED_CONFIRMED" ? "verdict ok" : "verdict"} role="status">
+              <span className="verdict-label">The honest check</span>
+              <b className="verdict-line">{VERDICT[d.status] ?? GLOSSARY[d.status]?.term}</b>
+              <span className="verdict-note">{GLOSSARY[d.status]?.short} Judged against the {d.as_of_hypotheses} ideas tried so far.</span>
+            </div>
             {d.notes.map((n) => <p className="note" key={n}>{plain(n)}</p>)}
 
             <div className="windowbar">
@@ -118,17 +125,16 @@ export function StrategyPage() {
             <Async state={report}>
               {(r) => (
                 <>
-                  <div className="grid2">
-                    <Panel title="How much evidence is there?" id="evidence">
-                      <EvidenceMeter e={r.evidence} />
-                    </Panel>
-                    <Panel title="Biggest falls from a peak">
-                      <h3 className="sub">Strategy</h3>
-                      <DrawdownTable rows={r.drawdown_periods_strategy} label="Strategy" />
-                      <h3 className="sub">Buy &amp; hold (same stocks)</h3>
-                      <DrawdownTable rows={r.drawdown_periods_benchmark} label="Buy and hold" />
-                    </Panel>
-                  </div>
+                  <Panel title="How much evidence is there?" id="evidence">
+                    <EvidenceMeter e={r.evidence} />
+                  </Panel>
+                  <Fold title="The bad stretches, month by month, and how the trades turned out" hint="biggest falls from a peak, every month's return, and the spread of the trades">
+                  <Panel title="Biggest falls from a peak">
+                    <h3 className="sub">Strategy</h3>
+                    <DrawdownTable rows={r.drawdown_periods_strategy} label="Strategy" />
+                    <h3 className="sub">Buy &amp; hold (same stocks)</h3>
+                    <DrawdownTable rows={r.drawdown_periods_benchmark} label="Buy and hold" />
+                  </Panel>
                   <Panel title="Return of each month">
                     <h3 className="sub">Strategy</h3>
                     <MonthlyHeatmap rows={r.monthly_strategy} label="Strategy return by month" />
@@ -140,10 +146,12 @@ export function StrategyPage() {
                       <TradeHistogram bins={r.trade_histogram} />
                     </Panel>
                   )}
+                  </Fold>
                 </>
               )}
             </Async>
 
+            <Fold title="Every number for both windows" hint="the full comparison with buy & hold, early window and later window, and where the numbers came from">
             <div className="grid2">
               <Panel title={`Early window (in-sample) · ${d.in_sample.start} → ${d.in_sample.end}`} flush>
                 <MetricsTable s={d.in_sample.strategy} b={d.in_sample.benchmark} />
@@ -159,10 +167,12 @@ export function StrategyPage() {
                 yearly cash rate used for the Sharpe ratio {d.provenance.risk_free_rate} · {d.provenance.ledger_total_at_snapshot} ideas tested at the time
               </p>
             </details>
+            </Fold>
           </>
         )}
       </Async>
 
+      <Fold title="Every trade" hint="the full list, a page at a time">
       <Panel title="Trade log" flush>
         <Async state={trades}>
           {(t) => (
@@ -207,6 +217,7 @@ export function StrategyPage() {
           )}
         </Async>
       </Panel>
+      </Fold>
     </div>
   );
 }

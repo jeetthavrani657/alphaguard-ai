@@ -641,3 +641,39 @@ kbd { font: 11px var(--mono); color: var(--muted); border: 1px solid var(--borde
 .claimform label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
 .claimform input { font-size: 16px; padding: 8px 10px; }
 ul.plain { margin: 0; padding-left: 18px; line-height: 1.55; }
+
+/* ---- Simple / Detailed ---- */
+.viewswitch button { font-size: 12.5px; padding: 4px 10px; }
+.viewswitch button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.fold { border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(180deg, var(--panel), var(--panel-end)); margin-bottom: 16px; }
+.fold > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 12px 16px; cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold-title { font-weight: 650; font-size: 15px; }
+.fold-hint { color: var(--muted); font-size: 13px; flex: 1 1 200px; }
+.fold-cue::after { content: "Show ▾"; color: var(--accent); font-size: 13px; white-space: nowrap; }
+.fold[open] > summary .fold-cue::after { content: "Hide ▴"; }
+.fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+.fold-body { padding: 0 16px 14px; }
+.fold-body > .panel { margin-top: 12px; }
+@media print { .fold > summary .fold-cue { display: none; } .fold:not([open]) > .fold-body { display: block; } }
+
+/* ---- Home: the honest check first, then the systems ---- */
+.verdict { display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; margin: 0 0 18px; border: 1px solid var(--border); border-left: 5px solid var(--warn); border-radius: 12px; background: linear-gradient(180deg, var(--panel), var(--panel-end)); }
+.verdict.ok { border-left-color: var(--pos); }
+.verdict-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.verdict-line { font-size: 20px; line-height: 1.3; }
+.verdict-note { color: var(--muted); font-size: 13.5px; }
+.subhead { font-size: 14px; margin: 14px 0 8px; }
+.prog { display: block; height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.prog > i { display: block; height: 100%; width: calc(var(--d) / var(--n) * 100%); min-width: 3px; background: var(--accent); }
+/* Simple hides the columns that need the Sharpe vocabulary; Detailed shows them (nothing is removed from the page's data) */
+html[data-view="simple"] .detail-col { display: none; }
+/* On a phone the answer must be on the first screen: the hero is just the name, the one-line promise, the two disclaimers and the buttons */
+@media (max-width: 640px) {
+  .hero { padding: 14px 16px; gap: 10px; }
+  .hero-mark { width: 40px; height: 40px; }
+  .hero-title { font-size: 28px; margin-bottom: 4px; }
+  .hero-tag { font-size: 15px; }
+  .hero-sub { display: none; }
+  .hero-chips { margin-bottom: 10px; }
+}

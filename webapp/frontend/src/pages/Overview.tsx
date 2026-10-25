@@ -8,6 +8,7 @@ import { StatusChip } from "../components/StatusChip";
 import { StockSearch } from "../components/StockSearch";
 import { TodayPanel } from "../components/TodayPanel";
 import { Term } from "../components/Term";
+import { Fold } from "../useViewMode";
 import { day, pct, signClass } from "../fmt";
 
 /**
@@ -43,10 +44,28 @@ export function Overview() {
           </div>
           <div className="hero-cta">
             <Link className="btn primary" to="/advisory">Build my portfolio</Link>
+            <Link className="btn" to="/claim-checker">Check a claim</Link>
             <Link className="btn" to="/methodology">How it works</Link>
           </div>
         </div>
       </section>
+
+      <Async state={strategies}>
+        {(d) => {
+          const passed = d.strategies.filter((s) => s.status === "VALIDATED_CONFIRMED").length;
+          return (
+            <div className={passed === 0 ? "verdict" : "verdict ok"} role="status">
+              <span className="verdict-label">The honest check</span>
+              <b className="verdict-line">
+                {passed === 0 ? `None of the ${d.strategies.length} strategies has passed it yet.` : `${passed} of ${d.strategies.length} strategies have passed it.`}
+              </b>
+              <span className="verdict-note">
+                {d.ledger_total_now} ideas have been tried, and a result only counts if luck cannot explain it after all of them. Most good-looking results do not survive that. <Link to="/methodology">What this means</Link>
+              </span>
+            </div>
+          );
+        }}
+      </Async>
 
       <TodayPanel />
 
@@ -57,10 +76,10 @@ export function Overview() {
           <b>Build a portfolio</b>
           <span>Answer five questions, get a mix for your risk appetite, see it in rupees, and what to buy or sell if you already hold some.</span>
         </Link>
-        <Link className="task" to="/multiasset">
-          <span className="task-ico" aria-hidden="true">↗</span>
-          <b>See what a trading rule would have done</b>
-          <span>A trend rule across six asset classes, against simply holding them, including through the 2020 crash.</span>
+        <Link className="task" to="/claim-checker">
+          <span className="task-ico" aria-hidden="true">✓</span>
+          <b>Check a claim</b>
+          <span>Somebody says a rule has a Sharpe of 2.3. Is that skill, or what luck produces when enough things are tried?</span>
         </Link>
         <Link className="task" to="/paper">
           <span className="task-ico" aria-hidden="true">◷</span>
@@ -75,6 +94,7 @@ export function Overview() {
         </div>
       </div>
 
+      <Fold title="The scoreboard and the numbers behind it" hint="every strategy and its status, the advisory profiles and the trading rules, and how to read them">
       <h2 className="section-title">The scoreboard in numbers</h2>
       <div className="stats">
         <div className="stat">
@@ -220,6 +240,7 @@ export function Overview() {
           </p>
         </div>
       </div>
+      </Fold>
     </div>
   );
 }

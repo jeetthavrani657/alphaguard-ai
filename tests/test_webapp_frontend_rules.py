@@ -260,6 +260,41 @@ def test_the_cost_panel_is_on_the_research_page_reads_the_api_and_draws_no_ratio
     assert not re.search(r"\.\w*(sharpe|sortino)", _strip_comments(text), flags=re.I) and "<Ratio" not in text, "the file carries no Sharpe with a status, so none is drawn"
 
 
+def test_simple_and_detailed_never_remove_anything_and_a_first_visit_starts_simple():
+    hook = _read("useViewMode.tsx")
+    assert hook.count("localStorage") == 2 and hook.count("try {") == 2, "every storage access must be guarded: it throws in some private windows"
+    assert 'return "simple"' in hook and 'open={mode === "detailed"}' in hook, "closed in Simple, open in Detailed: folding only, never removing"
+    assert "hashchange" in hook and ".contains(el)" in hook and "scrollIntoView" in hook, "a link to a part inside a closed fold must open the fold and land on the part"
+    css = _read("styles.css")
+    assert 'html[data-view="simple"] .detail-col { display: none; }' in css
+
+
+def test_what_must_always_be_visible_never_sits_inside_a_fold():
+    for page in ("Advisory.tsx", "PaperTrading.tsx"):
+        text = _read("pages", page)
+        assert text.index("<Disclaimer") < text.index("<Fold"), f"{page}: the disclaimer must come before anything that folds"
+    # the strategies list hides the two ratio columns in Simple, but the status column that every ratio needs beside it is never one of them
+    strategies = _read("pages", "Strategies.tsx")
+    status_cell = next(line for line in strategies.splitlines() if "<StatusChip" in line)
+    assert "detail-col" not in status_cell and strategies.count("detail-col") == 4, "only the two ratio headers and their two cells are hidden in Simple"
+    for line in strategies.splitlines():
+        if "<Ratio" in line:
+            assert "detail-col" in line, "every ratio sits in a hideable column: in Simple none is drawn, in Detailed each has its status beside it"
+
+
+def test_every_status_has_a_plain_verdict_and_the_home_page_states_the_honest_check_first():
+    from webapp.backend.main import app
+    labels = _read("labels.ts")
+    schemas = app.openapi()["components"]["schemas"]
+    statuses = set(schemas["Status"]["enum"]) if "Status" in schemas else set()
+    verdict_block = labels[labels.index("export const VERDICT"): labels.index("};", labels.index("export const VERDICT"))]
+    missing = [x for x in statuses if x not in verdict_block]
+    assert not missing, f"statuses with no plain verdict: {missing}"
+    home = _read("pages", "Overview.tsx")
+    assert home.index('className={passed === 0 ? "verdict"') < home.index("<TodayPanel />") < home.index("<Fold title="), "the honest check comes first, then the systems, then the folded detail"
+    assert 'status === "VALIDATED_CONFIRMED"' in home and "None of the" in home
+
+
 def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
     text = _read("components", "ReadFirst.tsx")
     shown = text.index("not investment advice")

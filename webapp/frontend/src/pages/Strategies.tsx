@@ -7,6 +7,7 @@ import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
 import { Term } from "../components/Term";
 import { when } from "../fmt";
+import { VERDICT } from "../labels";
 
 export function Strategies() {
   const state = useApi(() => api.strategies(), []);
@@ -29,8 +30,8 @@ export function Strategies() {
                 <table className="stack">
                   <thead>
                     <tr>
-                      <th>Strategy</th><th>Universe</th><th>Status</th><th><Term k="in_sample">In-sample</Term> <Term k="sharpe">Sharpe</Term></th>
-                      <th><Term k="out_of_sample">Out-of-sample</Term> <Term k="sharpe">Sharpe</Term></th><th>Up to date?</th>
+                      <th>Strategy</th><th>Universe</th><th>The honest check</th><th className="detail-col"><Term k="in_sample">In-sample</Term> <Term k="sharpe">Sharpe</Term></th>
+                      <th className="detail-col"><Term k="out_of_sample">Out-of-sample</Term> <Term k="sharpe">Sharpe</Term></th><th>Up to date?</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -38,9 +39,9 @@ export function Strategies() {
                       <tr key={s.id}>
                         <td><Link to={`/strategies/${s.id}`}>{s.name}</Link></td>
                         <td data-label="Universe">{s.universe}</td>
-                        <td data-label="Status"><StatusChip status={s.status} /> <span className="muted">as of {s.as_of_hypotheses}</span></td>
-                        <td data-label="In-sample Sharpe"><Ratio ratio={s.in_sample_sharpe} compact /></td>
-                        <td data-label="Out-of-sample Sharpe"><Ratio ratio={s.out_of_sample_sharpe} compact /></td>
+                        <td data-label="The honest check"><b>{VERDICT[s.status] ?? s.status}</b> <StatusChip status={s.status} /> <span className="muted">as of {s.as_of_hypotheses}</span></td>
+                        <td className="detail-col" data-label="In-sample Sharpe"><Ratio ratio={s.in_sample_sharpe} compact /></td>
+                        <td className="detail-col" data-label="Out-of-sample Sharpe"><Ratio ratio={s.out_of_sample_sharpe} compact /></td>
                         <td data-label="Up to date?">{s.stale ? <span className="chip stale">STALE: ledger has grown</span> : <span className="muted">current</span>}</td>
                       </tr>
                     ))}

@@ -119,6 +119,8 @@ forward days before any of the gates could be met. Nothing now passes the gates,
 1. **Intended amount.** How much money, in rupees, would you be willing to run in the end, and how much could you lose entirely without it changing your life? The second number is the
    real limit; every percentage above is a share of the first.
 2. **Drawdown levels.** Are 5%, 10% and 15% below the peak right for you? Many people say 10% and then cannot stand it at 8%. Choose the number at which you would stop sleeping.
+   **Answered 2026-10-25: 10%.** Read as the halt level (no new orders, a person must write a note), which is what the code already used and what go-live gate 7 already says. The 5% warning and
+   the 15% review level are still the proposals above; on Rs 20,000 the halt is Rs 2,000 (Rs 1,500 on Rs 15,000).
 3. **Halt or sell?** At the 15% level, should the system only stop and wait for you, or also sell everything to cash? (Stopping is simpler and keeps the rule's own exits; selling limits the
    loss but locks it in.)
 4. **The first step.** Is 5% of the intended amount the right size to learn with, and are 3 months at each step long enough?

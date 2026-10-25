@@ -12,6 +12,16 @@ export function strategyLabel(id: string): string {
   return universe ? `${rest.join(" ")} · ${universe}` : rest.join(" ");
 }
 
+/** A validation status as the plain headline of a verdict: what a person would say, not the label of the test. The exact name stays on the status chip beside it. */
+export const VERDICT: Record<string, string> = {
+  VALIDATED_FAILED: "It did not pass",
+  UNVALIDATED: "Too early to judge",
+  OOS_ONLY_SIGNIFICANT: "It passed only in the later period",
+  VALIDATED_CONFIRMED: "It passed in both periods",
+  BENCHMARK_NOT_A_HYPOTHESIS: "A yardstick, not a strategy",
+  SLICE_OF_POOLED_HYPOTHESIS: "One stock's part of a larger test",
+};
+
 /** "sma_50" as "SMA 50", "rsi_14" as "RSI 14". */
 export const indicatorLabel = (key: string): string => key.split("_").map((w) => WORDS[w] ?? w).join(" ");
 

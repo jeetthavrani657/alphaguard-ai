@@ -13,7 +13,7 @@ so that changing them is a one-line edit, and every one has a test that makes it
 
 RISK = {
     "drawdown_warning": 0.05,       # a visible alert; nothing stops
-    "drawdown_halt": 0.10,          # no new orders until a person writes a note (the same 10% as go-live gate 7)
+    "drawdown_halt": 0.10,          # no new orders until a person writes a note (the same 10% as go-live gate 7). CONFIRMED by the owner, 2026-10-25: "10%"
     "drawdown_review": 0.15,        # everything stops until the rule has been re-judged
     "daily_loss_halt": 0.03,        # one day's fall of this much halts new orders: a daily-bar rule should never lose this in a day, so something is wrong
 }

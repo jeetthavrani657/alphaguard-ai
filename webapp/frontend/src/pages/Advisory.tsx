@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useApi } from "../api/useApi";
 import { Async } from "../components/Async";
 import { Panel } from "../components/Panel";
+import { Fold } from "../useViewMode";
 import { Disclaimer } from "../components/ReadFirst";
 import { Ratio } from "../components/Ratio";
 import { StatusChip } from "../components/StatusChip";
@@ -363,7 +364,7 @@ export function Advisory() {
               <nav className="toc" aria-label="On this page">
                 <span className="muted">Jump to:</span>
                 {[["mix", "Your mix"], ["amount", "In rupees"], ["rebalance", "If you already hold some"], ["risk", "Risk and history"], ["assets", "The assets"], ["trend", "Trend today"], ["stress", "Past crises"]].map(([id, label]) => (
-                  <a key={id} href={`#${id}`} onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</a>
+                  <a key={id} href={`#${id}`}>{label}</a>
                 ))}
               </nav>
 
@@ -408,6 +409,7 @@ export function Advisory() {
                 <Rebalance p={p} d={d} />
               </Panel>
 
+              <Fold title="Risk, history and how the mix is built" hint="the historical simulation, the assets and how they move together, where each stands today, past crises, and the rule in four steps">
               <Panel title="5. Risk and a historical simulation" id="risk">
                 <p className="muted">
                   Simulated from {d.simulation_start} to {d.data_through} with the frozen rule (weights decided at one close, carried out the next day,
@@ -481,6 +483,7 @@ export function Advisory() {
                   <ul>{d.data_cleaning.removed.map((r) => <li key={r.asset_id + r.date}>{r.asset_id} on {r.date}: {num(r.price, 2)} against {num(r.neighbour_price, 2)} the day before</li>)}</ul>
                 </details>
               </Panel>
+              </Fold>
             </>
           );
         }}

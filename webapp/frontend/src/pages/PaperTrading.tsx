@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Fold } from "../useViewMode";
 import { api } from "../api/client";
 import { useApi, usePolling } from "../api/useApi";
 import { Async } from "../components/Async";
@@ -362,8 +363,12 @@ export function PaperTrading() {
             />
             <Scoreboard />
             <GoLive />
-            {d.books.map((b) => <div id={`book-${b.id}`} key={b.id}><BookCard book={b} /></div>)}
-            <AdvisoryForward />
+            <Fold title="The stock-picking paper books in detail" hint="each book's clock, positions, trades and how it stands against holding">
+              {d.books.map((b) => <div id={`book-${b.id}`} key={b.id}><BookCard book={b} /></div>)}
+            </Fold>
+            <Fold title="The advisory profiles and the trading rules in detail" hint="the three risk profiles and the trend and momentum rules, run forward">
+              <AdvisoryForward />
+            </Fold>
             <details className="liveprices" onToggle={(e) => setShowLive((e.currentTarget as HTMLDetailsElement).open)}>
               <summary>Live prices of the stocks these books hold (optional)</summary>
               {showLive && <LivePrices books={d.books} />}

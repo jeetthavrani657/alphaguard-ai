@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { ViewModeProvider } from "./useViewMode";
 import "./styles.css";
 
 // The browser loads index.html, which loads this file, which mounts <App />
@@ -10,7 +11,9 @@ import "./styles.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <ViewModeProvider>
+        <App />
+      </ViewModeProvider>
     </BrowserRouter>
   </StrictMode>,
 );
