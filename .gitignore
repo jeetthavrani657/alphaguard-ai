@@ -98,3 +98,4 @@ data/display_cache/
 # Logs of two evening steps (data/refresh_display.py, research/public_page.py): overwritten every run, nothing worth keeping.
 reports/output/display_refresh_last_run.log
 reports/output/public_page_last_run.log
+reports/output/track_record_last_run.log
