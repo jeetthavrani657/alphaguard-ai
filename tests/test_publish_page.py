@@ -13,6 +13,9 @@ import pytest
 
 import publish_page as pp
 
+HEAD = "run_date,book_id,return_pct\n"
+SNAP = "reports/output/forward_snapshots.csv"
+BOOKS = "reports/output/forward_books.csv"
 SAFE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title></head><body><p>checks made 1</p><a href="https://github.com/x/y">repo</a></body></html>'
 
 
@@ -50,6 +53,9 @@ def world(tmp_path):
     git(local, "config", "commit.gpgsign", "false")
     write(local, "docs/index.html", SAFE)
     write(local, "notes.txt", "first\n")
+    for name in ("forward_snapshots", "forward_books", "advisory_forward"):
+        write(local, f"reports/output/{name}.csv", HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0\n")
+    write(local, "reports/output/other.csv", "x\n1\n")                                              # a CSV the job must never touch
     git(local, "add", "-A")
     git(local, "commit", "-q", "-m", "start")
     git(local, "push", "-q", "origin", "main")
@@ -69,7 +75,7 @@ def test_a_changed_page_is_committed_and_pushed_and_nothing_else_goes_with_it(wo
     write(world["local"], "docs/index.html", SAFE.replace("checks made 1", "checks made 2"))
     r = run(world)
     assert r["status"] == "published", r
-    assert remote_log(world)[0].startswith("Daily refresh of the public track-record page")
+    assert remote_log(world)[0].startswith("Daily refresh of the public record (automatic)")
     assert git(world["remote"], "show", "--name-only", "--format=", "main").splitlines() == ["docs/index.html"]
     assert git(world["local"], "rev-parse", "HEAD") == git(world["remote"], "rev-parse", "main")
 
@@ -175,3 +181,72 @@ def test_it_runs_after_the_page_is_rebuilt_and_before_the_alerts_and_cannot_stop
     bat = open(os.path.join(os.path.dirname(os.path.dirname(pp.__file__)), "run_forward_log.bat"), encoding="utf-8").read()
     assert bat.index("research\\public_page.py") < bat.index("research\\publish_page.py") < bat.index("research\\alerts.py")
     assert pp.main.__doc__ is None and "return 0" in open(pp.__file__, encoding="utf-8").read().split("def main")[1]
+
+
+# --- the paper-trading record: committed only if it has only grown ---------------------------------------------------------------------
+
+def test_new_days_in_the_record_files_are_committed_and_pushed_together_with_a_changed_page(world):
+    write(world["local"], SNAP, HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0\n2026-10-22,a,3.0\n")
+    write(world["local"], BOOKS, HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0\n2026-10-22,a,3.5\n")
+    write(world["local"], "docs/index.html", SAFE.replace("checks made 1", "checks made 10"))
+    r = run(world)
+    assert r["status"] == "published" and sorted(r["files"]) == sorted(["docs/index.html", SNAP, BOOKS]), r
+    assert sorted(git(world["remote"], "show", "--name-only", "--format=", "main").splitlines()) == sorted(["docs/index.html", SNAP, BOOKS])
+    assert git(world["local"], "rev-parse", "HEAD") == git(world["remote"], "rev-parse", "main")
+
+
+def test_a_record_file_alone_is_enough_to_publish(world):
+    write(world["local"], SNAP, HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0\n2026-10-22,a,3.0\n")
+    r = run(world)
+    assert r["status"] == "published" and r["files"] == [SNAP]
+
+
+def test_the_last_day_may_be_run_again_but_an_earlier_day_rewritten_is_refused_and_the_rest_still_goes(world):
+    write(world["local"], SNAP, HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.5\n")                    # only the LAST day changed: allowed
+    write(world["local"], BOOKS, HEAD + "2026-10-20,a,9.9\n2026-10-21,a,2.0\n")                   # an EARLIER day changed: a rewrite
+    write(world["local"], "docs/index.html", SAFE.replace("checks made 1", "checks made 11"))
+    r = run(world)
+    assert r["status"] == "published" and sorted(r["files"]) == sorted(["docs/index.html", SNAP])
+    assert [p for p, why in r["refused"]] == [BOOKS] and "2026-10-20" in r["refused"][0][1]
+    assert git(world["remote"], "show", f"main:{BOOKS}") == (HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0").strip()      # the rewrite never reached GitHub
+    assert f" M {BOOKS}" in porcelain(world["local"])                                                 # it waits in the working folder for a person
+
+
+def test_when_the_only_change_is_a_rewrite_nothing_is_committed_and_it_says_why(world):
+    write(world["local"], BOOKS, HEAD + "2026-10-20,a,9.9\n2026-10-21,a,2.0\n")
+    before = git(world["remote"], "rev-parse", "main")
+    r = run(world)
+    assert r["status"] == "skipped" and "nothing was committed" in r["detail"] and BOOKS in r["detail"]
+    assert git(world["remote"], "rev-parse", "main") == before
+
+
+def test_a_record_file_that_was_never_committed_is_left_for_a_person(world):
+    git(world["local"], "rm", "-q", "--cached", SNAP)
+    git(world["local"], "commit", "-q", "-m", "stop tracking the snapshot file")
+    git(world["local"], "push", "-q", "origin", "main")
+    write(world["local"], SNAP, HEAD + "2026-10-20,a,1.0\n")
+    r = run(world)
+    assert r["status"] == "skipped" and [p for p, why in r["refused"]] == [SNAP]
+
+
+def test_a_csv_that_is_not_one_of_the_three_is_never_touched(world):
+    write(world["local"], "reports/output/other.csv", "x\n2\n")
+    write(world["local"], SNAP, HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0\n2026-10-22,a,3.0\n")
+    assert run(world)["files"] == [SNAP]
+    assert " M reports/output/other.csv" in porcelain(world["local"]) and git(world["remote"], "show", "main:reports/output/other.csv") == "x\n1".strip()
+
+
+def test_an_unsafe_page_is_refused_but_a_good_record_file_beside_it_is_still_published(world):
+    write(world["local"], "docs/index.html", SAFE.replace("</body>", "<script>x</script></body>"))
+    write(world["local"], SNAP, HEAD + "2026-10-20,a,1.0\n2026-10-21,a,2.0\n2026-10-22,a,3.0\n")
+    r = run(world)
+    assert r["status"] == "published" and r["files"] == [SNAP] and "script" in r["refused"][0][1]
+    assert " M docs/index.html" in porcelain(world["local"])
+
+
+def test_the_four_names_are_exactly_the_files_the_daily_run_writes_and_all_are_tracked():
+    root = os.path.dirname(os.path.dirname(pp.__file__))
+    assert pp.PAGE == "docs/index.html" and sorted(pp.RECORDS) == sorted(["reports/output/forward_snapshots.csv", "reports/output/forward_books.csv", "reports/output/advisory_forward.csv"])
+    tracked = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True).stdout.split()
+    for rel in [pp.PAGE, *pp.RECORDS]:
+        assert rel in tracked, f"{rel} is not in git"
