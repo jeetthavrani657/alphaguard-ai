@@ -94,3 +94,7 @@ reports/output/latest_prices_last_run.log
 
 # Display-only recent prices for stocks the daily run does not update (data/refresh_display.py); only the web app's latest-prices layer reads them.
 data/display_cache/
+
+# Logs of two evening steps (data/refresh_display.py, research/public_page.py): overwritten every run, nothing worth keeping.
+reports/output/display_refresh_last_run.log
+reports/output/public_page_last_run.log
