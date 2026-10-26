@@ -17,6 +17,7 @@ Every piece of text from the checks file is HTML-escaped. The page says when it 
 import html
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -107,6 +108,21 @@ def render(data: dict, built_at: str | None = None) -> str:
 </footer>
 </main></body></html>
 """
+
+
+def unsafe_parts(text: str) -> list:
+    """
+    What must never be in the published page: a script, a frame, a form, anything loaded from elsewhere, or a link to any host but GitHub. An empty list means it is safe to publish. The automatic
+    publisher (research/publish_page.py) refuses to push a page that fails this, whatever produced it.
+    """
+    low = text.lower()
+    found = [name for name, bad in (("a script", "<script" in low), ("a frame", "<iframe" in low or "<object" in low or "<embed" in low), ("a form", "<form" in low),
+                                    ("a linked file", "<link" in low), ("an import", "@import" in low or "url(" in low), ("a loaded resource", bool(re.search(r"\b(src|srcset)\s*=", low))),
+                                    ("a refresh or redirect", "http-equiv" in low)) if bad]
+    hosts = set(re.findall(r"https?://([^/\"' <>]+)", text))
+    if hosts - {"github.com"}:
+        found.append("a link to " + ", ".join(sorted(hosts - {"github.com"})))
+    return found
 
 
 def main() -> int:

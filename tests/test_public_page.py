@@ -92,3 +92,13 @@ def test_each_result_has_its_own_colour_class_and_the_page_fits_a_phone():
     out = page({**CHECKS, "checks": CHECKS["checks"] + [{"id": "c", "title": "Ledger", "status": "FAIL", "detail": "changed"}]})
     assert '<td class="pass">Passed</td>' in out and '<td class="early">Too early to check</td>' in out and '<td class="fail">FAILED</td>' in out
     assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in out and '<html lang="en">' in out
+
+
+def test_the_safety_check_finds_each_kind_of_unsafe_content_and_passes_the_real_page():
+    assert pp.unsafe_parts(page()) == []
+    cases = {"a script": "<SCRIPT>x</SCRIPT>", "a frame": "<iframe></iframe>", "a form": "<form>", "a linked file": '<link rel="stylesheet" href="x.css">', "an import": "<style>@import 'x';</style>",
+             "a loaded resource": '<img src="a.png">', "a refresh or redirect": '<meta http-equiv="refresh">'}
+    for name, bad in cases.items():
+        assert name in pp.unsafe_parts(page().replace("</body>", bad + "</body>")), name
+    assert pp.unsafe_parts(page().replace("</body>", '<a href="https://evil.example/a">x</a></body>')) == ["a link to evil.example"]
+    assert pp.unsafe_parts(page().replace("</body>", '<a href="https://github.com/other/repo">x</a></body>')) == []                     # github.com is the one host allowed

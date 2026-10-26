@@ -99,3 +99,5 @@ data/display_cache/
 reports/output/display_refresh_last_run.log
 reports/output/public_page_last_run.log
 reports/output/track_record_last_run.log
+reports/output/publish_page_last_run.log
+AUTO_PUBLISH_OFF
