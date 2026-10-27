@@ -27,3 +27,10 @@ run_date,profile_id,data_through,status,n_trading_days,return_pct,benchmark_retu
 2026-10-26,trend_risk_managed,2026-10-26,RUNNING,4,-1.854,-0.689,-1.854,74.04
 2026-10-26,momentum_top2,2026-10-26,RUNNING,4,-5.442,-0.689,-5.442,100.0
 2026-10-26,momentum_top3_risk_managed,2026-10-26,RUNNING,4,-2.501,-0.689,-2.501,94.75
+2026-10-27,conservative,2026-10-27,RUNNING,5,-1.273,-0.655,-1.821,100.0
+2026-10-27,moderate,2026-10-27,RUNNING,5,-1.354,-0.655,-1.883,100.0
+2026-10-27,aggressive,2026-10-27,RUNNING,5,-1.744,-0.655,-2.382,100.0
+2026-10-27,trend_equal_weight,2026-10-27,RUNNING,5,-1.362,-0.655,-1.709,48.23
+2026-10-27,trend_risk_managed,2026-10-27,RUNNING,5,-1.391,-0.655,-1.819,74.15
+2026-10-27,momentum_top2,2026-10-27,RUNNING,5,-4.81,-0.655,-5.442,100.0
+2026-10-27,momentum_top3_risk_managed,2026-10-27,RUNNING,5,-2.168,-0.655,-2.501,94.77
