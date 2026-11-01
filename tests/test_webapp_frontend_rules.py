@@ -295,6 +295,13 @@ def test_every_status_has_a_plain_verdict_and_the_home_page_states_the_honest_ch
     assert 'status === "VALIDATED_CONFIRMED"' in home and "None of the" in home
 
 
+def test_the_home_systems_say_ahead_or_behind_in_words_and_the_paper_orders_say_they_are_simulated():
+    text = _read("components", "TodayPanel.tsx")
+    assert '"ahead of holding"' in text and '"behind holding"' in text and "no verdict yet" in text, "a comparison in words, and never a verdict before the days are in"
+    assert "nothing is sent to a broker" in text and "simulated fills" in text, "the orders list must say what it is"
+    assert ".slice(0, 6)" in text and "b.orders" in text, "the list is the books' own simulated fills, newest first, and short"
+
+
 def test_the_one_line_disclaimer_is_always_on_the_page_and_never_inside_the_fold():
     text = _read("components", "ReadFirst.tsx")
     shown = text.index("not investment advice")
