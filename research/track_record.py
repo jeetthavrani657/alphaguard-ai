@@ -71,16 +71,25 @@ def csv_growth_problems(old_text: str, new_text: str) -> list:
     if not new or old[0] != new[0]:
         return ["the header changed"]
     last_day = max(r[0] for r in old[1:]) if len(old) > 1 else None
-    later = {tuple(r[:2]) if len(r) > 1 else (r[0],): r for r in new[1:]}
-    out = []
+
+    def key_of(r: list) -> tuple:
+        return tuple(r[:2]) if len(r) > 1 else (r[0],)
+
+    # A day can have more than one row for the same book (the evening run missed and then run again on the same day: a catch-up). So rows are grouped by key and each earlier day's rows must
+    # reappear exactly, in the same order, with nothing added to that day since. (A plain dictionary would keep only the last row per key and report the first as "changed" the day after
+    # a catch-up, a false alarm that was found before it reached the public page.)
+    old_by_key, new_by_key = {}, {}
     for r in old[1:]:
-        if r[0] == last_day:
-            continue
-        key = tuple(r[:2])
-        if key not in later:
-            out.append(f"the row for {key[0]} {key[1] if len(key) > 1 else ''} was removed".replace("  ", " "))
-        elif later[key] != r:
-            out.append(f"the row for {key[0]} {key[1] if len(key) > 1 else ''} was changed".replace("  ", " "))
+        if r[0] != last_day:
+            old_by_key.setdefault(key_of(r), []).append(r)
+    for r in new[1:]:
+        new_by_key.setdefault(key_of(r), []).append(r)
+    out = []
+    for key, rows in old_by_key.items():
+        label = f"{key[0]} {key[1]}" if len(key) > 1 else key[0]
+        now = new_by_key.get(key, [])
+        if now != rows:
+            out.append(f"the row for {label} was " + ("removed" if len(now) < len(rows) else "changed"))
     return out
 
 

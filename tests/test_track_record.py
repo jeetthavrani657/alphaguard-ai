@@ -262,3 +262,43 @@ def test_an_idea_whose_file_has_gone_missing_fails(repo):
     commit(repo, "the run is recorded, the file never was")
     check_ = status_of(tr.run_checks(repo), "ideas_frozen_first")
     assert check_["status"] == "FAIL" and "not in git" in check_["detail"]
+
+
+# --- a catch-up gives a book two rows on one day: that must not look like a rewrite the day after ------------------------------------------
+
+def test_two_rows_for_the_same_book_on_one_day_are_not_a_rewrite_the_next_day():
+    day1 = HEAD + "2026-10-30,a,1.0\n2026-10-30,a,2.0\n2026-10-30,b,5.0\n2026-10-30,b,6.0\n"           # the evening run was missed, then run twice on the 30th (data through the 29th, then the 30th)
+    day2 = day1 + "2026-11-02,a,3.0\n2026-11-02,b,7.0\n"
+    day3 = day2 + "2026-11-03,a,4.0\n"
+    assert tr.csv_growth_problems(day1, day2) == []                                                  # the 30th is still the last day
+    assert tr.csv_growth_problems(day2, day3) == []                                                  # the 30th is now an earlier day with two rows per book: they must match in order
+    assert tr.csv_growth_problems(day3, day3) == []
+
+
+def test_changing_removing_or_reordering_one_of_the_two_rows_of_a_day_is_still_caught():
+    day2 = HEAD + "2026-10-30,a,1.0\n2026-10-30,a,2.0\n2026-11-02,a,3.0\n"
+    changed_first = HEAD + "2026-10-30,a,9.9\n2026-10-30,a,2.0\n2026-11-02,a,3.0\n2026-11-03,a,4.0\n"
+    changed_second = HEAD + "2026-10-30,a,1.0\n2026-10-30,a,9.9\n2026-11-02,a,3.0\n2026-11-03,a,4.0\n"
+    dropped_one = HEAD + "2026-10-30,a,1.0\n2026-11-02,a,3.0\n2026-11-03,a,4.0\n"
+    reordered = HEAD + "2026-10-30,a,2.0\n2026-10-30,a,1.0\n2026-11-02,a,3.0\n2026-11-03,a,4.0\n"
+    for bad in (changed_first, changed_second, reordered):
+        assert tr.csv_growth_problems(day2, bad) == ["the row for 2026-10-30 a was changed"], bad
+    assert tr.csv_growth_problems(day2, dropped_one) == ["the row for 2026-10-30 a was removed"]
+    assert tr.csv_growth_problems(day2, HEAD + "2026-11-02,a,3.0\n") == ["the row for 2026-10-30 a was removed"]
+
+
+def test_the_real_record_files_have_no_false_alarm_against_their_own_last_commit():
+    import os, subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for rel in tr.FORWARD_FILES:
+        shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=root, capture_output=True, text=True)
+        path = os.path.join(root, rel)
+        if shown.returncode != 0 or not os.path.exists(path):
+            continue
+        assert tr.csv_growth_problems(shown.stdout, open(path, encoding="utf-8", newline="").read()) == [], rel
+
+
+def test_a_row_added_to_an_earlier_day_after_later_days_exist_is_a_change_of_history():
+    day2 = HEAD + "2026-10-30,a,1.0\n2026-11-02,a,3.0\n"
+    inserted = HEAD + "2026-10-30,a,1.0\n2026-10-30,a,1.5\n2026-11-02,a,3.0\n2026-11-03,a,4.0\n"      # a late row slipped into the 30th
+    assert tr.csv_growth_problems(day2, inserted) == ["the row for 2026-10-30 a was changed"]
